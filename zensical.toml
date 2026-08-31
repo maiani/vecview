@@ -1,0 +1,18 @@
+[project]
+site_name = "vecview"
+site_description = "Layered 3D scenes that render to SVG"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  { "Overview" = "index.md" },
+  { "Cameras" = "cameras.md" },
+  { "Scenes and layers" = "scenes.md" },
+  { "Shapes" = "shapes.md" },
+  { "Embedding a scene" = "embedding.md" },
+  { "Development" = "development.md" },
+]
+
+[project.validation]
+invalid_links = true
+invalid_link_anchors = true
+unresolved_references = true

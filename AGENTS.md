@@ -1,0 +1,86 @@
+# vecview contributor guide
+
+## Scope
+
+`vecview` projects world-space geometry into one SVG document, with an explicit
+layer stack. It does not plot data, compile TeX, rasterize, export PDF, compose
+multi-panel figures, or edit existing SVG. 
+
+## Architecture
+
+- Keep the three-way split, and do not let it blur:
+  - `shapes.py` knows numbers only — world-space arrays and `Face` records. No
+    camera, no style, no SVG import.
+  - `camera.py` defines what a camera *is*: `Camera` (the abstract contract) and
+    `ParallelCamera` (the affine machinery). Back-face culling lives here
+    because it is a camera question, not a scene one.
+  - `projections.py` holds the concrete projections: `OrthographicCamera` and
+    `ObliqueCamera`.
+  - `scene.py` is the **only** module that imports `svg`.
+- `_vec.py` and `_types.py` are private. Re-export from `__init__.py` what should
+  be public; `unit` is the only helper promoted so far.
+- Geometry that needs a camera to be computed does not belong in `shapes.py`.
+- Angles are degrees at every public boundary, radians nowhere.
+- Keep the camera hierarchy honest. `Camera` promises only `project`, `at`,
+  `depth`, and `visible`. `direction`, `screen_basis`, `foreshortening`, and
+  `plane_matrix` belong on `ParallelCamera` because each assumes a screen offset
+  independent of position. Moving any of them up would make them a silent wrong
+  answer for a perspective camera, which would subclass `Camera` directly.
+- `Scene.plane` reserves a group and nothing more. This package must not parse,
+  normalize, or embed foreign SVG; a consumer fills the group by id.
+- `Scene` records every call so `with_camera` can replay it. A method that fans
+  out to other public methods must wrap the fan-out in `_delegating()`, or the
+  replay duplicates the work.
+
+## Deliberate non-features
+
+Do not add these without the user changing the design first:
+
+- **Automatic depth sorting** (z-buffer or painter's algorithm). Layers are the
+  model. A beam crossing a translucent slab has three parts that no automatic
+  depth rule orders correctly. `Camera.depth()` exists so a caller can sort;
+  `Scene` never does.
+- **Rasterizing or PDF export.** Runtime dependencies stay `numpy` and `svg.py`;
+  a test in `tests/test_package_metadata.py` enforces it.
+- **Shading, materials, or lighting models.** This draws schematics, not renders.
+
+## Development
+
+- Supported Python: 3.12 and newer.
+- `uv sync --all-extras` for a full environment.
+- Run `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src`,
+  and `uv run pytest` before reporting a change complete.
+- Run `uv run python examples/slab_polarizer.py --projection all` after touching
+  geometry or projection. It is the realistic end-to-end check, and it renders
+  pictures whose correctness is visible. Mirrored or upside-down content, or a
+  beam that misses the slab, is the usual symptom of a projection bug.
+- Keep output deterministic: layer ties resolve by insertion order, coordinates
+  are rounded on emission. Byte-identical output is what keeps a figure diffable.
+
+## Testing
+
+- Test geometry as numbers, not as rendered strings: winding against declared
+  normal, a wave against an exact sine, a circle's radius. Reserve
+  rendered-output assertions for document structure.
+- Add a regression test for every projection or winding bug — a wrong normal is
+  invisible until it culls the wrong wall.
+- Test a projection through `foreshortening()`, not through its construction
+  angles: the ratios are what the axonometric classification is defined by.
+- `with_camera` must stay byte-identical to rebuilding from scratch. The
+  parametrized test in `tests/test_scene.py` covers all five projections.
+- `tests/test_document.py` pins what a consumer relies on: a parseable
+  standalone document, a viewBox agreeing with `width`/`height`, geometry inside
+  it, and deterministic bytes. It must not import a consumer.
+- Keep `docs/` in sync with user-visible changes in the same change, and run
+  `uv run zensical build` before reporting documentation work complete.
+- Keep `CHANGELOG.md` current in Keep a Changelog 1.1.0 format.
+
+## Naming and packaging
+
+- **`vecview` is the intended distribution and import name.** Confirm PyPI
+  availability immediately before a first publication. See `docs/development.md`
+  for the rename procedure.
+- `pyproject.toml` is canonical for Python metadata.
+- Do not commit, tag, upload, or publish unless the user explicitly asks.
+- Before 1.0, make API changes directly: update consumers, tests, and docs in the
+  same change. No compatibility aliases or deprecated wrappers.
