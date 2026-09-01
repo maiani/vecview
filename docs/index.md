@@ -99,6 +99,18 @@ partially transparent face.
 back faces of a convex solid, culled by their outward normals.
 `Camera.depth()` is available if you want to order something by depth yourself.
 
+## Related projects
+
+`vecview` is developed alongside [FigForge](https://github.com/maiani/figforge),
+which composes multi-panel figures, and
+[Vectex](https://github.com/maiani/vectex), which renders TeX equations to SVG
+fragments. The three form a suite for publication figures, and each is usable on
+its own.
+
+`vecview` depends on neither and contains no code specific to either. A
+composition layer needs only [`Scene.to_svg_document()`](embedding.md), so the
+integration costs no import in either direction.
+
 ## Next
 
 - [Cameras](cameras.md) — the hierarchy, the five projections, `screen_basis`, culling

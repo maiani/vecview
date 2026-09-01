@@ -4,7 +4,18 @@
 
 `vecview` projects world-space geometry into one SVG document, with an explicit
 layer stack. It does not plot data, compile TeX, rasterize, export PDF, compose
-multi-panel figures, or edit existing SVG. 
+multi-panel figures, or edit existing SVG.
+
+The package is **independent and has no downstream dependencies**. Consumers
+integrate through `Scene.to_svg_document()` alone; that direction is one-way.
+Do not add a consumer-specific adapter, import, dependency, example, or test.
+
+Naming the sibling projects is fine where it is only provenance: `vecview` is
+developed alongside FigForge and Vectex as a suite, and a "Related projects"
+link says so. What must stay out is *coupling* -- consumer-specific API
+documentation, worked integration examples, or tests that import a consumer.
+A tool that composes figures from `vecview` output documents that integration
+on its own side.
 
 ## Architecture
 

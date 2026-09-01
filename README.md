@@ -135,6 +135,30 @@ Rasterizing and PDF export are deliberately out of scope: they belong to whateve
 assembles the final page, and keeping them out holds the dependency set to `numpy`
 and `svg.py`.
 
+## Related projects
+
+`vecview` is developed alongside two sibling projects as a suite for building
+publication figures, and is also usable entirely on its own.
+
+| Project | Produces |
+| --- | --- |
+| [FigForge](https://github.com/maiani/figforge) | composed, exported multi-panel figures |
+| [Vectex](https://github.com/maiani/vectex) | editable TeX equations as SVG fragments |
+| **vecview** | layered 3D schematics as SVG documents |
+
+FigForge composes; Vectex and `vecview` produce the vector content it places.
+
+The three are built apart but in step on purpose: all emit editable, diffable
+vector SVG, and two unrelated producers meeting FigForge through a single
+`to_svg_document()` method is the evidence that contract is sufficient. See
+[FigForge's `AGENTS.md`](https://github.com/maiani/figforge/blob/main/AGENTS.md#the-suite).
+
+`vecview` knows nothing about any of them. It has no dependency on FigForge and
+no FigForge-specific code, and it never will: everything a composition layer
+needs is [`Scene.to_svg_document()`](docs/embedding.md), which is why the
+integration costs neither side an import. Use `vecview` standalone and it stays
+`numpy` and `svg.py`.
+
 ## Documentation
 
 - [Overview](docs/index.md)
