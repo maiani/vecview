@@ -20,7 +20,8 @@ uv run pytest
 The examples are also part of the surface being maintained:
 
 ```bash
-uv run python examples/slab_polarizer.py
+uv run python examples/slab_polarizer.py --projection all
+uv run python examples/altermagnetic_dot.py --projection all
 ```
 
 ## The name

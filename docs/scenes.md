@@ -280,7 +280,8 @@ suggest:
 Where a scene mixes in screen-space work, rebuild it per camera instead. The
 `slab_polarizer` example does exactly that, and says why: its soft beam glows are
 `rect2d` columns positioned from `cam.at(...)`, so a replay would leave them where
-the first camera put them.
+the first camera put them. The `altermagnetic_dot` example is the opposite case:
+world-space throughout, it is built once and replayed with `with_camera`.
 
 World-space arrays are held by reference, not copied, so do not mutate them after
 adding.

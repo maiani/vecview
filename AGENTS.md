@@ -61,7 +61,8 @@ Do not add these without the user changing the design first:
 - `uv sync --all-extras` for a full environment.
 - Run `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src`,
   and `uv run pytest` before reporting a change complete.
-- Run `uv run python examples/slab_polarizer.py --projection all` after touching
+- Run `uv run python examples/slab_polarizer.py --projection all` and
+  `uv run python examples/altermagnetic_dot.py --projection all` after touching
   geometry or projection. It is the realistic end-to-end check, and it renders
   pictures whose correctness is visible. Mirrored or upside-down content, or a
   beam that misses the slab, is the usual symptom of a projection bug.

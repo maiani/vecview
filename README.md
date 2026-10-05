@@ -171,7 +171,14 @@ the final page.
 ```bash
 uv run python examples/slab_polarizer.py                      # one projection
 uv run python examples/slab_polarizer.py --projection all     # all five
+uv run python examples/altermagnetic_dot.py --projection all  # a device sketch, replayed
 ```
+
+`slab_polarizer` is an outreach picture of a polarizing slab, rebuilt per
+projection because it mixes in screen-space glows. `altermagnetic_dot` is a
+quantum-dot device sketch with arc-shaped gates, Gaussian densities, and a bias
+circuit; being world-space throughout, it is built once and replayed under each
+camera with `with_camera`.
 
 ## Development
 
@@ -183,8 +190,7 @@ uv run mypy src
 uv run pytest
 ```
 
-Run `uv run python examples/slab_polarizer.py --projection all` after touching
-geometry or projection: mirrored content, or a beam that misses the slab, is the
+Run both examples with `--projection all` after touching geometry or projection: mirrored content, or a beam that misses the slab, is the
 usual sign of a projection bug.
 
 ## Related projects

@@ -5,6 +5,16 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-05
+
+### Added
+
+- `examples/altermagnetic_dot.py`: a device sketch of an altermagnetic quantum
+  dot -- arc-shaped non-convex gates and tapered leads through `prism_walls`,
+  Gaussian spin densities, camera-facing spins, a bias circuit, and labels at
+  world points -- built once and replayed under four projections with
+  `with_camera`.
+
 ## [0.1.1] - 2026-10-05
 
 ### Changed
