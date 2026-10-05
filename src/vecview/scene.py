@@ -5,18 +5,24 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import svg
 
-from vecview._types import Array, Point3, Points3, Style
+from vecview._types import Array, Point3, Points2, Points3, Style
+from vecview._vec import as_points, basis_for, convex_hull, unit
 from vecview.camera import Camera, ParallelCamera
-from vecview.shapes import Face
+from vecview.shapes import Face, Pivot, arrow_shape, ellipse_shape, prism_faces
 
 
 def _points(projected: Array, ndigits: int = 2) -> list[svg.Point]:
     """Projected coordinates as the ``x,y`` pairs ``svg.py`` wants for ``points``."""
-    return [svg.Point(round(float(x), ndigits), round(float(y), ndigits)) for x, y in projected]
+    # Adding 0.0 turns the -0.0 that rounding can produce into 0.0.
+    return [
+        svg.Point(round(float(x), ndigits) + 0.0, round(float(y), ndigits) + 0.0)
+        for x, y in projected
+    ]
 
 
 def _face_id(base: str, name: str) -> str:
@@ -26,6 +32,67 @@ def _face_id(base: str, name: str) -> str:
     ``"slab"`` and ``"+z"`` give ``"slab-pz"``.
     """
     return f"{base}-{name.replace('+', 'p').replace('-', 'm')}"
+
+
+type Align = Literal[
+    "center",
+    "north",
+    "south",
+    "east",
+    "west",
+    "northeast",
+    "northwest",
+    "southeast",
+    "southwest",
+]
+
+# Which point of a slot's box sits on its anchor, as fractions of (width, height).
+_ALIGN: dict[str, tuple[float, float]] = {
+    "center": (0.5, 0.5),
+    "north": (0.5, 0.0),
+    "south": (0.5, 1.0),
+    "east": (1.0, 0.5),
+    "west": (0.0, 0.5),
+    "northeast": (1.0, 0.0),
+    "northwest": (0.0, 0.0),
+    "southeast": (1.0, 1.0),
+    "southwest": (0.0, 1.0),
+}
+
+
+def _runs(visible: list[bool]) -> list[tuple[int, int]]:
+    """Maximal runs of consecutive ``True`` entries in a cyclic sequence.
+
+    Each run is ``(start, count)``; a run may wrap past the end.  A sequence
+    that is ``True`` throughout is one run starting at ``0``.
+    """
+    n = len(visible)
+    if all(visible):
+        return [(0, n)] if n else []
+    # Start scanning just after a False entry, so no run is split by the wrap.
+    first = next(i for i in range(n) if not visible[i]) + 1
+    runs: list[tuple[int, int]] = []
+    count = 0
+    for k in range(n):
+        i = (first + k) % n
+        if visible[i]:
+            count += 1
+        elif count:
+            runs.append(((i - count) % n, count))
+            count = 0
+    if count:
+        runs.append(((first + n - count) % n, count))
+    return runs
+
+
+def _parallel(cam: Camera, what: str) -> ParallelCamera:
+    """``cam`` as a :class:`ParallelCamera`, or a clear error naming ``what`` needs it."""
+    if not isinstance(cam, ParallelCamera):
+        raise TypeError(
+            f"{type(cam).__name__} cannot {what}: it needs the affine map only a "
+            "parallel projection has"
+        )
+    return cam
 
 
 DEFAULT_FONT = "DejaVu Sans, Verdana, sans-serif"
@@ -240,14 +307,9 @@ class Scene:
         See :meth:`Camera.plane_matrix` for the geometry, including why this is
         exact for an orthographic camera and would not be for a perspective one.
         """
-        if not isinstance(self.cam, ParallelCamera):
-            raise TypeError(
-                f"{type(self.cam).__name__} cannot embed content in a plane: the "
-                "affine transform an SVG `matrix` carries exists only for a "
-                "parallel projection"
-            )
+        cam = _parallel(self.cam, "embed content in a plane")
         self._record("plane", layer, origin, u_edge, v_edge, id=id, **style)
-        matrix = self.cam.plane_matrix(origin, u_edge, v_edge)
+        matrix = cam.plane_matrix(origin, u_edge, v_edge)
         o = np.asarray(origin, dtype=np.float64)
         u = np.asarray(u_edge, dtype=np.float64)
         v = np.asarray(v_edge, dtype=np.float64)
@@ -260,6 +322,317 @@ class Scene:
                 **style,
             ),
         )
+
+    def slot(
+        self,
+        layer: int,
+        pt3: Point3,
+        w: float,
+        h: float,
+        *,
+        id: str,
+        align: Align = "center",
+        dx: float = 0.0,
+        dy: float = 0.0,
+        **style: Style,
+    ) -> None:
+        """Reserve an empty, screen-aligned group anchored at a projected world point.
+
+        The screen-space sibling of :meth:`plane`: where a plane makes content
+        lie *in* the scene, a slot keeps it upright and unforeshortened -- a
+        label, an equation, an inset -- while pinning it to a point of the
+        geometry.  Nothing is drawn, and this package does not embed foreign
+        SVG; a consumer fills the group by ``id``.
+
+        The group is translated to the anchor, ``cam.at(pt3)`` offset by
+        ``(dx, dy)``, and records ``align`` as ``data-align``, so a consumer can
+        line its content up against the anchor at whatever size it ends up.  A
+        ``w`` by ``h`` box aligned the same way grows the fitted viewBox, so
+        content of that size is not clipped.  Under :meth:`with_camera` the
+        anchor is reprojected, so the slot follows the geometry.
+
+        Args:
+            layer: Draw order, so geometry on a higher layer can cover the content.
+            pt3: World point the slot is pinned to.
+            w: Width of the box to reserve, in scene units.
+            h: Height of the box to reserve, in scene units.
+            id: Handle a consumer uses to find and fill the group. Required.
+            align: Which point of the box sits on the anchor: ``"west"`` puts
+                the anchor at the middle of the box's left edge, so the content
+                extends to the right.
+            dx: Screen offset of the anchor, in scene units.
+            dy: Screen offset of the anchor, in scene units, downward.
+        """
+        if align not in _ALIGN:
+            raise ValueError(f"unknown align {align!r}; expected one of {sorted(_ALIGN)}")
+        self._record("slot", layer, pt3, w, h, id=id, align=align, dx=dx, dy=dy, **style)
+        x, y = self.cam.at(pt3)
+        x, y = x + dx, y + dy
+        fx, fy = _ALIGN[align]
+        x0, y0 = x - fx * w, y - fy * h
+        self._grow(np.array([[x0, y0], [x0 + w, y0 + h]]))
+        self._emit(
+            layer,
+            svg.G(
+                id=id,
+                transform=[svg.Translate(round(x, 2), round(y, 2))],
+                data={"align": align},
+                **style,
+            ),
+        )
+
+    def silhouette(self, layer: int, solid: Iterable[Face] | Points3, **style: Style) -> None:
+        """Fill the projected outline of a convex solid as one polygon.
+
+        Drawing a convex solid's visible walls one polygon each leaves hairline
+        seams where neighbouring walls meet, because each edge is anti-aliased
+        against the background separately.  Every visible wall lies inside the
+        silhouette, so filling the silhouette in the wall colour and drawing the
+        cap over it gives the same picture with no seams::
+
+            fin = prism_faces(footprint, 0.0, 0.3)
+            scene.silhouette(30, fin, fill="#b98a40", id="lead-walls")
+            scene.faces(30, [f for f in fin if f.name == "+z"], fill="#e2b56a")
+
+        The outline is the convex hull of the projected vertices, so it is only
+        the silhouette of a convex solid.  It is recomputed by :meth:`with_camera`.
+
+        Args:
+            layer: Draw order.
+            solid: Faces of the solid, or its world-space vertices.
+            **style: SVG presentation attributes of the polygon.
+        """
+        given = list(solid)
+        self._record("silhouette", layer, given, **style)
+        if given and isinstance(given[0], Face):
+            pts = np.vstack([face.points for face in given if isinstance(face, Face)])
+        else:
+            pts = as_points(given)
+        p = self.cam.project(pts)
+        outline = p[convex_hull(p)]
+        self._grow(outline)
+        self._emit(layer, svg.Polygon(points=_points(outline), **style))
+
+    def prism_walls(
+        self, layer: int, footprint: Points2, z0: float, z1: float, **style: Style
+    ) -> None:
+        """Draw the camera-facing walls of an extruded footprint as one seamless shape.
+
+        Each maximal run of consecutive facing walls becomes one strip -- along
+        the base, then back along the top -- so no seam shows between
+        neighbouring walls, however finely a curved footprint is faceted.  All
+        strips go into a single ``<path>``.  Draw the cap over it::
+
+            gate = annulus_sector((0, 0), 2.6, 3.0, 20, 160)
+            scene.prism_walls(30, gate, 0.0, 0.26, fill="#4a5059", id="gate-walls")
+            scene.faces(30, prism_faces(gate, 0.0, 0.26)[:1], fill="#737a84", id="gate")
+
+        Works for non-convex footprints, which :meth:`silhouette` does not.  With
+        an unstroked wall style and a cap facing the camera, walls-then-cap is
+        exact at any height: along any view ray the cap is never behind a wall,
+        and walls hiding other walls of the same solid are indistinguishable
+        when they share one fill.  Only a stroke can show an edge of a wall that
+        another wall of the same solid hides -- negligible for a low extrusion,
+        visible for a tall non-convex one.  There is no depth sort to fix that,
+        by design.
+
+        Args:
+            layer: Draw order.
+            footprint: Simple polygon, as for :func:`~vecview.shapes.prism_faces`.
+            z0: Height of the base.
+            z1: Height of the top.
+            **style: SVG presentation attributes of the path.
+
+        Culling uses this scene's camera, so :meth:`with_camera` redraws the
+        walls the new camera faces.
+        """
+        self._record("prism_walls", layer, footprint, z0, z1, **style)
+        walls = prism_faces(footprint, z0, z1)[2:]
+        facing = {id(face) for face in self.cam.visible(walls)}
+        runs = _runs([id(face) in facing for face in walls])
+        if not runs:
+            return
+        n = len(walls)
+        commands: list[svg.PathData] = []
+        for start, count in runs:
+            indices = [(start + k) % n for k in range(count)]
+            bottom = [walls[i].points[0] for i in indices] + [walls[indices[-1]].points[1]]
+            top = [walls[indices[-1]].points[2]] + [walls[i].points[3] for i in reversed(indices)]
+            outline = self.cam.project(np.array(bottom + top))
+            self._grow(outline)
+            first, *rest = _points(outline)
+            commands.append(svg.M(first.x, first.y))
+            commands += [svg.L(p.x, p.y) for p in rest]
+            commands.append(svg.Z())
+        self._emit(layer, svg.Path(d=commands, **style))
+
+    def arrow(
+        self,
+        layer: int,
+        origin: Point3,
+        direction: Point3,
+        length: float,
+        *,
+        normal: Point3 | Literal["camera"],
+        shaft_w: float,
+        head_w: float,
+        head_len: float,
+        pivot: Pivot = "tail",
+        **style: Style,
+    ) -> None:
+        """Flat arrow, as :func:`~vecview.shapes.arrow_shape`, drawn as a polygon.
+
+        ``normal="camera"`` turns the arrow about its own axis to show the
+        widest face it can, so it reads from any viewpoint -- a spin along
+        ``z``, say.  The normal is resolved from this scene's camera when drawn,
+        so :meth:`with_camera` turns the arrow to the new camera too.  Computing
+        that normal yourself from ``cam.view`` would bake in the original one.
+
+        Args:
+            normal: Normal of the plane the arrow lies flat in, or ``"camera"``.
+                The latter needs a :class:`ParallelCamera`.
+
+        Raises:
+            ValueError: If ``normal="camera"`` and the arrow points along the
+                projection ray, where it has no face to show.
+
+        The remaining arguments are those of :func:`~vecview.shapes.arrow_shape`.
+        """
+        self._record(
+            "arrow",
+            layer,
+            origin,
+            direction,
+            length,
+            normal=normal,
+            shaft_w=shaft_w,
+            head_w=head_w,
+            head_len=head_len,
+            pivot=pivot,
+            **style,
+        )
+        if isinstance(normal, str):
+            if normal != "camera":
+                raise ValueError(f"normal must be a vector or 'camera', got {normal!r}")
+            normal = self._facing_normal(direction)
+        shape = arrow_shape(origin, direction, length, normal, shaft_w, head_w, head_len, pivot)
+        with self._delegating():
+            self.polygon(layer, shape, **style)
+
+    def _facing_normal(self, direction: Point3) -> Array:
+        """Normal of the plane through ``direction`` that shows the widest arrow.
+
+        The arrow's width runs along some ``s`` perpendicular to its axis; this
+        picks the ``s`` whose screen projection is longest -- the top singular
+        vector of the camera matrix restricted to that perpendicular plane.  For
+        an orthographic camera that is the plane facing the viewer; for an
+        oblique one, ``view`` would give a narrower arrow, so it is not used.
+        """
+        cam = _parallel(self.cam, "face an arrow toward the camera")
+        d = unit(direction)
+        if float(np.linalg.norm(cam.matrix @ d)) < 1e-9:
+            raise ValueError(
+                "arrow points along the projection ray, so no plane through it faces the camera"
+            )
+        e1, e2 = basis_for(d)
+        _, _, vt = np.linalg.svd(cam.matrix @ np.column_stack([e1, e2]))
+        width = vt[0, 0] * e1 + vt[0, 1] * e2
+        n = unit(np.cross(d, width))
+        return n if float(np.dot(n, cam.view)) >= 0 else -n
+
+    def gaussian(
+        self,
+        layer: int,
+        center: Point3,
+        u: Point3,
+        v: Point3,
+        a: float,
+        b: float,
+        *,
+        id: str,
+        color: str,
+        opacity: float = 1.0,
+        extent: float = 2.0,
+        stops: int = 9,
+        **style: Style,
+    ) -> None:
+        """A soft Gaussian spot lying in a world plane, as one gradient-filled polygon.
+
+        The opacity follows ``exp(-(s/a)**2 - (t/b)**2)`` along the in-plane
+        axes ``u`` and ``v``, so ``a`` and ``b`` are the ``1/e`` half-widths.  A
+        radial gradient mapped through the plane's affine transform does this in
+        one element, foreshortened with the plane, where nested translucent
+        ellipses would take many and show their steps.
+
+        The profile is shifted to reach exactly zero at ``extent`` half-widths,
+        where the polygon ends, so there is no visible rim.  The gradient goes
+        into ``<defs>`` as ``{id}-profile``.
+
+        Args:
+            layer: Draw order.
+            center: Centre of the spot.
+            u: Direction of the ``a`` axis.
+            v: Direction of the ``b`` axis; perpendicular to ``u``.
+            a: ``1/e`` half-width along ``u``.
+            b: ``1/e`` half-width along ``v``.
+            id: Id of the polygon. Required, since the gradient id derives from it.
+            color: Fill colour.
+            opacity: Opacity at the centre.
+            extent: Radius drawn, in half-widths.
+            stops: Gradient stops sampling the profile; more is smoother.
+
+        Raises:
+            TypeError: For a camera that is not a :class:`ParallelCamera`; only
+                an affine projection maps a gradient through a plane exactly.
+
+        Note that ``cairosvg`` renders a gradient *fill* correctly; it is a
+        gradient *mask* that it silently drops.
+        """
+        cam = _parallel(self.cam, "map a gradient through a plane")
+        if stops < 2:
+            raise ValueError("a gradient needs at least two stops")
+        self._record(
+            "gaussian",
+            layer,
+            center,
+            u,
+            v,
+            a,
+            b,
+            id=id,
+            color=color,
+            opacity=opacity,
+            extent=extent,
+            stops=stops,
+            **style,
+        )
+        # Gradient coordinates (s, t) in units of the half-widths, mapped onto the plane.
+        matrix = cam.plane_matrix(center, a * unit(u), b * unit(v))
+        floor = np.exp(-(extent**2))
+        profile: list[svg.Element] = [
+            svg.Stop(
+                offset=round(k / (stops - 1), 4),
+                stop_color=color,
+                stop_opacity=round(
+                    opacity * (np.exp(-((extent * k / (stops - 1)) ** 2)) - floor) / (1 - floor), 4
+                ),
+            )
+            for k in range(stops)
+        ]
+        self.defs.append(
+            svg.RadialGradient(
+                id=f"{id}-profile",
+                gradientUnits="userSpaceOnUse",
+                gradientTransform=[svg.Matrix(*(round(value, 4) for value in matrix))],
+                cx=0,
+                cy=0,
+                r=extent,
+                elements=profile,
+            )
+        )
+        outline = ellipse_shape(center, u, v, a * extent, b * extent)
+        with self._delegating():
+            self.polygon(layer, outline, fill=f"url(#{id}-profile)", id=id, **style)
 
     def text(
         self,
@@ -378,4 +751,4 @@ class Scene:
         return out
 
 
-__all__ = ["DEFAULT_FONT", "DEFAULT_TEXT_FILL", "Scene"]
+__all__ = ["DEFAULT_FONT", "DEFAULT_TEXT_FILL", "Align", "Scene"]

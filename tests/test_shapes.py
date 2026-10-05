@@ -183,3 +183,192 @@ class TestSineRibbon:
         a = vecview.sine_ribbon((0, 0, 0), (0, 0, 1), 4.0, (1, 0, 0), 1.0, **kwargs)
         b = vecview.sine_ribbon((0, 0, 0), (0, 0, 1), 4.0, (1, 0, 0), 1.0, phase=np.pi, **kwargs)
         assert np.allclose(a[:, 0], -b[:, 0], atol=1e-15)
+
+
+class TestEllipseShape:
+    def test_points_satisfy_the_ellipse_equation(self) -> None:
+        u, v = np.array([1.0, 1.0, 0.0]), np.array([-1.0, 1.0, 0.0])
+        ring = vecview.ellipse_shape((1, 2, 3), u, v, 2.0, 0.5, n=48)
+        rel = ring - [1, 2, 3]
+        s, t = rel @ vecview.unit(u), rel @ vecview.unit(v)
+        assert np.allclose((s / 2.0) ** 2 + (t / 0.5) ** 2, 1.0)
+        assert_in_plane(ring, np.cross(u, v))
+
+    def test_starts_on_the_a_axis_and_winds_ccw_about_u_cross_v(self) -> None:
+        ring = vecview.ellipse_shape((0, 0, 0), (1, 0, 0), (0, 1, 0), 2.0, 1.0, n=16)
+        assert np.allclose(ring[0], [2.0, 0.0, 0.0])
+        assert np.cross(ring[1] - ring[0], ring[2] - ring[1])[2] > 0
+
+    def test_has_no_duplicate_seam(self) -> None:
+        ring = vecview.ellipse_shape((0, 0, 0), (1, 0, 0), (0, 0, 1), 2.0, 1.0, n=10)
+        assert len(ring) == 10
+        assert not np.allclose(ring[0], ring[-1])
+
+    def test_equal_axes_give_a_circle(self) -> None:
+        ring = vecview.ellipse_shape((0, 0, 0), (1, 0, 0), (0, 1, 0), 1.5, 1.5)
+        assert np.allclose(np.linalg.norm(ring, axis=1), 1.5)
+
+    def test_rejects_axes_that_are_not_perpendicular(self) -> None:
+        with pytest.raises(ValueError, match="perpendicular"):
+            vecview.ellipse_shape((0, 0, 0), (1, 0, 0), (1, 1, 0), 1.0, 1.0)
+
+
+class TestPrismFaces:
+    TAPER = ((0.0, -1.0), (3.0, -0.3), (3.4, 0.0), (3.0, 0.3), (0.0, 1.0))
+
+    @pytest.fixture
+    def faces(self) -> list[Face]:
+        return vecview.prism_faces(self.TAPER, 0.0, 0.5)
+
+    def test_names_cap_base_and_one_wall_per_edge(self, faces: list[Face]) -> None:
+        names = [f.name for f in faces]
+        assert names[:2] == ["+z", "-z"]
+        assert names[2:] == [f"side-{i}" for i in range(len(self.TAPER))]
+
+    def test_declared_normals_match_the_winding(self, faces: list[Face]) -> None:
+        for face in faces:
+            p = face.points
+            assert np.dot(np.cross(p[1] - p[0], p[2] - p[1]), face.normal) > 0, face.name
+
+    def test_normals_point_outward(self, faces: list[Face]) -> None:
+        centre = np.vstack([f.points for f in faces]).mean(axis=0)
+        for face in faces:
+            assert np.dot(face.points.mean(axis=0) - centre, face.normal) > 0, face.name
+
+    def test_each_face_is_planar_and_walls_are_vertical(self, faces: list[Face]) -> None:
+        for face in faces:
+            assert_in_plane(face.points, face.normal)
+        assert all(f.normal[2] == 0 for f in faces[2:])
+
+    def test_cap_and_base_sit_at_their_heights(self, faces: list[Face]) -> None:
+        assert np.allclose(faces[0].points[:, 2], 0.5)
+        assert np.allclose(faces[1].points[:, 2], 0.0)
+
+    def test_clockwise_footprint_gives_the_same_solid(self) -> None:
+        """Winding is normalized, so the cap still faces +z and walls still face out."""
+        ccw = vecview.prism_faces(self.TAPER, 0.0, 0.5)
+        cw = vecview.prism_faces(self.TAPER[::-1], 0.0, 0.5)
+        cap = cw[0].points
+        assert np.cross(cap[1] - cap[0], cap[2] - cap[1])[2] > 0
+        normals = sorted(tuple(np.round(f.normal, 12)) for f in ccw)
+        assert sorted(tuple(np.round(f.normal, 12)) for f in cw) == normals
+
+    def test_a_box_footprint_culls_like_box_faces(self) -> None:
+        cam = vecview.OrthographicCamera(35.0, 24.0, 62.0)
+        prism = vecview.prism_faces([(-1, -1), (1, -1), (1, 1), (-1, 1)], -1.0, 1.0)
+        assert len(cam.visible(prism)) == len(cam.visible(vecview.box_faces((0, 0, 0), (2, 2, 2))))
+
+    def test_collinear_vertices_are_allowed(self) -> None:
+        vecview.prism_faces([(0, 0), (1, 0), (2, 0), (2, 1), (0, 1)], 0.0, 1.0)
+
+    @pytest.mark.parametrize(
+        "footprint",
+        [
+            [(0, 0), (2, 0), (2, 2), (0, 2), (2, 1)],  # bow-tie-like crossing
+            [(np.cos(t), np.sin(t)) for t in np.arange(5) * 4 * np.pi / 5],  # star
+            [(0, 0), (4, 0), (4, 2), (2, 0), (2, 2), (0, 2)],  # touches itself at (2, 0)
+        ],
+        ids=["crossing", "star", "touching"],
+    )
+    def test_rejects_a_self_intersecting_footprint(
+        self, footprint: list[tuple[float, float]]
+    ) -> None:
+        with pytest.raises(ValueError, match="simple polygon"):
+            vecview.prism_faces(footprint, 0.0, 1.0)
+
+    def test_rejects_malformed_arguments(self) -> None:
+        with pytest.raises(ValueError, match="z1 must exceed z0"):
+            vecview.prism_faces(self.TAPER, 1.0, 1.0)
+        with pytest.raises(ValueError, match="shape"):
+            vecview.prism_faces([(0, 0), (1, 0)], 0.0, 1.0)
+        with pytest.raises(ValueError, match="repeated"):
+            vecview.prism_faces([(0, 0), (1, 0), (1, 0), (0, 1)], 0.0, 1.0)
+
+
+def inside(polygon: np.ndarray, point: np.ndarray) -> bool:
+    """Even-odd point-in-polygon test, for checking outward normals of a concave shape."""
+    x, y = point
+    hit = False
+    for (x0, y0), (x1, y1) in zip(polygon, np.roll(polygon, -1, axis=0), strict=True):
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            hit = not hit
+    return hit
+
+
+class TestNonConvexPrism:
+    L_SHAPE = ((0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3))
+
+    @pytest.mark.parametrize(
+        "footprint",
+        [L_SHAPE, L_SHAPE[::-1], vecview.annulus_sector((0, 0), 2.6, 3.0, 20, 160, n=12)],
+        ids=["L", "L-clockwise", "sector"],
+    )
+    def test_walls_wind_ccw_about_normals_that_point_outward(self, footprint: object) -> None:
+        faces = vecview.prism_faces(footprint, 0.0, 0.3)  # type: ignore[arg-type]
+        cap = faces[0].points[:, :2]
+        for face in faces:
+            # Newell's normal: the winding of the whole polygon, valid at concave corners.
+            p, q = face.points, np.roll(face.points, -1, axis=0)
+            assert np.dot(np.cross(p, q).sum(axis=0), face.normal) > 0, face.name
+        for face in faces[2:]:
+            mid = face.points.mean(axis=0)[:2]
+            assert not inside(cap, mid + 1e-3 * face.normal[:2]), face.name
+            assert inside(cap, mid - 1e-3 * face.normal[:2]), face.name
+
+    def test_a_concave_footprint_has_facing_walls_that_overlap_on_screen(self) -> None:
+        """Why culling is not a complete answer here, and prism_walls exists."""
+        cam = vecview.OrthographicCamera(35.0, 24.0, 62.0)
+        faces = vecview.prism_faces(self.L_SHAPE, 0.0, 0.3)
+        assert len(cam.visible(faces[2:])) > 2
+
+    def test_rejects_a_footprint_without_area(self) -> None:
+        with pytest.raises(ValueError, match="area"):
+            vecview.prism_faces([(0, 0), (1, 0), (2, 0)], 0.0, 1.0)
+
+
+class TestAnnulusSector:
+    def test_points_lie_on_the_two_radii(self) -> None:
+        foot = vecview.annulus_sector((1, 2), 2.0, 3.0, 10, 100, n=8)
+        r = np.linalg.norm(foot - [1, 2], axis=1)
+        assert np.allclose(r[:9], 3.0) and np.allclose(r[9:], 2.0)
+
+    def test_is_counter_clockwise_and_spans_the_angles(self) -> None:
+        foot = vecview.annulus_sector((0, 0), 1.0, 2.0, -30, 210, n=16)
+        x, y = foot[:, 0], foot[:, 1]
+        assert np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y) > 0
+        assert np.allclose(
+            foot[0], 2.0 * np.array([np.cos(np.radians(-30)), np.sin(np.radians(-30))])
+        )
+        assert np.allclose(
+            foot[16], 2.0 * np.array([np.cos(np.radians(210)), np.sin(np.radians(210))])
+        )
+
+    def test_area_matches_the_exact_sector_as_n_grows(self) -> None:
+        foot = vecview.annulus_sector((0, 0), 1.0, 2.0, 0, 90, n=400)
+        x, y = foot[:, 0], foot[:, 1]
+        area = 0.5 * (np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+        assert area == pytest.approx(np.pi / 4 * (4 - 1), rel=1e-4)
+
+    def test_zero_inner_radius_gives_a_wedge(self) -> None:
+        foot = vecview.annulus_sector((5, 5), 0.0, 1.0, 0, 90, n=4)
+        assert len(foot) == 6
+        assert np.allclose(foot[-1], [5, 5])
+
+    def test_extrudes_into_a_valid_prism(self) -> None:
+        vecview.prism_faces(vecview.annulus_sector((0, 0), 2.6, 3.0, 20, 160), 0.0, 0.26)
+
+    @pytest.mark.parametrize(
+        ("r_in", "r_out", "t0", "t1", "n"),
+        [
+            (2, 1, 0, 90, 8),
+            (-1, 1, 0, 90, 8),
+            (1, 2, 90, 90, 8),
+            (1, 2, 0, 360, 8),
+            (1, 2, 0, 90, 0),
+        ],
+    )
+    def test_rejects_malformed_arguments(
+        self, r_in: float, r_out: float, t0: float, t1: float, n: int
+    ) -> None:
+        with pytest.raises(ValueError):
+            vecview.annulus_sector((0, 0), r_in, r_out, t0, t1, n=n)

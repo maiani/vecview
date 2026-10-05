@@ -1,10 +1,26 @@
 # vecview
 
-Layered 3D scenes that render to SVG, for scientific schematics.
+Layered 3D scenes that render to SVG, for scientific schematics: a slab and a
+beam, a lattice, an optical bench. The schematic is generated from code and
+stays editable afterwards: elements keep the ids you give them, the same scene
+renders to byte-identical SVG, and the output opens in Inkscape.
 
-A small projection layer on top of [`svg.py`](https://pypi.org/project/svg.py/).
-`svg.py` builds the elements; `vecview` supplies what it has no notion of — a
-camera, world-space glyph geometry, and an explicit layer stack.
+vecview is a small projection layer on top of
+[`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
+vecview supplies what it has no notion of: a camera, world-space glyph geometry,
+and an explicit layer stack. Runtime dependencies are `numpy` and `svg.py`.
+
+vecview is alpha: unpublished, and the API may change before 1.0.
+
+## Install
+
+vecview is not yet on PyPI. Install it from a checkout (Python 3.12 or newer):
+
+```bash
+python -m pip install -e /path/to/vecview
+```
+
+## Quick start
 
 ```python
 import vecview
@@ -28,6 +44,11 @@ for angle in (0.0, 67.5):
 scene.save("slab.svg")
 ```
 
+World coordinates are right-handed `(x, y, z)` with `z` up, and angles are in
+degrees. The first argument of every drawing call is its layer. `cull=True`
+keeps only the walls this camera can see, and the viewBox is fitted to the
+content.
+
 ## Projections
 
 Five, all parallel, so parallel edges stay parallel:
@@ -36,128 +57,145 @@ Five, all parallel, so parallel edges stay parallel:
 | --- | --- |
 | `OrthographicCamera.isometric(scale)` | all three axes equal, `0.8165` |
 | `OrthographicCamera.dimetric(scale, ratio=0.5)` | two equal, third by `ratio` |
-| `OrthographicCamera(azim, elev, scale)` | trimetric — the general case |
+| `OrthographicCamera(azim_deg, elev_deg, scale)` | trimetric, the general case |
 | `ObliqueCamera.cavalier(scale)` | front face true, depth `1.0` |
 | `ObliqueCamera.cabinet(scale)` | front face true, depth `0.5` |
 
-`foreshortening()` reports the ratios for any camera and `axonometry()` names the
-class an orthographic one falls into — both read the projection rather than how it
-was built.
-
-A finished scene re-renders under any of them, exactly:
+`foreshortening()` reports the ratios for any camera, and `axonometry()` names
+the class an orthographic one falls into; both read the projection rather than
+how it was built. A finished scene re-renders under any camera, byte-identical
+to building it from scratch with that camera:
 
 ```python
 scene.with_camera(vecview.ObliqueCamera.cabinet(62)).save("cabinet.svg")
 ```
 
-The hierarchy keeps that honest. `Camera` promises only `project`, `at`, `depth`,
-and `visible`; `direction`, `screen_basis`, `foreshortening`, and `plane_matrix`
-live on `ParallelCamera` because each assumes a screen offset that does not depend
-on where in the scene you are. A future `PerspectiveCamera` would subclass `Camera`
-directly and inherit none of them, which is the point.
-
-## Flat content in a world plane
-
-`Scene.plane` reserves a rectangle of a world plane, so a Matplotlib plot or a TeX
-equation lies *in* the scene — foreshortened and sheared with the geometry — rather
-than pasted on top:
-
-```python
-scene.plane(15, origin, u_edge, v_edge, id="plot-plane")
-```
-
-The group is left empty for a consumer to fill; this package never parses foreign
-SVG. The embedding is exact rather than approximate, because a parallel projection
-is affine and stays affine when restricted to a plane — which is what an SVG
-`matrix` expresses. (A perspective camera would give a homography, which `matrix`
-cannot represent; that is one concrete cost of ever adding one.)
+`Camera` promises only `project`, `at`, `depth`, and `visible`. `direction`,
+`screen_basis`, `foreshortening`, and `plane_matrix` live on `ParallelCamera`,
+because each assumes a screen offset independent of position. A future
+perspective camera would subclass `Camera` directly and inherit none of them.
 
 ## Why layers, not a depth sort
 
-There is no z-buffer and no painter's-algorithm depth sort. For a schematic with
-a beam passing through a translucent slab, deciding what occludes what by hand is
-worth more than getting it automatically and almost right — the beam above the
-slab, the attenuated segment inside it, and the emerging beam below are three
-draw calls at three layers, and no automatic rule orders them correctly against a
-partially transparent face.
+There is no z-buffer and no painter's-algorithm depth sort. For a beam passing
+through a translucent slab, the beam above the slab, the attenuated segment
+inside it, and the emerging beam below are three draw calls at three layers, and
+no automatic rule orders them correctly against a partially transparent face.
+Deciding occlusion by hand is worth more than getting it automatically and
+almost right.
 
-`Camera.visible()` covers the one case where the answer *is* unambiguous: the
-back faces of a convex solid, culled by their outward normals.
+`Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case:
+the back faces of a convex solid, culled by their outward normals.
+`Camera.depth()` is there if you want to sort something yourself.
 
-## Install
+## Drawing
 
-Not published to PyPI (the name is taken by an unrelated project — see
-[Development](docs/development.md)). Install from a checkout:
+World-space calls on `Scene`:
 
-```bash
-pip install -e /path/to/vecview
-```
+- `polygon`, `polyline`, `text`, and `faces` draw projected geometry;
+  `faces(..., id="slab")` suffixes the id per face (`slab-pz`, `slab-px`, …).
+- `arrow(..., normal="camera")` turns an arrow about its own axis to show its
+  widest face, resolved at draw time so a reprojection turns it too. An explicit
+  normal also works.
+- `silhouette(layer, solid)` fills the projected convex hull of a solid as one
+  polygon. Drawn in the wall colour under the cap, it removes the hairline seams
+  between per-wall polygons.
+- `gaussian(layer, center, u, v, a, b, id=..., color=...)` draws a soft spot
+  lying in a world plane: one polygon filled by a radial gradient mapped
+  through the plane's affine transform.
 
-## The pieces
+Screen-space `rect2d` and `text2d`, `add_def` for `<defs>`, and `add` for raw
+`svg.py` elements complete the set. Style keywords pass straight to `svg.py`
+(`stroke_width` becomes `stroke-width`).
 
-| Piece | What it does |
+Geometry functions return plain world-space arrays and know nothing about
+cameras, styles, or SVG, which keeps them testable as numbers:
+
+| Function | Returns |
 | --- | --- |
-| `Camera` | The projection contract. `ParallelCamera` adds the affine frames: `screen_basis()`, `direction()`, `foreshortening()`, `plane_matrix()` |
-| projections | `OrthographicCamera` (isometric / dimetric / trimetric) and `ObliqueCamera` (cavalier / cabinet) |
-| `Scene` | The layer stack. World-space `polygon`/`polyline`/`text`/`faces`/`plane`, screen-space `rect2d`/`text2d`, `<defs>`, a fitted viewBox, and `with_camera()` |
-| shapes | `box_faces`, `rect_shape`, `circle_shape`, `arrow_shape`, `double_arrow_shape`, `sine_ribbon`, `in_plane_dir` — all returning plain world-space arrays |
+| `box_faces(center, size)` | an axis-aligned box as six named, correctly wound `Face`s |
+| `prism_faces(footprint, z0, z1)` | a convex footprint extruded along `z`, culling like a box |
+| `rect_shape`, `circle_shape`, `ellipse_shape` | flat outlines in any plane |
+| `arrow_shape`, `double_arrow_shape` | flat arrows with a shaft and head |
+| `sine_ribbon` | a transverse wave along an axis, for `polyline`; the amplitude may be an envelope |
+| `in_plane_dir(angle_deg, u, v)` | a unit direction at an angle within a plane |
 
-Geometry functions know nothing about cameras, styles, or SVG. That split keeps
-them testable as numbers, and lets one polygon be drawn twice with different
-fills.
-
-### Placement without guesswork
-
-At an azimuth of 35°, neither `+x` nor `+y` moves a point horizontally across the
-picture, so positioning things inside a projected plane by eye is guesswork.
-`screen_basis()` returns the two in-plane world directions that *do*:
+At an azimuth of 35°, neither `+x` nor `+y` moves a point horizontally across
+the picture. `screen_basis()` returns the two in-plane world directions that do:
 
 ```python
 horizontal, down = cam.screen_basis()  # in the z = 0 plane
 spots = [-3.0 * horizontal + 1.7 * down, +3.0 * horizontal + 1.7 * down]
 ```
 
-## Embedding in a larger document
+## Reserving room for other content
 
-`Scene.to_svg_document()` returns a complete, standalone SVG document string.
-That is the whole contract: any tool that accepts an object exposing that method
-can place a scene, without `vecview` knowing about it or depending on it.
+Two calls reserve an empty group for content vecview does not draw itself, such
+as a plot or a TeX label. vecview never parses foreign SVG; a consumer fills the
+group by id.
+
+`Scene.plane` reserves a rectangle of a world plane, so flat content lies *in*
+the scene, foreshortened and sheared with the geometry:
 
 ```python
-document = scene.to_svg_document()
+scene.plane(15, origin=(-4.2, -2.9, 0.01), u_edge=(0, 8.4, 0), v_edge=(5.8, 0, 0), id="plot-plane")
 ```
 
-The document carries a `viewBox` fitted to the content, so its origin is usually
-*not* `0, 0` — a consumer has to honour that. See
-[Embedding a scene](docs/embedding.md).
+The embedding is exact: a parallel projection restricted to a plane is affine,
+which is what an SVG `matrix` expresses. (A perspective camera would give a
+homography, which `matrix` cannot represent.)
 
-Rasterizing and PDF export are deliberately out of scope: they belong to whatever
-assembles the final page, and keeping them out holds the dependency set to `numpy`
-and `svg.py`.
+`Scene.slot` pins an upright, unforeshortened group to a projected world point,
+for content such as a TeX label that should read at the document's font size:
+
+```python
+scene.slot(45, (5.5, 4.5, 0), 20, 10, id="label-x", align="west", dx=1.6)
+```
+
+The group records `align` as `data-align`, the `w` by `h` box grows the fitted
+viewBox, and `with_camera` reprojects the anchor.
+
+## Output
+
+`Scene.save(path)` writes the document; `Scene.to_svg_document()` returns it as
+a string. That method is the whole embedding contract: any tool that accepts an
+object exposing it can place a scene, without vecview knowing about the tool.
+The fitted viewBox usually does *not* start at `0, 0`, so a consumer must honour
+its origin. See [Embedding a scene](docs/embedding.md).
+
+Rasterizing and PDF export are out of scope; they belong to whatever assembles
+the final page.
+
+## Examples
+
+```bash
+uv run python examples/slab_polarizer.py                      # one projection
+uv run python examples/slab_polarizer.py --projection all     # all five
+```
+
+## Development
+
+```bash
+uv sync --all-extras
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy src
+uv run pytest
+```
+
+Run `uv run python examples/slab_polarizer.py --projection all` after touching
+geometry or projection: mirrored content, or a beam that misses the slab, is the
+usual sign of a projection bug.
 
 ## Related projects
 
-`vecview` is developed alongside two sibling projects as a suite for building
-publication figures, and is also usable entirely on its own.
+vecview is developed alongside [FigForge](https://github.com/maiani/figforge),
+which composes multi-panel figures, and two other producers of editable SVG:
+[Vectex](https://github.com/maiani/vectex) (TeX equations) and cirquit (circuit
+schematics). All four share one premise: figures generated from code, with
+stable ids and byte-identical output, that stay editable in Inkscape.
 
-| Project | Produces |
-| --- | --- |
-| [FigForge](https://github.com/maiani/figforge) | composed, exported multi-panel figures |
-| [Vectex](https://github.com/maiani/vectex) | editable TeX equations as SVG fragments |
-| **vecview** | layered 3D schematics as SVG documents |
-
-FigForge composes; Vectex and `vecview` produce the vector content it places.
-
-The three are built apart but in step on purpose: all emit editable, diffable
-vector SVG, and two unrelated producers meeting FigForge through a single
-`to_svg_document()` method is the evidence that contract is sufficient. See
-[FigForge's `AGENTS.md`](https://github.com/maiani/figforge/blob/main/AGENTS.md#the-suite).
-
-`vecview` knows nothing about any of them. It has no dependency on FigForge and
-no FigForge-specific code, and it never will: everything a composition layer
-needs is [`Scene.to_svg_document()`](docs/embedding.md), which is why the
-integration costs neither side an import. Use `vecview` standalone and it stays
-`numpy` and `svg.py`.
+vecview depends on none of them and contains no code specific to any of them.
 
 ## Documentation
 
@@ -167,13 +205,6 @@ integration costs neither side an import. Use `vecview` standalone and it stays
 - [Shapes](docs/shapes.md)
 - [Embedding a scene](docs/embedding.md)
 - [Development](docs/development.md)
-
-## Examples
-
-```bash
-uv run python examples/slab_polarizer.py                      # one projection
-uv run python examples/slab_polarizer.py --projection all     # all five
-```
 
 ## License
 

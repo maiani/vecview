@@ -22,7 +22,10 @@ type Point3 = Sequence[float] | Array
 type Points3 = Sequence[Point3] | Array
 """A sequence of world-space points, shape ``(n, 3)``."""
 
+type Points2 = Sequence[Sequence[float]] | Array
+"""A sequence of 2D points, shape ``(n, 2)`` -- a footprint in a plane."""
+
 type Style = Any
 """An SVG presentation attribute value, passed through to ``svg.py``."""
 
-__all__ = ["Array", "Point3", "Points3", "Style"]
+__all__ = ["Array", "Point3", "Points2", "Points3", "Style"]

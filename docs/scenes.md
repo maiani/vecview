@@ -48,6 +48,43 @@ Style keyword arguments pass straight through to `svg.py`, so Python's
 underscores map to SVG's hyphens: `stroke_width` → `stroke-width`,
 `fill_opacity` → `fill-opacity`, `text_anchor` → `text-anchor`.
 
+`arrow` draws [`arrow_shape`](shapes.md#arrows) as a polygon, with one addition:
+`normal="camera"` turns the arrow about its own axis to show the widest face it
+can, so a spin along `z` reads from any viewpoint:
+
+```python
+scene.arrow(22, base, (0, 0, 1), 1.05, normal="camera", shaft_w=0.1, head_w=0.34, head_len=0.34)
+```
+
+The normal is resolved from the scene's camera when the arrow is drawn, so a
+[reprojection](#rendering-one-scene-several-ways) turns it too. Computing it
+yourself from `cam.view` bakes in the original camera — and for an oblique
+camera, `view` does not even give the widest face. An arrow pointing along the
+projection ray has no face to show and raises `ValueError`.
+
+`gaussian` draws a soft spot lying in a world plane, with opacity
+`exp(-(s/a)² - (t/b)²)` along the in-plane axes `u` and `v`:
+
+```python
+scene.gaussian(
+    20, (0, 0, 0.01), (1, 0, 0), (0, 1, 0), 1.3, 0.8, id="density-up", color="#d62828", opacity=0.8
+)
+```
+
+It is one polygon filled by a radial gradient mapped through the plane's affine
+transform, so it foreshortens with the plane — where nested translucent ellipses
+would take many elements and show their steps. The profile is shifted to reach
+exactly zero at `extent` half-widths (default `2`), where the polygon ends, so
+there is no rim. The gradient lands in `<defs>` as `{id}-profile`. Like `plane`,
+it needs a parallel camera.
+
+The profile is faithful, so it reads more compact than a stack of nested
+translucent contours, which overweights the tails. Where two spots overlap, the
+one drawn later covers the earlier at its centre in proportion to its opacity: at
+`opacity=1` it hides it entirely. To show both densities through each other, keep
+both opacities well below 1 (around `0.5`–`0.65`) rather than raising the later
+one.
+
 `text` anchors at a projected world point and then offsets by `dx`/`dy` in
 *screen* units — the right frame for "just above the label's anchor", which
 should not shift when the camera turns.
@@ -157,6 +194,64 @@ fills the group by `id`, normalizing its content to the unit square. See
 
 Choosing the edges is a real decision, and getting it wrong mirrors or inverts
 every label. The rule is in [Orientation](embedding.md#orientation).
+
+## Anchoring upright content
+
+```python
+scene.slot(layer, point3, w, h, id="label-x", align="west", dx=1.6, dy=0.5)
+```
+
+The screen-aligned sibling of `plane`. Where a plane makes content lie *in* the
+scene, a slot keeps it upright and unforeshortened — a TeX label, an inset —
+while pinning it to a point of the geometry.
+
+It reserves an **empty group** translated to the anchor, the projected point
+offset by `(dx, dy)` in screen units, and records `align` as `data-align`.
+`align` names the point of the content's box that sits on the anchor: `"west"`
+puts the anchor at the middle of the box's left edge, so the content extends to
+the right. The nine values are `"center"` and the eight compass points.
+
+A `w` by `h` box, aligned the same way, grows the fitted viewBox so content of
+that size is not clipped. Nothing is drawn; a consumer fills the group by `id`
+and lines its content up against the anchor using `data-align` — see
+[Embedding a scene](embedding.md#filling-a-slot). Because the anchor is a world
+point, a [reprojection](#rendering-one-scene-several-ways) moves the slot with
+the geometry, which a hand-placed `rect2d` would not.
+
+## Seamless solids
+
+```python
+gate = vecview.annulus_sector((0, 0), 2.6, 3.0, 20, 160)
+scene.prism_walls(30, gate, 0.0, 0.26, fill="#4a5059", id="gate-walls")
+scene.faces(30, vecview.prism_faces(gate, 0.0, 0.26)[:1], fill="#737a84", id="gate")
+```
+
+Drawing a solid's visible walls one polygon each leaves hairline seams where
+neighbouring walls meet, in `cairosvg` and Inkscape alike: each shared edge is
+anti-aliased against the background twice. That is worst on a curved footprint,
+which is many thin facets.
+
+`prism_walls` culls the walls of an extruded footprint with the scene's own
+camera, merges each run of consecutive facing walls into one strip — along the
+base, back along the top — and emits all strips as one `<path>`. Draw the cap
+over it. It handles non-convex footprints.
+
+Walls-then-cap is **exact at any height** when the walls are unstroked and the
+cap faces the camera:
+
+- along any view ray, the cap is never *behind* a wall, so painting it last is
+  always right where it shows;
+- where one facing wall hides another of the same solid, both share one fill, so
+  which is painted on top cannot be seen.
+
+Only a **stroke** breaks this: the outline of a wall hidden by another wall of
+the same solid shows through. For a low extrusion that hidden part is a sliver
+and does not matter; for a tall non-convex prism it can. There is no depth sort
+to fix it, by design — leave such walls unstroked and stroke the cap instead.
+
+`silhouette` is the older, simpler tool for a *convex* solid given as faces or
+points: it fills the convex hull of the projected vertices. For a non-convex
+outline the hull is wrong; use `prism_walls`.
 
 ## Rendering one scene several ways
 

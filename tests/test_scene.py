@@ -264,6 +264,15 @@ class TestReprojection:
         scene.text(30, (0, 0, 4.5), "beam", size=20, text_anchor="middle")
         scene.plane(15, (-3, 2, 0.01), (6, 0, 0), (0, -4, 0), id="plot")
         scene.add_def(svg.RadialGradient(id="glow", elements=[svg.Stop(offset=0)]))
+        fin = vecview.prism_faces([(2, -1), (4, -0.5), (4, 0.5), (2, 1)], 0.0, 0.4)
+        scene.silhouette(25, fin, fill="#b98a40", id="fin-walls")
+        scene.slot(40, (4, 0, 0.4), 30.0, 12.0, id="fin-label", align="west", dx=4.0)
+        scene.arrow(
+            35, (0, 0, 0), (0, 0, 1), 2.0, normal="camera", shaft_w=0.1, head_w=0.3, head_len=0.3
+        )
+        scene.gaussian(12, (0, 0, 0.01), (1, 0, 0), (0, 1, 0), 1.5, 0.8, id="spot", color="red")
+        gate = vecview.annulus_sector((0, 0), 2.6, 3.0, 20, 160, n=12)
+        scene.prism_walls(30, gate, 0.0, 0.26, fill="#4a5059", id="gate-walls")
         return scene
 
     @pytest.mark.parametrize(
@@ -349,3 +358,260 @@ class TestCulling:
         scene = Scene(cam)
         scene.faces(0, vecview.box_faces((0, 0, 0), (1, 1, 1)))
         assert len(scene.items) == 6
+
+
+class TestSlot:
+    """A reserved, screen-aligned group pinned to a projected world point."""
+
+    @staticmethod
+    def group(scene: Scene, id: str) -> svg.G:
+        return next(el for el in (scene.render().elements or []) if el.id == id)
+
+    def test_group_is_empty_and_translated_to_the_anchor(self, scene: Scene, cam: Camera) -> None:
+        scene.slot(5, (1, 2, 3), 20.0, 10.0, id="label", dx=3.0, dy=-4.0)
+        group = self.group(scene, "label")
+        x, y = cam.at((1, 2, 3))
+        assert not group.elements
+        assert group.transform == [svg.Translate(round(x + 3.0, 2), round(y - 4.0, 2))]
+
+    def test_alignment_is_recorded_for_the_consumer(self, scene: Scene) -> None:
+        scene.slot(5, (0, 0, 0), 20.0, 10.0, id="label", align="southwest")
+        assert self.group(scene, "label").data == {"align": "southwest"}
+
+    @pytest.mark.parametrize(
+        ("align", "corner"),
+        [
+            ("center", (-10.0, -5.0)),
+            ("west", (0.0, -5.0)),
+            ("east", (-20.0, -5.0)),
+            ("north", (-10.0, 0.0)),
+            ("southeast", (-20.0, -10.0)),
+        ],
+    )
+    def test_reserved_box_is_aligned_on_the_anchor(
+        self, scene: Scene, cam: Camera, align: str, corner: tuple[float, float]
+    ) -> None:
+        scene.slot(5, (0, 0, 0), 20.0, 10.0, id="label", align=align)  # type: ignore[arg-type]
+        lo, hi = scene.bbox()
+        x, y = cam.at((0, 0, 0))
+        assert np.allclose(lo, [x + corner[0], y + corner[1]])
+        assert np.allclose(hi - lo, [20.0, 10.0])
+
+    def test_rejects_an_unknown_alignment(self, scene: Scene) -> None:
+        with pytest.raises(ValueError, match="align"):
+            scene.slot(5, (0, 0, 0), 1.0, 1.0, id="x", align="left")  # type: ignore[arg-type]
+
+    def test_follows_the_geometry_under_reprojection(self, scene: Scene) -> None:
+        scene.slot(5, (2, 0, 1), 20.0, 10.0, id="label")
+        other = vecview.ObliqueCamera.cabinet(10.0)
+        x, y = other.at((2, 0, 1))
+        moved = self.group(scene.with_camera(other), "label")
+        assert moved.transform == [svg.Translate(round(x, 2), round(y, 2))]
+
+
+class TestSilhouette:
+    def test_box_outline_is_its_six_outer_vertices(self, scene: Scene) -> None:
+        scene.silhouette(0, vecview.box_faces((0, 0, 0), (2, 2, 2)), fill="grey", id="walls")
+        (polygon,) = scene.render().elements or []
+        assert isinstance(polygon, svg.Polygon)
+        assert len(polygon.points or []) == 6, "a box seen from a generic angle is a hexagon"
+
+    def test_outline_contains_every_projected_vertex(self, scene: Scene, cam: Camera) -> None:
+        fin = vecview.prism_faces([(0, -1), (3, -0.3), (3.4, 0), (3, 0.3), (0, 1)], 0.0, 0.5)
+        scene.silhouette(0, fin)
+        lo, hi = scene.bbox()
+        p = cam.project(np.vstack([f.points for f in fin]))
+        assert np.allclose(lo, p.min(axis=0)) and np.allclose(hi, p.max(axis=0))
+
+    def test_accepts_bare_vertices(self, scene: Scene) -> None:
+        scene.silhouette(0, SQUARE)
+        assert len(scene.items) == 1
+
+    def test_is_recomputed_on_reprojection(self, scene: Scene) -> None:
+        scene.silhouette(0, vecview.box_faces((0, 0, 0), (2, 2, 2)))
+        top_down = scene.with_camera(vecview.OrthographicCamera(0.0, 90.0, 10.0))
+        (polygon,) = top_down.render().elements or []
+        assert isinstance(polygon, svg.Polygon)
+        assert len(polygon.points or []) == 4, "seen from straight above, a box is a square"
+
+
+class TestArrow:
+    def test_explicit_normal_matches_arrow_shape(self, scene: Scene, cam: Camera) -> None:
+        args = ((0, 0, 0), (1, 0, 0), 2.0)
+        scene.arrow(0, *args, normal=(0, 0, 1), shaft_w=0.1, head_w=0.3, head_len=0.4)
+        expected = Scene(cam)
+        expected.polygon(0, vecview.arrow_shape(*args, (0, 0, 1), 0.1, 0.3, 0.4))
+        assert scene.to_svg_document() == expected.to_svg_document()
+
+    def test_camera_normal_shows_the_full_head_width(self, scene: Scene, cam: Camera) -> None:
+        """Facing the camera, the head's screen width equals its world width."""
+        scene.arrow(
+            0, (0, 0, 0), (0, 0, 1), 2.0, normal="camera", shaft_w=0.1, head_w=0.5, head_len=0.4
+        )
+        shape = vecview.arrow_shape(
+            (0, 0, 0), (0, 0, 1), 2.0, scene._facing_normal((0, 0, 1)), 0.1, 0.5, 0.4
+        )
+        head = cam.project(shape[[2, 4]])
+        assert np.linalg.norm(head[0] - head[1]) == pytest.approx(0.5 * cam.scale)
+
+    def test_camera_normal_contains_the_arrow(self, scene: Scene) -> None:
+        n = scene._facing_normal((0, 0, 1))
+        assert np.dot(n, [0, 0, 1]) == pytest.approx(0.0)
+
+    @pytest.mark.parametrize(
+        "camera",
+        [vecview.ObliqueCamera.cabinet(10.0), vecview.ObliqueCamera.cavalier(10.0)],
+        ids=["cabinet", "cavalier"],
+    )
+    @pytest.mark.parametrize("direction", [(0, 0, 1), (1, 0, 0), (1, 2, 0.5)])
+    def test_camera_normal_is_the_widest_face(
+        self, camera: vecview.ParallelCamera, direction: tuple[float, float, float]
+    ) -> None:
+        """For an oblique camera no face is undistorted; the widest is chosen."""
+        d = vecview.unit(direction)
+        n = Scene(camera)._facing_normal(d)
+        chosen = np.linalg.norm(camera.direction(np.cross(n, d)))
+        e1 = vecview.unit(np.cross(d, [0.3, 0.5, 0.7]))
+        e2 = np.cross(d, e1)
+        widths = [
+            np.linalg.norm(camera.direction(np.cos(t) * e1 + np.sin(t) * e2))
+            for t in np.linspace(0, np.pi, 721)
+        ]
+        assert chosen == pytest.approx(max(widths), rel=1e-4)
+
+    def test_rejects_an_arrow_along_the_projection_ray(self, scene: Scene, cam: Camera) -> None:
+        assert isinstance(cam, vecview.ParallelCamera)
+        with pytest.raises(ValueError, match="projection ray"):
+            scene.arrow(
+                0, (0, 0, 0), cam.view, 1.0, normal="camera", shaft_w=0.1, head_w=0.3, head_len=0.3
+            )
+
+    def test_records_one_call(self, scene: Scene) -> None:
+        scene.arrow(
+            0, (0, 0, 0), (0, 0, 1), 1.0, normal="camera", shaft_w=0.1, head_w=0.3, head_len=0.3
+        )
+        assert len(scene.with_camera(scene.cam).items) == 1
+
+
+class TestGaussian:
+    @pytest.fixture
+    def spot(self, scene: Scene) -> Scene:
+        scene.gaussian(0, (1, 0, 0), (1, 0, 0), (0, 1, 0), 2.0, 1.0, id="spot", color="red")
+        return scene
+
+    def test_one_polygon_filled_by_its_own_gradient(self, spot: Scene) -> None:
+        document = spot.render()
+        defs, polygon = document.elements or []
+        assert isinstance(defs, svg.Defs) and isinstance(polygon, svg.Polygon)
+        assert polygon.fill == "url(#spot-profile)"
+        assert [el.id for el in defs.elements or []] == ["spot-profile"]
+
+    def test_gradient_maps_onto_the_projected_axes(self, spot: Scene, cam: Camera) -> None:
+        (gradient,) = spot.defs
+        assert isinstance(gradient, svg.RadialGradient)
+        (matrix,) = gradient.gradientTransform or []
+        assert isinstance(matrix, svg.Matrix)
+        a, b, c, d, e, f = (matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f)
+        # gradient (1, 0) is one half-width along u from the centre
+        expected = cam.at((1 + 2.0, 0, 0))
+        assert (a + e, b + f) == pytest.approx(expected, abs=1e-3)
+        expected = cam.at((1, 1.0, 0))
+        assert (c + e, d + f) == pytest.approx(expected, abs=1e-3)
+
+    def test_profile_is_gaussian_and_reaches_zero_at_the_rim(self, spot: Scene) -> None:
+        (gradient,) = spot.defs
+        assert isinstance(gradient, svg.RadialGradient)
+        stops = [s for s in gradient.elements or [] if isinstance(s, svg.Stop)]
+        offsets = np.array([float(s.offset or 0) for s in stops])
+        opacity = np.array([float(s.stop_opacity or 0) for s in stops])
+        floor = np.exp(-4.0)
+        assert opacity[0] == 1.0 and opacity[-1] == 0.0
+        assert np.allclose(
+            opacity, (np.exp(-((2.0 * offsets) ** 2)) - floor) / (1 - floor), atol=1e-4
+        )
+
+    def test_needs_a_parallel_camera(self) -> None:
+        class Pinhole(vecview.Camera):
+            def project(self, pts):  # type: ignore[no-untyped-def]
+                return np.zeros((len(pts), 2))
+
+            def depth(self, pts):  # type: ignore[no-untyped-def]
+                return np.zeros(len(pts))
+
+            def visible(self, faces, *, tol=0.0):  # type: ignore[no-untyped-def]
+                return list(faces)
+
+        with pytest.raises(TypeError, match="parallel projection"):
+            Scene(Pinhole(1.0)).gaussian(
+                0, (0, 0, 0), (1, 0, 0), (0, 1, 0), 1, 1, id="s", color="red"
+            )
+
+
+class TestPrismWalls:
+    from vecview.scene import _runs as runs
+
+    @pytest.mark.parametrize(
+        ("visible", "expected"),
+        [
+            ([True, True, False, True], [(3, 3)]),  # wraps past the end
+            ([False, True, True, False, True, False], [(1, 2), (4, 1)]),
+            ([True, True, True], [(0, 3)]),
+            ([False, False], []),
+            ([True, False, False, False], [(0, 1)]),
+        ],
+    )
+    def test_runs_are_maximal_and_cyclic(
+        self, visible: list[bool], expected: list[tuple[int, int]]
+    ) -> None:
+        assert TestPrismWalls.runs(visible) == expected
+
+    @staticmethod
+    def subpaths(scene: Scene) -> list[list[tuple[float, float]]]:
+        (path,) = scene.render().elements or []
+        assert isinstance(path, svg.Path)
+        paths: list[list[tuple[float, float]]] = []
+        for command in path.d or []:
+            if isinstance(command, svg.M):
+                paths.append([(float(command.x), float(command.y))])
+            elif isinstance(command, svg.L):
+                paths[-1].append((float(command.x), float(command.y)))
+        return paths
+
+    def test_one_strip_per_run_of_facing_walls(self, scene: Scene, cam: Camera) -> None:
+        gate = vecview.annulus_sector((0, 0), 2.6, 3.0, 20, 160, n=12)
+        scene.prism_walls(0, gate, 0.0, 0.26, id="walls")
+        walls = vecview.prism_faces(gate, 0.0, 0.26)[2:]
+        facing = [any(w is v for v in cam.visible(walls)) for w in walls]
+        expected = TestPrismWalls.runs(facing)
+        strips = self.subpaths(scene)
+        assert len(strips) == len(expected)
+        # A run of k walls is k + 1 base points forward and k + 1 top points back.
+        assert sorted(len(s) for s in strips) == sorted(2 * (k + 1) for _, k in expected)
+
+    def test_strip_traces_base_then_top(self, scene: Scene, cam: Camera) -> None:
+        square = [(-1, -1), (1, -1), (1, 1), (-1, 1)]
+        scene.prism_walls(0, square, 0.0, 0.5)
+        (strip,) = self.subpaths(scene)
+        walls = vecview.prism_faces(square, 0.0, 0.5)[2:]
+        facing = cam.visible(walls)
+        assert len(facing) == 2, "a generic view of a box shows two walls"
+        start = next(i for i, w in enumerate(walls) if w is facing[0])
+        first, second = (walls[(start + k) % 4] for k in range(2))
+        if second is not facing[1]:
+            first, second = second, walls[(start + 1) % 4]
+        expected = cam.project(
+            [
+                first.points[0],
+                second.points[0],
+                second.points[1],
+                second.points[2],
+                second.points[3],
+                first.points[3],
+            ]
+        )
+        assert np.allclose(strip, expected, atol=0.01)
+
+    def test_walls_are_reculled_on_reprojection(self, scene: Scene) -> None:
+        scene.prism_walls(0, [(-1, -1), (1, -1), (1, 1), (-1, 1)], 0.0, 0.5)
+        clone = scene.with_camera(vecview.ObliqueCamera.cabinet(10.0))
+        assert self.subpaths(clone) != self.subpaths(scene)

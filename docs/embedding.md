@@ -70,6 +70,25 @@ as an upright screen rectangle — in the plane geometrically, yet visually past
 with no foreshortening cue. Use it to *place* things in a plane, not to embed
 content in one.
 
+## Filling a slot
+
+[`Scene.slot`](scenes.md#anchoring-upright-content) reserves an empty group for
+upright content pinned to a world point. What a consumer finds:
+
+- `<g id="..." transform="translate(x y)" data-align="west"/>` — the translation
+  is the **anchor**, not a corner of the box.
+- `data-align` names the point of the content's box to put on the anchor:
+  `center`, or a compass point from `north` round to `northwest`.
+
+Align against the anchor at the content's *final* size: offset the content by
+`-fx * width, -fy * height`, where `(fx, fy)` is `(0, 0.5)` for `west`,
+`(0.5, 0.5)` for `center`, `(1, 1)` for `southeast`, and so on.
+
+The `w` by `h` box passed to `slot` only reserves room in the fitted viewBox, in
+scene units. If the consumer scales the scene but keeps the content at its own
+size — usually right for a label set in the document's font size — the reserved
+room matches the content exactly only when the scene is placed at 1:1.
+
 ## Settings that matter when embedding
 
 `to_svg_document()` takes no arguments, so a consumer cannot pass render options.

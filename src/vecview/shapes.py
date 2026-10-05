@@ -11,8 +11,9 @@ from __future__ import annotations
 from typing import Literal, NamedTuple
 
 import numpy as np
+import numpy.typing as npt
 
-from vecview._types import Array, Point3
+from vecview._types import Array, Point3, Points2
 from vecview._vec import basis_for, unit
 
 FaceName = Literal["-x", "+x", "-y", "+y", "-z", "+z"]
@@ -88,6 +89,139 @@ def box_faces(center: Point3, size: Point3) -> list[Face]:
         name = f"{'+' if sign > 0 else '-'}{'xyz'[axis]}"
         faces.append(Face(name, rect_shape(c + normal * h[axis], u, v, du, dv), normal))
     return faces
+
+
+def _self_intersects(poly: Array) -> bool:
+    """Whether any two non-adjacent edges of a closed polygon cross or touch."""
+    n = len(poly)
+    a, b = poly, np.roll(poly, -1, axis=0)
+    scale = float(np.ptp(poly, axis=0).max()) or 1.0
+    eps = 1e-12 * scale * scale
+
+    def orient(p: Array, q: Array, r: Array) -> Array:
+        cross: Array = (q[..., 0] - p[..., 0]) * (r[..., 1] - p[..., 1]) - (
+            q[..., 1] - p[..., 1]
+        ) * (r[..., 0] - p[..., 0])
+        return cross
+
+    def within(p: Array, q: Array, r: Array) -> npt.NDArray[np.bool_]:
+        """Whether r lies in the bounding box of segment pq (for collinear r)."""
+        lo, hi = np.minimum(p, q), np.maximum(p, q)
+        inside: npt.NDArray[np.bool_] = np.all(
+            (r >= lo - 1e-12 * scale) & (r <= hi + 1e-12 * scale), axis=-1
+        )
+        return inside
+
+    i, j = np.triu_indices(n, k=2)
+    keep = ~((i == 0) & (j == n - 1))  # the closing edge is adjacent to the first
+    i, j = i[keep], j[keep]
+    ai, bi, aj, bj = a[i], b[i], a[j], b[j]
+    d1, d2 = orient(ai, bi, aj), orient(ai, bi, bj)
+    d3, d4 = orient(aj, bj, ai), orient(aj, bj, bi)
+    proper = (d1 * d2 < -eps * eps) & (d3 * d4 < -eps * eps)
+    touching = (
+        ((np.abs(d1) <= eps) & within(ai, bi, aj))
+        | ((np.abs(d2) <= eps) & within(ai, bi, bj))
+        | ((np.abs(d3) <= eps) & within(aj, bj, ai))
+        | ((np.abs(d4) <= eps) & within(aj, bj, bi))
+    )
+    return bool(np.any(proper | touching))
+
+
+def prism_faces(footprint: Points2, z0: float, z1: float) -> list[Face]:
+    """The faces of a footprint extruded along ``z``, each wound CCW about its normal.
+
+    The generalization of :func:`box_faces` to any simple cross-section -- a
+    tapered electrode, an arc-shaped gate.  The cap is named ``"+z"`` and the
+    base ``"-z"``, as for a box; wall ``i`` spans footprint vertices ``i`` and
+    ``i + 1`` and is named ``"side-{i}"``.
+
+    Args:
+        footprint: Simple polygon in the ``xy`` plane, shape ``(n, 2)``, in
+            either winding; it may be non-convex. Collinear vertices are
+            allowed; repeated ones are not.
+        z0: Height of the base.
+        z1: Height of the cap; must exceed ``z0``.
+
+    Raises:
+        ValueError: If the footprint is not a simple polygon of at least three
+            distinct vertices -- self-intersecting or self-touching outlines
+            have no well-defined outside -- or ``z1 <= z0``.
+
+    Back-face culling selects the walls that face the camera, which for a
+    convex footprint is exactly the visible set.  For a non-convex one, a
+    facing wall can still be hidden behind another wall of the same solid;
+    :meth:`~vecview.scene.Scene.prism_walls` draws such a solid correctly.
+    """
+    foot = np.asarray(footprint, dtype=np.float64)
+    if foot.ndim != 2 or foot.shape[1] != 2 or len(foot) < 3:
+        raise ValueError(f"footprint must have shape (n, 2) with n >= 3, got {foot.shape}")
+    if not z1 > z0:
+        raise ValueError(f"z1 must exceed z0, got z0={z0}, z1={z1}")
+    x, y = foot[:, 0], foot[:, 1]
+    area = 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+    edges = np.roll(foot, -1, axis=0) - foot
+    lengths = np.linalg.norm(edges, axis=1)
+    if np.any(lengths <= 1e-12 * float(lengths.max())):
+        raise ValueError("footprint has repeated consecutive vertices")
+    if abs(area) <= 1e-12 * float(lengths.max()) ** 2:
+        raise ValueError("footprint encloses no area")
+    if _self_intersects(foot):
+        raise ValueError("footprint must be a simple polygon: its edges cross or touch")
+    if area < 0:
+        foot = foot[::-1]  # clockwise: reverse so the cap faces +z
+        edges = np.roll(foot, -1, axis=0) - foot
+
+    n = len(foot)
+    base = np.column_stack([foot, np.full(n, float(z0))])
+    cap = np.column_stack([foot, np.full(n, float(z1))])
+    faces = [
+        Face("+z", cap, np.array([0.0, 0.0, 1.0])),
+        Face("-z", base[::-1].copy(), np.array([0.0, 0.0, -1.0])),
+    ]
+    for i in range(n):
+        j = (i + 1) % n
+        # For a CCW footprint the outside is to the right of each edge, and
+        # (edge, +z, outward) is right-handed, which winds the wall CCW from outside.
+        outward = unit(np.array([edges[i, 1], -edges[i, 0], 0.0]))
+        faces.append(Face(f"side-{i}", np.array([base[i], base[j], cap[j], cap[i]]), outward))
+    return faces
+
+
+def annulus_sector(
+    center: tuple[float, float] | Array,
+    r_in: float,
+    r_out: float,
+    theta0_deg: float,
+    theta1_deg: float,
+    n: int = 32,
+) -> Array:
+    """Footprint of an annular sector, shape ``(m, 2)``, counter-clockwise.
+
+    The outer arc runs from ``theta0_deg`` to ``theta1_deg`` in ``n`` segments,
+    then the inner arc runs back.  With ``r_in = 0`` the inner arc collapses to
+    the centre and the result is a pie wedge.  Angles are measured from ``+x``
+    toward ``+y``.  Pair with :func:`prism_faces` for an arc-shaped electrode.
+
+    Raises:
+        ValueError: Unless ``0 <= r_in < r_out``, ``n >= 1``, and the span
+            ``theta1_deg - theta0_deg`` lies in ``(0, 360)``. A full ring is not a
+            simple polygon.
+    """
+    if not 0.0 <= r_in < r_out:
+        raise ValueError(f"need 0 <= r_in < r_out, got r_in={r_in}, r_out={r_out}")
+    span = theta1_deg - theta0_deg
+    if not 0.0 < span < 360.0:
+        raise ValueError(f"theta1_deg - theta0_deg must lie in (0, 360), got {span}")
+    if n < 1:
+        raise ValueError(f"n must be at least 1, got {n}")
+    c = np.asarray(center, dtype=np.float64)
+    t = np.radians(np.linspace(theta0_deg, theta1_deg, n + 1))
+    ring = np.column_stack([np.cos(t), np.sin(t)])
+    outer = c + r_out * ring
+    inner = c[None, :] if r_in == 0.0 else c + r_in * ring[::-1]
+    footprint: Array = np.vstack([outer, inner])
+    return footprint
 
 
 def arrow_shape(
@@ -170,6 +304,27 @@ def circle_shape(center: Point3, radius: float, normal: Point3, n: int = 64) -> 
     return ring
 
 
+def ellipse_shape(center: Point3, u: Point3, v: Point3, a: float, b: float, n: int = 64) -> Array:
+    """Ellipse as an ``n``-gon, with semi-axis ``a`` along ``u`` and ``b`` along ``v``.
+
+    The generalization of :func:`circle_shape`. The first vertex lies at
+    ``center + a * u`` and the points run counter-clockwise about ``u x v``,
+    with no duplicated closing point.
+
+    Raises:
+        ValueError: If ``u`` and ``v`` are not perpendicular, since the
+            semi-axes would then not be ``a`` and ``b``.
+    """
+    uh, vh = unit(u), unit(v)
+    if abs(float(np.dot(uh, vh))) > 1e-9:
+        raise ValueError("u and v must be perpendicular: they are the ellipse's axes")
+    t = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+    ring: Array = np.asarray(center, dtype=np.float64) + (
+        np.outer(a * np.cos(t), uh) + np.outer(b * np.sin(t), vh)
+    )
+    return ring
+
+
 def sine_ribbon(
     start: Point3,
     axis: Point3,
@@ -195,11 +350,14 @@ def sine_ribbon(
 __all__ = [
     "Face",
     "FaceName",
+    "annulus_sector",
     "arrow_shape",
     "box_faces",
     "circle_shape",
     "double_arrow_shape",
+    "ellipse_shape",
     "in_plane_dir",
+    "prism_faces",
     "rect_shape",
     "sine_ribbon",
 ]

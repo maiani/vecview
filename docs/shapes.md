@@ -65,6 +65,41 @@ scene.faces(11, [f for f in walls if f.name != "+z"], fill="#cfd6e0")
 A zero-thickness box is legitimate — a bare plane you want to draw with the box
 machinery — and still returns six faces.
 
+## Prisms
+
+```python
+vecview.prism_faces(footprint, z0, z1)  ->  list[Face]
+```
+
+A footprint in the `xy` plane, extruded from `z0` to `z1` — a tapered electrode,
+a hexagonal pillar, an arc-shaped gate. The cap is `"+z"` and the base `"-z"`, as for a
+box, so `[f for f in fin if f.name == "+z"]` still picks the top; wall `i` spans
+footprint vertices `i` and `i + 1` and is named `"side-{i}"`. Every face is wound
+counter-clockwise about its outward normal, so `faces(..., cull=True)` works.
+
+The footprint may come in either winding and may be non-convex, but it must be
+a **simple polygon**: an outline that crosses or touches itself has no
+well-defined outside, and raises `ValueError`. Collinear vertices are fine;
+repeated ones are not.
+
+For a convex footprint, culling leaves exactly the visible walls. For a
+non-convex one it leaves the walls that *face* the camera, and one of those can
+still sit behind another wall of the same solid.
+
+Either way, walls drawn one polygon each show hairline seams where their
+anti-aliased edges meet. Draw them with
+[`Scene.prism_walls`](scenes.md#seamless-solids) and the cap over them instead.
+
+```python
+vecview.annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg, n=32)
+```
+
+The footprint of an annular sector, counter-clockwise: the outer arc from
+`theta0_deg` to `theta1_deg` in `n` segments, then the inner arc back. With
+`r_in=0` it is a pie wedge. The span must lie strictly between 0° and 360°, since
+a full ring is not a simple polygon. Join it to other outlines yourself to build
+a compound footprint.
+
 ## Circles
 
 ```python
@@ -75,6 +110,14 @@ A circle in the plane through `center`, as an `n`-gon. There is no duplicated
 closing point, so `Scene.polygon` closes it cleanly and `n` is exactly the vertex
 count. The in-plane rotation is arbitrary but deterministic, which is what matters
 for reproducible output.
+
+```python
+vecview.ellipse_shape(center, u, v, a, b, n=64)
+```
+
+The generalization: semi-axis `a` along `u` and `b` along `v`, which must be
+perpendicular. The first vertex is `center + a * u`, and the points run
+counter-clockwise about `u × v`, again with no duplicated closing point.
 
 ## Arrows
 

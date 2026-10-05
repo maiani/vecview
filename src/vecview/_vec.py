@@ -40,4 +40,30 @@ def basis_for(normal: Point3) -> tuple[Array, Array]:
     return a, np.asarray(np.cross(n, a), dtype=np.float64)
 
 
-__all__ = ["as_points", "basis_for", "unit"]
+def convex_hull(pts2: Array) -> list[int]:
+    """Indices of the 2D convex hull of ``pts2`` (Andrew's monotone chain).
+
+    Counter-clockwise in a y-up frame, which is clockwise on an SVG screen.
+    Collinear boundary points are dropped. Ties break on index, so the result is
+    deterministic for repeated points.
+    """
+    order = sorted(range(len(pts2)), key=lambda i: (float(pts2[i, 0]), float(pts2[i, 1]), i))
+
+    def turn(o: int, a: int, b: int) -> float:
+        return float(
+            (pts2[a, 0] - pts2[o, 0]) * (pts2[b, 1] - pts2[o, 1])
+            - (pts2[a, 1] - pts2[o, 1]) * (pts2[b, 0] - pts2[o, 0])
+        )
+
+    chains: list[list[int]] = []
+    for sequence in (order, order[::-1]):
+        chain: list[int] = []
+        for i in sequence:
+            while len(chain) >= 2 and turn(chain[-2], chain[-1], i) <= 0:
+                chain.pop()
+            chain.append(i)
+        chains.append(chain[:-1])
+    return chains[0] + chains[1]
+
+
+__all__ = ["as_points", "basis_for", "convex_hull", "unit"]
