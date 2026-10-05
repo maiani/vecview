@@ -86,18 +86,20 @@ bitmap, so it lies *in* the picture rather than on top of it. The embedding is
 exact: a parallel projection is affine, so restricted to a plane it is still
 affine — precisely what an SVG `matrix` expresses.
 
-## Why layers, not a depth sort
+## Layers first, depth sorting by request
 
-There is no z-buffer and no painter's-algorithm depth sort. For a schematic with
-a beam passing through a translucent slab, deciding what occludes what by hand is
-worth more than getting it automatically and almost right: the beam above the
-slab, the attenuated segment inside it, and the emerging beam below are three draw
-calls at three layers, and no automatic rule orders them correctly against a
-partially transparent face.
+Draw order is an explicit layer stack. For a schematic with a beam passing
+through a translucent slab, deciding what occludes what by hand is worth more
+than getting it automatically and almost right: the beam above the slab, the
+attenuated segment inside it, and the emerging beam below are three draw calls at
+three layers, and no automatic rule orders them correctly against a partially
+transparent face.
 
-`Camera.visible()` covers the one case where the answer *is* unambiguous — the
-back faces of a convex solid, culled by their outward normals.
-`Camera.depth()` is available if you want to order something by depth yourself.
+A lattice of hundreds of atoms is the opposite case, and a layer can opt in to
+[sorting by depth](scenes.md#sorting-by-depth) for it. The curved solids —
+spheres, cylinders, cones, solid arrows, tubes — have exact outlines under every
+parallel projection, so a sorted layer of them stays a small, editable file. See
+the [gallery](gallery.md).
 
 ## Related projects
 
@@ -116,5 +118,6 @@ integration costs no import in either direction.
 - [Cameras](cameras.md) — the hierarchy, the five projections, `screen_basis`, culling
 - [Scenes and layers](scenes.md) — the layer stack, reprojection, embedded planes
 - [Shapes](shapes.md) — the world-space geometry catalogue
+- [Gallery](gallery.md) — the figures everyone draws, each from one script
 - [Embedding a scene](embedding.md) — handing the output to a larger document
 - [Development](development.md) — toolchain, and the name situation

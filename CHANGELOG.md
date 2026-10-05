@@ -5,6 +5,39 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- `Scene.sort_by_depth(layer)` -- opt one layer in to the painter's algorithm.
+  Its world-space elements are drawn back to front, keyed by the mean depth of
+  the points that made them; ties keep insertion order and screen-space
+  elements go on top. Other layers are untouched, and `with_camera` re-sorts.
+- `Scene.sphere` -- the exact outline of a sphere as one `<circle>`, or a rotated
+  `<ellipse>` under an oblique camera.
+- `Scene.cylinder` and `Scene.cone` -- exact outlines of a cylinder, frustum, or
+  cone: two straight sides and two elliptical arcs in one `<path>`, plus the end
+  disk that faces the camera. `slices=n` cuts a long cylinder into separately
+  sorted lengths that still draw as one seamless solid.
+- `Scene.arrow3d` -- a solid arrow, cylindrical shaft and conical head in one group.
+- `Scene.tube` -- a tube along a world-space curve, as overlapping stroked pieces
+  that sort over and under each other without seams.
+- `highlight=` on the solids -- a gradient fill lightest toward the upper left;
+  spheres of one colour pair share one gradient.
+- `Scene.edges` -- the edges of a convex solid, visible ones solid and hidden ones
+  dropped or restyled (dashed), optionally one path per edge and trimmed at the
+  vertices.
+- `Scene.sphere_curve` -- a curve on a sphere, split exactly where it passes behind.
+- `Scene._repr_svg_`, so a scene displays inline in Jupyter.
+- `text` and `text2d` accept a list of `svg.TSpan` runs, for subscripts.
+- `arc_shape`, `helix`, `surface_faces`, `convex_polyhedron`, and `trim_corners`.
+- `examples/gallery/` -- a perovskite cell, the fcc Brillouin zone, C60, the Bloch
+  sphere, a gapped Dirac cone, a Néel skyrmion, and a solenoid, each from one
+  script; `python examples/gallery --docs` builds them all into the new Gallery
+  page.
+
+### Changed
+
+- `prism_walls` builds its path through the shared helper; output is unchanged.
+
 ## [0.1.2] - 2026-10-05
 
 ### Added

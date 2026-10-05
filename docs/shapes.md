@@ -119,6 +119,23 @@ The generalization: semi-axis `a` along `u` and `b` along `v`, which must be
 perpendicular. The first vertex is `center + a * u`, and the points run
 counter-clockwise about `u × v`, again with no duplicated closing point.
 
+## Arcs and helices
+
+```python
+vecview.arc_shape(center, u, v, radius, theta0_deg, theta1_deg, n=32)
+vecview.helix(start, axis, radius, pitch, turns, n_per_turn=48, phase_deg=0.0)
+```
+
+`arc_shape` is a circular arc in the plane of `u` and `v`, with angles measured
+from `u` toward `v`. `v` need not be perpendicular to `u`, only not parallel, so
+the arc marking the angle between two vectors is
+`arc_shape(origin, a, b, r, 0, angle_between)`.
+
+`helix` winds about `axis` from `start`, which is on the axis, advancing `pitch`
+along it per turn: right-handed for a positive pitch, left-handed for a negative
+one. Draw it with [`Scene.tube`](scenes.md#curved-solids) for a coil, or
+`polyline` for a spin spiral's envelope.
+
 ## Arrows
 
 ```python
@@ -157,6 +174,57 @@ about `center`, no direction implied.
 
 A `head_len` longer than the whole arrow is clamped rather than producing a
 self-crossing polygon.
+
+## Surfaces
+
+```python
+vecview.surface_faces(x, y, z)  ->  list[Face]
+```
+
+The quads of a parametric surface sampled on a grid: `x`, `y` and `z` are 2D
+arrays of one shape, from `np.meshgrid` for a height field or from any
+parametrization. Quad `(i, j)` is named `"q-{i}-{j}"` and wound
+counter-clockwise about its normal, `∂/∂i × ∂/∂j` — upward for a height field
+from `meshgrid(..., indexing="ij")`. A polar grid gives a cone or a band surface:
+
+```python
+k, t = np.meshgrid(np.linspace(0, 1, 13), np.linspace(0, 2 * np.pi, 57), indexing="ij")
+band = vecview.surface_faces(k * np.cos(t), k * np.sin(t), np.sqrt(k**2 + 0.25**2))
+scene.sort_by_depth(10)
+for face in band:
+    scene.polygon(10, face.points, fill=colour(face), stroke=colour(face), stroke_width=0.4)
+```
+
+A surface is two-sided, so do not cull it; sort it, and use the normal to colour
+a fold that turns toward the camera. A stroke in the fill colour hides the
+hairline seams between quads.
+
+## Polyhedra
+
+```python
+vecview.convex_polyhedron(vertices, tol=1e-9)  ->  list[Face]
+vecview.trim_corners(faces, radius, n=8)  ->  list[Face]
+```
+
+`convex_polyhedron` returns the faces of the convex hull of `vertices`, each wound
+counter-clockwise about its outward normal and named `"face-{k}"` in a
+deterministic order. Coplanar vertices merge into one polygonal face, so the
+truncated octahedron of an fcc Brillouin zone comes out as eight hexagons and six
+squares rather than triangles. Interior points are ignored. The search tests
+every vertex triple against every vertex — instant for the tens of vertices of a
+zone or a coordination polyhedron, and not meant for a mesh of thousands.
+
+`trim_corners` cuts a disk of `radius` out of every corner of every face, for a
+polyhedron with an atom on each vertex. A face running into a sphere's centre
+cannot be [depth-sorted](scenes.md#sorting-by-depth) against it, since part of the
+face is inside the ball; cut back to the surface, it can. Pair it with
+`Scene.edges(trim=radius)`:
+
+```python
+octahedron = vecview.convex_polyhedron(oxygens)
+scene.faces(10, vecview.trim_corners(octahedron, r_o), fill="#6f9fd8", fill_opacity=0.35)
+scene.edges(10, octahedron, separate=True, trim=r_o, stroke="#2d5c94")
+```
 
 ## Waves
 

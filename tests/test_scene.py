@@ -178,6 +178,12 @@ class TestPrimitives:
         assert text.x == pytest.approx(round(x0 + 5.0, 2))
         assert text.y == pytest.approx(round(y0 - 3.0, 2))
 
+    def test_text_accepts_tspan_runs_for_subscripts(self, scene: Scene) -> None:
+        runs = [svg.TSpan(text="k"), svg.TSpan(text="x", baseline_shift="sub")]
+        scene.text(0, (0, 0, 0), runs, id="kx")
+        doc = scene.to_svg_document()
+        assert '<tspan>k</tspan><tspan baseline-shift="sub">x</tspan>' in doc
+
     def test_text_has_a_default_font_and_fill(self, scene: Scene) -> None:
         scene.text2d(0, 0, 0, "label")
         text = (scene.render().elements or [])[0]
@@ -273,6 +279,17 @@ class TestReprojection:
         scene.gaussian(12, (0, 0, 0.01), (1, 0, 0), (0, 1, 0), 1.5, 0.8, id="spot", color="red")
         gate = vecview.annulus_sector((0, 0), 2.6, 3.0, 20, 160, n=12)
         scene.prism_walls(30, gate, 0.0, 0.26, fill="#4a5059", id="gate-walls")
+        scene.sort_by_depth(40)
+        scene.sphere(40, (1, 1, 1), 0.5, fill="#c33", highlight="#fcc")
+        scene.cylinder(40, (0, 0, 0), (1, 1, 1), 0.1, fill="#888", highlight="#eee", id="bond")
+        scene.cone(40, (2, 0, 0), (2, 0, 1), 0.3, fill="#a5c")
+        scene.cylinder(40, (-2, 0, 0), (-2, 3, 0), 0.4, slices=5, stroke="#000", id="core")
+        scene.arrow3d(40, (-1, 0, 0), (1, -1, 2), 1.2, shaft_r=0.05, head_r=0.15, head_len=0.3)
+        scene.tube(40, vecview.helix((3, 0, 0), (0, 0, 1), 0.5, 0.4, 2), 0.05, stroke="#000")
+        cell = vecview.box_faces((0, 0, 3), (1, 1, 1))
+        scene.edges(41, cell, back={"stroke_dasharray": "3 2"}, back_layer=39, stroke="#000")
+        ring = vecview.circle_shape((1, 1, 1), 0.5, (0, 0, 1))
+        scene.sphere_curve(42, (1, 1, 1), ring, closed=True, back={}, stroke="#000")
         return scene
 
     @pytest.mark.parametrize(

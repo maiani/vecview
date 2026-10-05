@@ -75,18 +75,20 @@ scene.with_camera(vecview.ObliqueCamera.cabinet(62)).save("cabinet.svg")
 because each assumes a screen offset independent of position. A future
 perspective camera would subclass `Camera` directly and inherit none of them.
 
-## Why layers, not a depth sort
+## Layers first, depth sorting by request
 
-There is no z-buffer and no painter's-algorithm depth sort. For a beam passing
+There is no z-buffer. Draw order is an explicit layer stack: for a beam passing
 through a translucent slab, the beam above the slab, the attenuated segment
 inside it, and the emerging beam below are three draw calls at three layers, and
 no automatic rule orders them correctly against a partially transparent face.
-Deciding occlusion by hand is worth more than getting it automatically and
-almost right.
+Deciding occlusion by hand is worth more than getting it automatically and almost
+right.
 
-`Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case:
-the back faces of a convex solid, culled by their outward normals.
-`Camera.depth()` is there if you want to sort something yourself.
+A lattice of hundreds of atoms is the opposite case. `scene.sort_by_depth(layer)`
+opts one layer in to the painter's algorithm: its elements are drawn back to
+front, ties keep insertion order, and every other layer is untouched.
+`Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case,
+the back faces of a convex solid.
 
 ## Drawing
 
@@ -104,6 +106,21 @@ World-space calls on `Scene`:
   lying in a world plane: one polygon filled by a radial gradient mapped
   through the plane's affine transform.
 
+Curved solids have exact outlines under any parallel projection, and each is one
+native element or group:
+
+- `sphere` is a single `<circle>` (an `<ellipse>` under an oblique camera).
+- `cylinder` and `cone` are two straight sides and two elliptical arcs, plus the
+  end disk that faces the camera; `slices=n` cuts a long one into separately
+  sorted lengths.
+- `arrow3d` is a solid shaft and head; `tube` follows any curve, such as a `helix`.
+- `highlight="#fff"` shades any of them with a gradient: a fill style, fixed on
+  screen, not a lighting model.
+
+`edges(layer, faces, back={...})` draws a convex solid's edges and dashes the
+hidden ones, and `sphere_curve` splits a curve on a sphere where it passes behind.
+Labels can be `svg.TSpan` runs, for subscripts.
+
 Screen-space `rect2d` and `text2d`, `add_def` for `<defs>`, and `add` for raw
 `svg.py` elements complete the set. Style keywords pass straight to `svg.py`
 (`stroke_width` becomes `stroke-width`).
@@ -118,6 +135,10 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | `rect_shape`, `circle_shape`, `ellipse_shape` | flat outlines in any plane |
 | `arrow_shape`, `double_arrow_shape` | flat arrows with a shaft and head |
 | `sine_ribbon` | a transverse wave along an axis, for `polyline`; the amplitude may be an envelope |
+| `arc_shape`, `helix` | an arc between two directions; a coil or spin spiral |
+| `surface_faces(x, y, z)` | the quads of a sampled surface, such as a band structure |
+| `convex_polyhedron(vertices)` | a Brillouin zone or coordination polyhedron from its corners |
+| `trim_corners(faces, r)` | faces cut back from atoms sitting on their corners |
 | `in_plane_dir(angle_deg, u, v)` | a unit direction at an angle within a plane |
 
 At an azimuth of 35°, neither `+x` nor `+y` moves a point horizontally across
@@ -158,7 +179,7 @@ viewBox, and `with_camera` reprojects the anchor.
 ## Output
 
 `Scene.save(path)` writes the document; `Scene.to_svg_document()` returns it as
-a string. That method is the whole embedding contract: any tool that accepts an
+a string. In Jupyter a scene displays itself inline. That method is the whole embedding contract: any tool that accepts an
 object exposing it can place a scene, without VecView knowing about the tool.
 The fitted viewBox usually does *not* start at `0, 0`, so a consumer must honour
 its origin. See [Embedding a scene](docs/embedding.md).
@@ -168,7 +189,13 @@ the final page.
 
 ## Examples
 
+The [gallery](docs/gallery.md) has the figures everyone draws — a perovskite
+cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
+solenoid — each from one script:
+
 ```bash
+uv run python examples/gallery                                # all of them
+
 uv run python examples/slab_polarizer.py                      # one projection
 uv run python examples/slab_polarizer.py --projection all     # all five
 uv run python examples/altermagnetic_dot.py --projection all  # a device sketch, replayed
@@ -209,6 +236,7 @@ VecView depends on none of them and contains no code specific to any of them.
 - [Cameras](docs/cameras.md)
 - [Scenes and layers](docs/scenes.md)
 - [Shapes](docs/shapes.md)
+- [Gallery](docs/gallery.md)
 - [Embedding a scene](docs/embedding.md)
 - [Development](docs/development.md)
 

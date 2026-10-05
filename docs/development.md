@@ -48,9 +48,11 @@ dimetric, and trimetric cases.
 - **Keep the three-way split**: `shapes` knows only numbers, `camera` knows
   projection, `scene` is the only module that touches `svg.py`. Geometry that
   needs a camera to be computed does not belong in `shapes`.
-- **No automatic depth sorting.** See [Scenes](scenes.md#why-not-a-depth-sort).
-  Back-face culling of convex solids is the one exception, and it lives on
-  `Camera`, not `Scene`.
+- **Layers first.** A layer is depth-sorted only when it asks to be; see
+  [Scenes](scenes.md#sorting-by-depth). Back-face culling of convex solids lives
+  on `Camera`, not `Scene`.
+- **Highlights are fill styles.** A highlight gradient sits in a fixed place on
+  screen; there is no light direction, material, or shading model.
 - **Degrees at the API surface**, radians nowhere.
 - **Deterministic output.** Same scene, same bytes: layer ties resolve by
   insertion order and coordinates are rounded on emission, so a figure stays

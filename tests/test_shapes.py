@@ -372,3 +372,113 @@ class TestAnnulusSector:
     ) -> None:
         with pytest.raises(ValueError):
             vecview.annulus_sector((0, 0), r_in, r_out, t0, t1, n=n)
+
+
+class TestArcShape:
+    def test_lies_on_the_circle_between_the_angles(self) -> None:
+        arc = vecview.arc_shape((1, 2, 3), (1, 0, 0), (0, 1, 0), 2.0, 0.0, 90.0, n=8)
+        assert np.allclose(np.linalg.norm(arc - (1, 2, 3), axis=1), 2.0)
+        assert np.allclose(arc[0], (3, 2, 3)) and np.allclose(arc[-1], (1, 4, 3))
+
+    def test_v_need_not_be_perpendicular(self) -> None:
+        """The arc between two vectors is measured in their plane, from the first."""
+        a, b = np.array([0.0, 0.0, 1.0]), vecview.unit([1.0, 0.0, 1.0])
+        arc = vecview.arc_shape((0, 0, 0), a, b, 1.0, 0.0, 45.0)
+        assert np.allclose(arc[-1], b)
+
+    def test_rejects_parallel_axes(self) -> None:
+        with pytest.raises(ValueError, match="parallel"):
+            vecview.arc_shape((0, 0, 0), (1, 0, 0), (2, 0, 0), 1.0, 0.0, 90.0)
+
+
+class TestHelix:
+    def test_radius_and_pitch(self) -> None:
+        h = vecview.helix((0, 0, 0), (0, 0, 1), 0.5, 2.0, 3.0, n_per_turn=40)
+        assert np.allclose(np.hypot(h[:, 0], h[:, 1]), 0.5)
+        assert np.isclose(h[-1, 2] - h[0, 2], 6.0)
+        assert np.allclose(h[40, :2], h[0, :2]), "one full turn returns to the same angle"
+
+    @pytest.mark.parametrize(("pitch", "sign"), [(1.0, 1.0), (-1.0, -1.0)])
+    def test_handedness_follows_the_pitch(self, pitch: float, sign: float) -> None:
+        h = vecview.helix((0, 0, 0), (0, 0, 1), 1.0, pitch, 1.0)
+        # Right-handed: counter-clockwise about +z while rising.
+        turning = h[0, 0] * h[1, 1] - h[0, 1] * h[1, 0]
+        assert turning > 0 and np.sign(h[1, 2] - h[0, 2]) == sign
+
+    def test_rejects_no_turns(self) -> None:
+        with pytest.raises(ValueError, match="turns"):
+            vecview.helix((0, 0, 0), (0, 0, 1), 1.0, 1.0, 0.0)
+
+
+class TestSurfaceFaces:
+    def test_one_quad_per_grid_cell(self) -> None:
+        x, y = np.meshgrid(np.linspace(0, 1, 4), np.linspace(0, 1, 3), indexing="ij")
+        faces = vecview.surface_faces(x, y, x * y)
+        assert len(faces) == 3 * 2
+        assert faces[0].name == "q-0-0" and faces[-1].name == "q-2-1"
+
+    def test_ij_height_field_normals_point_up_and_wind_ccw(self) -> None:
+        x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5), indexing="ij")
+        for face in vecview.surface_faces(x, y, 0.1 * x**2):
+            assert face.normal[2] > 0
+            p = face.points
+            assert np.dot(np.cross(p[1] - p[0], p[2] - p[0]), face.normal) > 0
+
+    def test_rejects_mismatched_grids(self) -> None:
+        with pytest.raises(ValueError, match="one shape"):
+            vecview.surface_faces(np.zeros((3, 3)), np.zeros((3, 3)), np.zeros((3, 4)))
+
+
+class TestConvexPolyhedron:
+    def test_cube_has_six_square_faces(self) -> None:
+        corners = [(x, y, z) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+        faces = vecview.convex_polyhedron(corners)
+        assert sorted(len(f.points) for f in faces) == [4] * 6
+
+    def test_truncated_octahedron_merges_coplanar_triangles(self) -> None:
+        """The fcc Brillouin zone: eight hexagons and six squares."""
+        verts = {
+            tuple(s * v for s, v in zip(signs, perm, strict=True))
+            for perm in __import__("itertools").permutations((0, 1, 2))
+            for signs in __import__("itertools").product((1, -1), repeat=3)
+        }
+        faces = vecview.convex_polyhedron(sorted(verts))
+        assert sorted(len(f.points) for f in faces) == [4] * 6 + [6] * 8
+
+    def test_faces_wind_ccw_about_outward_normals(self) -> None:
+        rng = np.random.default_rng(1)
+        faces = vecview.convex_polyhedron(rng.normal(size=(30, 3)))
+        for face in faces:
+            p = face.points
+            area = sum(np.cross(p[i] - p[0], p[i + 1] - p[0]) for i in range(1, len(p) - 1))
+            assert np.dot(area, face.normal) > 0
+            assert_in_plane(p, face.normal)
+
+    def test_interior_points_are_ignored(self) -> None:
+        corners = [(x, y, z) for x in (-1, 1) for y in (-1, 1) for z in (-1, 1)]
+        assert len(vecview.convex_polyhedron([*corners, (0, 0, 0), (0.5, 0, 0)])) == 6
+
+    def test_rejects_a_flat_point_set(self) -> None:
+        with pytest.raises(ValueError, match="coplanar"):
+            vecview.convex_polyhedron([(0, 0, 0), (1, 0, 0), (0, 1, 0), (1, 1, 0)])
+
+
+class TestTrimCorners:
+    def test_every_point_keeps_its_distance_from_the_corners(self) -> None:
+        square = vecview.box_faces((0, 0, 0), (2, 2, 2))[:1]
+        (cut,) = vecview.trim_corners(square, 0.3)
+        corners = square[0].points
+        gaps = np.linalg.norm(cut.points[:, None, :] - corners[None, :, :], axis=2).min(axis=1)
+        assert gaps.min() == pytest.approx(0.3)
+        assert_in_plane(cut.points, cut.normal)
+
+    def test_keeps_name_normal_and_winding(self) -> None:
+        face = vecview.box_faces((0, 0, 0), (2, 2, 2))[0]
+        (cut,) = vecview.trim_corners([face], 0.3)
+        p = cut.points
+        area = sum(np.cross(p[i] - p[0], p[i + 1] - p[0]) for i in range(1, len(p) - 1))
+        assert cut.name == face.name and np.dot(area, face.normal) > 0
+
+    def test_rejects_cuts_that_would_overlap(self) -> None:
+        with pytest.raises(ValueError, match="half the shortest edge"):
+            vecview.trim_corners(vecview.box_faces((0, 0, 0), (1, 1, 1)), 0.5)

@@ -173,8 +173,8 @@ class ParallelCamera(Camera):
         """Signed distance along the view axis; larger is nearer the camera.
 
         Provided as a query for callers who want to order something by depth
-        themselves.  :class:`~vecview.scene.Scene` never sorts by depth on its
-        own -- see its class docstring for why.
+        themselves.  :class:`~vecview.scene.Scene` sorts a layer by this only
+        when asked, through :meth:`~vecview.scene.Scene.sort_by_depth`.
         """
         depths: Array = np.asarray(as_points(pts) @ self.view, dtype=np.float64)
         return depths

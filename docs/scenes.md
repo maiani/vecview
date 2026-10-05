@@ -24,16 +24,45 @@ Layers are integers rather than names so you can leave gaps and slot something i
 later without renumbering. A common habit is decades — 10 for the solid, 20 for
 what sits on it, 30 for labels.
 
-### Why not a depth sort
+### Sorting by depth
 
-There is no z-buffer and no painter's algorithm. A beam passing through a
-translucent slab has three parts — above, attenuated inside, emerging below — and
-no automatic depth rule orders those correctly against a partially transparent
-face. Deciding it by hand is worth more than getting it automatically and almost
-right. Back-face culling of a convex solid, the one unambiguous case, is
-available as [`Camera.visible`](cameras.md#back-face-culling).
+```python
+scene.sort_by_depth(30)
+```
 
-`Camera.depth()` is there if you want to order something by depth yourself.
+Layers are the model, and a scene never reorders a layer on its own. A layer
+passed to `sort_by_depth` opts in to the painter's algorithm: its world-space
+elements are drawn farthest first, each keyed by the mean depth of the points
+that made it — a sphere by its centre, a cylinder by its axis midpoint, a polygon
+by its vertices. Equal depths keep insertion order, so the output stays
+deterministic, and screen-space elements, which have no depth, go on top. Other
+layers are untouched, and the setting is recorded, so
+[`with_camera`](#rendering-one-scene-several-ways) re-sorts for the new camera.
+
+It is for **many separate objects that do not interpenetrate**: the atoms and
+bonds of a lattice, the arrows of a spin texture, the quads of a surface. There,
+assigning layers by hand is not an option, and sorting is close to exact — exact
+for non-overlapping spheres of one radius.
+
+It is a heuristic, and two cases defeat it:
+
+- **A line or face running into a sphere's centre.** Part of it is inside the
+  ball, so no order is right. Cut it back to the surface — `edges(trim=r)`,
+  [`trim_corners`](shapes.md#polyhedra), or a bond whose ends you move to the atom
+  surfaces — and it sorts exactly.
+- **Long objects that each cover part of the other**, like a coil round a core.
+  A single key cannot describe either. Cut the long one into
+  [slices](#long-objects).
+
+What it cannot do at all is order a beam inside a translucent slab: the beam
+above, the attenuated segment inside, and the emerging beam below are three draw
+calls at three layers, and no automatic rule orders them correctly against a
+partially transparent face. That case still belongs on separate layers, decided
+by hand.
+
+`Camera.depth()` is there if you want to order something yourself, and
+back-face culling of a convex solid is
+[`Camera.visible`](cameras.md#back-face-culling).
 
 ## World-space calls
 
@@ -111,6 +140,116 @@ XML name character, so the sign is spelled out:
 scene.faces(10, cam.visible(slab), fill="#cfd6e0", id="slab")
 # -> slab-pz, slab-px, slab-py
 ```
+
+`text` and `text2d` take either a string or a list of `svg.TSpan` runs, for a
+subscript or a mixed style:
+
+```python
+k_x = [svg.TSpan(text="k"), svg.TSpan(text="x", baseline_shift="sub", font_size=14)]
+scene.text(40, tip, k_x, size=20, font_style="italic")
+```
+
+For real mathematics, reserve a [slot](#anchoring-upright-content) and fill it
+with a TeX fragment in the tool that composes the page.
+
+## Curved solids
+
+```python
+scene.sphere(layer, center, radius, highlight=None, **style)
+scene.cylinder(
+    layer, p0, p1, radius, r1=None, ends=True, end_style=None, highlight=None, slices=1, **style
+)
+scene.cone(layer, base, apex, radius, end=True, end_style=None, highlight=None, **style)
+scene.arrow3d(
+    layer, origin, direction, length, shaft_r=..., head_r=..., head_len=..., pivot="tail", **style
+)
+scene.tube(layer, points3, radius, chunk=4, **style)
+```
+
+A parallel projection maps a sphere onto an ellipse and a circle onto an ellipse,
+so curved solids have **exact, closed-form outlines**, and each is drawn as one:
+
+- `sphere` is a single `<circle>` — or, under an oblique camera, a rotated
+  `<ellipse>`. An editor sees a circle, not a polygon.
+- `cylinder` is one `<path>` of two straight sides and two elliptical arcs: the
+  outer common tangents of the projected end circles, which have a closed form.
+  The end disk that faces the camera, if any, is drawn over the body as a native
+  ellipse. `r1` makes a frustum and `ends=False` an open tube — what a bond hidden
+  inside two atoms wants. `end_style` restyles the disks, typically a lighter
+  `fill`.
+- `cone` is `cylinder` with `r1=0`: two tangents from the apex and one arc.
+- `arrow3d` is a cylindrical shaft and a conical head in one `<g>`, ordered within
+  the group by which end is nearer, so it reads as a solid from every side. The
+  flat [`arrow`](#world-space-calls) is still the better choice when an arrow
+  seen end-on must stay legible.
+- `tube` follows a world-space curve — a coil, a field line. It is drawn as wide
+  round-joined strokes, which is exact for an orthographic camera, since a tube
+  projects to its centre line thickened by its radius. `fill` is the tube's colour
+  and `stroke` its outline. It is cut into pieces of `chunk` segments so that in a
+  sorted layer it passes over and under itself; neighbouring pieces overlap and
+  each outline stops short of its body, so no seam shows.
+
+Each solid is one `<g>` (or, for a sphere, one element), so it is one object in
+an editor and one key for [`sort_by_depth`](#sorting-by-depth). An `id` goes on
+the group and is suffixed for the parts: `{id}-body`, `{id}-body-end0`,
+`{id}-head`, `{id}-shaft`, `{id}-3` for the fourth tube piece.
+
+### Highlights
+
+`highlight="#ffffff"` shades a solid: a sphere with a radial gradient from the
+highlight near its upper left to its `fill` at the rim, a cylinder or cone with a
+linear gradient across its width. This is a **fill style, not a lighting model**
+— the highlight sits in the same place on screen whatever the camera, and there
+is no light direction, material, or shading per face.
+
+Spheres of one colour pair share one gradient, `ball-{fill}-{highlight}`, so a
+lattice of a thousand atoms in two colours adds two definitions. A cylinder's
+gradient depends on its geometry, so it needs an `id` and is named `{id}-shade`
+(or `{id}-body-shade` through the group).
+
+### Long objects
+
+```python
+scene.cylinder(10, (-2, 0, 0), (2, 0, 0), 0.8, slices=20, id="core")
+```
+
+Keyed by its centre alone, a long cylinder sorts wholly in front of everything
+on its far half and wholly behind everything on its near half — a coil wound
+round it comes out wrong at both ends. `slices` cuts it into lengths along its
+axis, each its own `<g>` keyed by its own midpoint, so each turn meets the slice
+it wraps. The slices overlap a little and the outline is stroked along the sides
+only, so the result still looks like one solid — except with a translucent fill,
+where the overlaps show.
+
+## Hidden lines
+
+```python
+scene.edges(layer, faces, back=None, back_layer=None, separate=False, trim=0.0, **style)
+scene.sphere_curve(layer, center, points3, closed=False, back=None, back_layer=None, **style)
+```
+
+`edges` draws the edges of a convex solid, visible ones with `style`. An edge is
+visible when either face it bounds faces the camera, which is exact for a convex
+solid. Hidden edges are dropped unless `back` is given, in which case they get
+`{**style, **back}` — the crystallographer's dashed back edges — on `back_layer`,
+which you can put under a translucent solid's faces so they veil it:
+
+```python
+zone = vecview.convex_polyhedron(corners)
+scene.edges(30, zone, back={"stroke_dasharray": "5 4"}, back_layer=5, stroke="#222")
+scene.faces(20, zone, cull=True, fill="#a9c8ea", fill_opacity=0.2)
+```
+
+`separate=True` emits one `<path>` per edge, keyed by its own midpoint, so cell
+edges interleave with atoms in a sorted layer; `trim` shortens each edge at both
+ends, to stop at the surface of an atom on each corner.
+
+`sphere_curve` draws a curve lying on a sphere — an equator, a meridian — split
+exactly where it passes behind the sphere, with the same `back` and `back_layer`.
+A point on the sphere faces the camera when `(p - center) · view ≥ 0`, and the
+curve is cut where that changes sign.
+
+Both re-split under [`with_camera`](#rendering-one-scene-several-ways).
 
 ## Screen-space calls
 
@@ -296,6 +435,9 @@ path = scene.save("scene.svg")  # writes it, returns the Path
 
 Rendering does not consume the scene — call it as often as you like, and keep
 adding afterwards.
+
+In a Jupyter notebook a scene displays itself: it implements `_repr_svg_`, which
+returns the document, or nothing while the scene is still empty.
 
 Only SVG is written. PNG and PDF export are left to the consumer, which is what
 holds the runtime dependencies to `numpy` and `svg.py`. Run `cairosvg` over the

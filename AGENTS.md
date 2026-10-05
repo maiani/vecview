@@ -47,13 +47,18 @@ on its own side.
 
 Do not add these without the user changing the design first:
 
-- **Automatic depth sorting** (z-buffer or painter's algorithm). Layers are the
-  model. A beam crossing a translucent slab has three parts that no automatic
-  depth rule orders correctly. `Camera.depth()` exists so a caller can sort;
-  `Scene` never does.
+- **Automatic depth sorting across layers** (a z-buffer, or sorting a layer that
+  did not ask). Layers are the model. A beam crossing a translucent slab has
+  three parts that no automatic depth rule orders correctly. The painter's
+  algorithm exists only inside a layer passed to `Scene.sort_by_depth`, for many
+  separate objects; its known failures are fixed by cutting geometry back
+  (`edges(trim=)`, `trim_corners`) or into pieces (`cylinder(slices=)`, `tube`
+  chunks), not by a smarter global sort.
 - **Rasterizing or PDF export.** Runtime dependencies stay `numpy` and `svg.py`;
   a test in `tests/test_package_metadata.py` enforces it.
 - **Shading, materials, or lighting models.** This draws schematics, not renders.
+  `highlight=` gradients are a fill style fixed on screen, with no light
+  direction; keep them that way.
 
 ## Development
 
@@ -61,9 +66,11 @@ Do not add these without the user changing the design first:
 - `uv sync --all-extras` for a full environment.
 - Run `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src`,
   and `uv run pytest` before reporting a change complete.
-- Run `uv run python examples/slab_polarizer.py --projection all` and
-  `uv run python examples/altermagnetic_dot.py --projection all` after touching
-  geometry or projection. It is the realistic end-to-end check, and it renders
+- Run `uv run python examples/slab_polarizer.py --projection all`,
+  `uv run python examples/altermagnetic_dot.py --projection all`, and
+  `uv run python examples/gallery` after touching geometry or projection, and
+  look at `examples/out/gallery/*.png` after touching a solid, an outline, or
+  the depth sort. Refresh `docs/gallery/` with `--docs` when a figure changes. It is the realistic end-to-end check, and it renders
   pictures whose correctness is visible. Mirrored or upside-down content, or a
   beam that misses the slab, is the usual symptom of a projection bug.
 - Keep output deterministic: layer ties resolve by insertion order, coordinates

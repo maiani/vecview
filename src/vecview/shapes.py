@@ -8,13 +8,15 @@ same polygon can be drawn twice with different fills, or reused as a clip path.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from itertools import combinations
 from typing import Literal, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
 
-from vecview._types import Array, Point3, Points2
-from vecview._vec import basis_for, unit
+from vecview._types import Array, Point3, Points2, Points3
+from vecview._vec import as_points, basis_for, unit
 
 FaceName = Literal["-x", "+x", "-y", "+y", "-z", "+z"]
 
@@ -325,6 +327,207 @@ def ellipse_shape(center: Point3, u: Point3, v: Point3, a: float, b: float, n: i
     return ring
 
 
+def arc_shape(
+    center: Point3,
+    u: Point3,
+    v: Point3,
+    radius: float,
+    theta0_deg: float,
+    theta1_deg: float,
+    n: int = 32,
+) -> Array:
+    """Circular arc of ``n`` segments in the plane of ``u`` and ``v``.
+
+    Angles are measured from ``u`` toward ``v``; ``v`` need not be perpendicular
+    to ``u``, only not parallel, so the arc marking the angle between two
+    vectors is ``arc_shape(origin, a, b, r, 0, angle_between)``.
+
+    Raises:
+        ValueError: If ``u`` and ``v`` are parallel, which leaves no plane.
+    """
+    uh = unit(u)
+    w = np.asarray(v, dtype=np.float64) - float(np.dot(v, uh)) * uh
+    if float(np.linalg.norm(w)) < 1e-12 * max(float(np.linalg.norm(v)), 1.0):
+        raise ValueError("u and v are parallel, so they span no plane for the arc")
+    vh = unit(w)
+    t = np.radians(np.linspace(theta0_deg, theta1_deg, n + 1))
+    arc: Array = np.asarray(center, dtype=np.float64) + radius * (
+        np.outer(np.cos(t), uh) + np.outer(np.sin(t), vh)
+    )
+    return arc
+
+
+def helix(
+    start: Point3,
+    axis: Point3,
+    radius: float,
+    pitch: float,
+    turns: float,
+    n_per_turn: int = 48,
+    phase_deg: float = 0.0,
+) -> Array:
+    """Helix winding about ``axis`` from ``start``, for a coil or a spin spiral.
+
+    ``start`` is on the axis.  The curve begins ``radius`` from it at angle
+    ``phase_deg`` (measured in the frame of :func:`circle_shape`), turns
+    counter-clockwise about ``axis`` and advances ``pitch`` along it per turn,
+    so a positive ``pitch`` is right-handed and a negative one left-handed.
+
+    Raises:
+        ValueError: Unless ``turns`` and ``n_per_turn`` are positive.
+    """
+    if turns <= 0 or n_per_turn < 1:
+        raise ValueError(f"need turns > 0 and n_per_turn >= 1, got {turns}, {n_per_turn}")
+    a = unit(axis)
+    e1, e2 = basis_for(a)
+    count = max(round(turns * n_per_turn), 1)
+    s = np.linspace(0.0, turns, count + 1)
+    t = 2.0 * np.pi * s + np.radians(phase_deg)
+    curve: Array = (
+        np.asarray(start, dtype=np.float64)
+        + radius * (np.outer(np.cos(t), e1) + np.outer(np.sin(t), e2))
+        + np.outer(s * pitch, a)
+    )
+    return curve
+
+
+def surface_faces(x: Array, y: Array, z: Array) -> list[Face]:
+    """Quads of a parametric surface sampled on a grid, for band surfaces and cones.
+
+    ``x``, ``y`` and ``z`` are 2D arrays of one shape ``(m, n)`` -- the output
+    of :func:`numpy.meshgrid` for a height field ``z = f(x, y)``, or any
+    parametrization ``(x(s, t), y(s, t), z(s, t))``.  Quad ``(i, j)`` spans
+    samples ``i..i+1`` and ``j..j+1``, is named ``"q-{i}-{j}"``, and is wound
+    counter-clockwise about its normal, which points along ``d/di x d/dj``.  For
+    a height field from ``np.meshgrid(xs, ys, indexing="ij")`` that is upward;
+    the default ``indexing="xy"`` swaps the axes and points it downward.
+
+    A surface is two-sided, so do not cull it; draw the quads in a layer passed
+    to :meth:`~vecview.scene.Scene.sort_by_depth`, and use the normal to pick a
+    front or back colour if the surface folds toward the camera.
+
+    Raises:
+        ValueError: If the arrays differ in shape or have fewer than two
+            samples along either axis.
+    """
+    gx, gy, gz = (np.asarray(a, dtype=np.float64) for a in (x, y, z))
+    if not gx.shape == gy.shape == gz.shape or gx.ndim != 2:
+        raise ValueError(
+            f"x, y and z must be 2D arrays of one shape, got {gx.shape}, {gy.shape}, {gz.shape}"
+        )
+    m, n = gx.shape
+    if m < 2 or n < 2:
+        raise ValueError(f"a surface needs at least 2 x 2 samples, got {m} x {n}")
+    p = np.stack([gx, gy, gz], axis=-1)
+    faces: list[Face] = []
+    for i in range(m - 1):
+        for j in range(n - 1):
+            quad = np.array([p[i, j], p[i + 1, j], p[i + 1, j + 1], p[i, j + 1]])
+            # Twice the cross product of the two partial derivatives, from the
+            # diagonals, which stays defined when one edge collapses to a point.
+            normal = unit(np.cross(quad[2] - quad[0], quad[3] - quad[1]))
+            faces.append(Face(f"q-{i}-{j}", quad, normal))
+    return faces
+
+
+def convex_polyhedron(vertices: Points3, *, tol: float = 1e-9) -> list[Face]:
+    """Faces of the convex hull of ``vertices``, each wound CCW about its outward normal.
+
+    For a Brillouin zone, a coordination octahedron, or any small convex solid
+    known by its corners.  Faces are named ``"face-{k}"`` in a deterministic
+    order, and coplanar vertices merge into one polygonal face, so a truncated
+    octahedron gives eight hexagons and six squares rather than triangles.
+    Vertices strictly inside the hull are ignored.
+
+    The search tests every vertex triple against every vertex, which is
+    ``O(n^4)``: instant for the tens of vertices this is meant for, and the
+    wrong tool for a mesh of thousands.
+
+    Args:
+        vertices: World points, shape ``(n, 3)``.
+        tol: Coplanarity tolerance, relative to the size of the solid.
+
+    Raises:
+        ValueError: For fewer than four vertices, or vertices that are all
+            coplanar, since neither encloses a volume.
+    """
+    pts = as_points(vertices)
+    n = len(pts)
+    if n < 4:
+        raise ValueError(f"a polyhedron needs at least 4 vertices, got {n}")
+    size = float(np.ptp(pts, axis=0).max()) or 1.0
+    eps = tol * size
+
+    i, j, k = (np.asarray(c) for c in zip(*combinations(range(n), 3), strict=True))
+    found: dict[frozenset[int], Array] = {}
+    chunk = 4096
+    for lo in range(0, len(i), chunk):
+        a, b, c = pts[i[lo : lo + chunk]], pts[j[lo : lo + chunk]], pts[k[lo : lo + chunk]]
+        normals = np.cross(b - a, c - a)
+        lengths = np.linalg.norm(normals, axis=1)
+        ok = lengths > eps * size
+        normals = normals[ok] / lengths[ok, None]
+        side = pts @ normals.T - np.einsum("ij,ij->i", a[ok], normals)
+        below, above = np.all(side <= eps, axis=0), np.all(side >= -eps, axis=0)
+        for col in np.flatnonzero(below | above):
+            normal = normals[col] if below[col] else -normals[col]
+            on = frozenset(int(v) for v in np.flatnonzero(np.abs(side[:, col]) <= eps))
+            found.setdefault(on, normal)
+    if not found or all(len(on) == n for on in found):
+        raise ValueError("vertices are coplanar, so they enclose no volume")
+
+    faces: list[Face] = []
+    for on, normal in found.items():
+        idx = sorted(on)
+        ring = pts[idx]
+        centre = ring.mean(axis=0)
+        e1, e2 = basis_for(normal)
+        rel = ring - centre
+        order = np.argsort(np.arctan2(rel @ e2, rel @ e1), kind="stable")
+        faces.append(Face(f"face-{len(faces)}", ring[order], np.asarray(normal)))
+    return faces
+
+
+def trim_corners(faces: Iterable[Face], radius: float, n: int = 8) -> list[Face]:
+    """Faces with a disk of ``radius`` cut out at every corner.
+
+    For a polyhedron with an atom or marker on each vertex.  A face that runs
+    into the centre of a sphere cannot be depth-sorted against it, since part
+    of the face is inside the ball; cut back to the sphere's surface, it can.
+    The ball meets each face plane in a disk about the vertex, so the corner is
+    replaced by an inward arc of ``n`` segments, centred on the vertex, from
+    one edge to the other.  Name and normal are kept.
+
+    Pair with :meth:`~vecview.scene.Scene.edges` ``trim=radius`` for the edges.
+
+    Raises:
+        ValueError: If ``radius`` is not smaller than half of every edge, which
+            would make neighbouring cuts overlap.
+    """
+    trimmed: list[Face] = []
+    for face in faces:
+        ring = np.asarray(face.points, dtype=np.float64)
+        edges = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
+        if radius <= 0:
+            trimmed.append(face)
+            continue
+        if radius >= 0.5 * float(edges.min()):
+            raise ValueError(
+                f"radius {radius:g} must be under half the shortest edge, "
+                f"{0.5 * float(edges.min()):g}, of face {face.name!r}"
+            )
+        out: list[Array] = []
+        for i, v in enumerate(ring):
+            a = unit(ring[i - 1] - v)
+            b = unit(ring[(i + 1) % len(ring)] - v)
+            angle = float(np.arccos(np.clip(np.dot(a, b), -1.0, 1.0)))
+            w = unit(b - np.dot(b, a) * a)
+            t = np.linspace(0.0, angle, n + 1)
+            out.extend(v + radius * (np.outer(np.cos(t), a) + np.outer(np.sin(t), w)))
+        trimmed.append(Face(face.name, np.array(out), face.normal))
+    return trimmed
+
+
 def sine_ribbon(
     start: Point3,
     axis: Point3,
@@ -351,13 +554,18 @@ __all__ = [
     "Face",
     "FaceName",
     "annulus_sector",
+    "arc_shape",
     "arrow_shape",
     "box_faces",
     "circle_shape",
+    "convex_polyhedron",
     "double_arrow_shape",
     "ellipse_shape",
+    "helix",
     "in_plane_dir",
     "prism_faces",
     "rect_shape",
     "sine_ribbon",
+    "surface_faces",
+    "trim_corners",
 ]
