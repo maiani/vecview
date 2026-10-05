@@ -5,20 +5,26 @@ beam, a lattice, an optical bench. The schematic is generated from code and
 stays editable afterwards: elements keep the ids you give them, the same scene
 renders to byte-identical SVG, and the output opens in Inkscape.
 
+<p align="center">
+  <img src="docs/images/readme.svg" alt="A gate-defined quantum dot on a layered slab, with leads, gates, spin densities and a bias circuit" width="640">
+</p>
+
+<p align="center"><sub>A device sketch: layered solids, Gaussian densities, solid arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="docs/gallery.md">gallery</a>.</sub></p>
+
 VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
 VecView supplies what it has no notion of: a camera, world-space glyph geometry,
 and an explicit layer stack. Runtime dependencies are `numpy` and `svg.py`.
 
-VecView is alpha: unpublished, and the API may change before 1.0.
+VecView is alpha: not yet on PyPI, and the API may change before 1.0.
 
 ## Install
 
-VecView is not yet on PyPI. Install it from a checkout (Python 3.12 or newer):
+VecView is not yet on PyPI. Install it from GitHub (Python 3.12 or newer):
 
 ```bash
-python -m pip install -e /path/to/vecview
-python -m pip install -e "/path/to/vecview[occlusion]"  # exact visibility: shapely, contourpy
+python -m pip install "vecview @ git+https://github.com/maiani/vecview"
+python -m pip install "vecview[occlusion] @ git+https://github.com/maiani/vecview"  # exact visibility
 ```
 
 ## Quick start
@@ -232,7 +238,7 @@ usual sign of a projection bug.
 
 VecView is developed alongside [FigWorks](https://github.com/maiani/figworks),
 which composes multi-panel figures, and two other producers of editable SVG:
-[VecTeX](https://github.com/maiani/vectex) (TeX equations) and VecWire (circuit
+[VecTeX](https://github.com/maiani/vectex) (TeX equations) and [VecWire](https://github.com/maiani/vecwire) (circuit
 schematics). All four share one premise: figures generated from code, with
 stable ids and byte-identical output, that stay editable in Inkscape.
 
