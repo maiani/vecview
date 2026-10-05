@@ -1,4 +1,4 @@
-# vecview
+# VecView
 
 Layered 3D scenes that render to SVG, for scientific schematics.
 
@@ -101,9 +101,9 @@ back faces of a convex solid, culled by their outward normals.
 
 ## Related projects
 
-`vecview` is developed alongside [FigForge](https://github.com/maiani/figforge),
+`vecview` is developed alongside [FigWorks](https://github.com/maiani/figworks),
 which composes multi-panel figures, and
-[Vectex](https://github.com/maiani/vectex), which renders TeX equations to SVG
+[VecTeX](https://github.com/maiani/vectex), which renders TeX equations to SVG
 fragments. The three form a suite for publication figures, and each is usable on
 its own.
 

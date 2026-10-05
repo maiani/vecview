@@ -5,6 +5,14 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-05
+
+### Changed
+
+- Prose spells the project VecView; the distribution, import, and command names
+  stay `vecview`. The sibling projects are now FigWorks (formerly FigForge) and
+  VecWire (formerly cirquit).
+
 ## [0.1.0] - 2026-10-05
 
 ### Added

@@ -1,20 +1,20 @@
-# vecview
+# VecView
 
 Layered 3D scenes that render to SVG, for scientific schematics: a slab and a
 beam, a lattice, an optical bench. The schematic is generated from code and
 stays editable afterwards: elements keep the ids you give them, the same scene
 renders to byte-identical SVG, and the output opens in Inkscape.
 
-vecview is a small projection layer on top of
+VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
-vecview supplies what it has no notion of: a camera, world-space glyph geometry,
+VecView supplies what it has no notion of: a camera, world-space glyph geometry,
 and an explicit layer stack. Runtime dependencies are `numpy` and `svg.py`.
 
-vecview is alpha: unpublished, and the API may change before 1.0.
+VecView is alpha: unpublished, and the API may change before 1.0.
 
 ## Install
 
-vecview is not yet on PyPI. Install it from a checkout (Python 3.12 or newer):
+VecView is not yet on PyPI. Install it from a checkout (Python 3.12 or newer):
 
 ```bash
 python -m pip install -e /path/to/vecview
@@ -130,8 +130,8 @@ spots = [-3.0 * horizontal + 1.7 * down, +3.0 * horizontal + 1.7 * down]
 
 ## Reserving room for other content
 
-Two calls reserve an empty group for content vecview does not draw itself, such
-as a plot or a TeX label. vecview never parses foreign SVG; a consumer fills the
+Two calls reserve an empty group for content VecView does not draw itself, such
+as a plot or a TeX label. VecView never parses foreign SVG; a consumer fills the
 group by id.
 
 `Scene.plane` reserves a rectangle of a world plane, so flat content lies *in*
@@ -159,7 +159,7 @@ viewBox, and `with_camera` reprojects the anchor.
 
 `Scene.save(path)` writes the document; `Scene.to_svg_document()` returns it as
 a string. That method is the whole embedding contract: any tool that accepts an
-object exposing it can place a scene, without vecview knowing about the tool.
+object exposing it can place a scene, without VecView knowing about the tool.
 The fitted viewBox usually does *not* start at `0, 0`, so a consumer must honour
 its origin. See [Embedding a scene](docs/embedding.md).
 
@@ -189,13 +189,13 @@ usual sign of a projection bug.
 
 ## Related projects
 
-vecview is developed alongside [FigForge](https://github.com/maiani/figforge),
+VecView is developed alongside [FigWorks](https://github.com/maiani/figworks),
 which composes multi-panel figures, and two other producers of editable SVG:
-[Vectex](https://github.com/maiani/vectex) (TeX equations) and cirquit (circuit
+[VecTeX](https://github.com/maiani/vectex) (TeX equations) and VecWire (circuit
 schematics). All four share one premise: figures generated from code, with
 stable ids and byte-identical output, that stay editable in Inkscape.
 
-vecview depends on none of them and contains no code specific to any of them.
+VecView depends on none of them and contains no code specific to any of them.
 
 ## Documentation
 

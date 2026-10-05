@@ -1,5 +1,5 @@
 [project]
-site_name = "vecview"
+site_name = "VecView"
 site_description = "Layered 3D scenes that render to SVG"
 docs_dir = "docs"
 site_dir = "site"

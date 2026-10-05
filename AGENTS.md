@@ -1,4 +1,4 @@
-# vecview contributor guide
+# VecView contributor guide
 
 ## Scope
 
@@ -11,7 +11,7 @@ integrate through `Scene.to_svg_document()` alone; that direction is one-way.
 Do not add a consumer-specific adapter, import, dependency, example, or test.
 
 Naming the sibling projects is fine where it is only provenance: `vecview` is
-developed alongside FigForge and Vectex as a suite, and a "Related projects"
+developed alongside FigWorks and VecTeX as a suite, and a "Related projects"
 link says so. What must stay out is *coupling* -- consumer-specific API
 documentation, worked integration examples, or tests that import a consumer.
 A tool that composes figures from `vecview` output documents that integration
