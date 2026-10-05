@@ -10,6 +10,7 @@ import svg
 
 import vecview
 from vecview import Camera, OrthographicCamera, Scene
+from vecview.scene import _Canvas
 
 SQUARE = np.array([[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]], dtype=float)
 
@@ -22,6 +23,17 @@ def cam() -> Camera:
 @pytest.fixture
 def scene(cam: Camera) -> Scene:
     return Scene(cam)
+
+
+def drawn(scene: Scene) -> list[svg.Element]:
+    """The rendered elements, without the definitions."""
+    return [el for el in (scene.render().elements or []) if not isinstance(el, svg.Defs)]
+
+
+def definitions(scene: Scene) -> list[svg.Element]:
+    """The rendered ``<defs>`` children."""
+    first = (scene.render().elements or [None])[0]
+    return list(first.elements or []) if isinstance(first, svg.Defs) else []
 
 
 def tags(document: svg.SVG) -> list[str]:
@@ -163,13 +175,13 @@ class TestPrimitives:
     def test_faces_draws_every_face_given(self, scene: Scene) -> None:
         faces = vecview.box_faces((0, 0, 0), (1, 1, 1))
         scene.faces(0, faces, fill="grey")
-        assert len(scene.items) == 6
+        assert len(drawn(scene)) == 6
 
     def test_faces_does_not_cull_on_its_own(self, scene: Scene, cam: Camera) -> None:
         """Culling is explicit via Camera.visible, so styling stays predictable."""
         faces = vecview.box_faces((0, 0, 0), (1, 1, 1))
         scene.faces(0, cam.visible(faces), fill="grey")
-        assert len(scene.items) == 3
+        assert len(drawn(scene)) == 3
 
     def test_text_offsets_are_in_screen_units(self, scene: Scene, cam: Camera) -> None:
         scene.text(0, (0, 0, 0), "label", dx=5.0, dy=-3.0, size=10)
@@ -228,7 +240,7 @@ class TestDocumentProtocol:
     def test_repr_summarizes_the_scene(self, scene: Scene) -> None:
         scene.polygon(0, SQUARE)
         scene.add_def(svg.RadialGradient(id="g", elements=[]))
-        assert repr(scene) == f"Scene({scene.cam!r}, 1 elements, 1 defs)"
+        assert repr(scene) == f"Scene({scene.camera!r}, cameras=[], 2 calls)"
 
 
 class TestFaceIds:
@@ -330,8 +342,7 @@ class TestReprojection:
         scene = Scene(cam)
         scene.faces(0, vecview.box_faces((0, 0, 0), (1, 1, 1)))
         scene.text(0, (0, 0, 0), "label")
-        clone = scene.with_camera(cam)
-        assert len(clone.items) == len(scene.items)
+        assert len(drawn(scene)) == 7
 
     def test_bounding_box_is_recomputed(self) -> None:
         base = self.build(vecview.OrthographicCamera(35.0, 24.0, 62.0))
@@ -374,7 +385,7 @@ class TestCulling:
     def test_cull_off_by_default(self, cam: Camera) -> None:
         scene = Scene(cam)
         scene.faces(0, vecview.box_faces((0, 0, 0), (1, 1, 1)))
-        assert len(scene.items) == 6
+        assert len(drawn(scene)) == 6
 
 
 class TestSlot:
@@ -442,7 +453,7 @@ class TestSilhouette:
 
     def test_accepts_bare_vertices(self, scene: Scene) -> None:
         scene.silhouette(0, SQUARE)
-        assert len(scene.items) == 1
+        assert len(drawn(scene)) == 1
 
     def test_is_recomputed_on_reprojection(self, scene: Scene) -> None:
         scene.silhouette(0, vecview.box_faces((0, 0, 0), (2, 2, 2)))
@@ -466,13 +477,13 @@ class TestArrow:
             0, (0, 0, 0), (0, 0, 1), 2.0, normal="camera", shaft_w=0.1, head_w=0.5, head_len=0.4
         )
         shape = vecview.arrow_shape(
-            (0, 0, 0), (0, 0, 1), 2.0, scene._facing_normal((0, 0, 1)), 0.1, 0.5, 0.4
+            (0, 0, 0), (0, 0, 1), 2.0, _Canvas(cam)._facing_normal((0, 0, 1)), 0.1, 0.5, 0.4
         )
         head = cam.project(shape[[2, 4]])
         assert np.linalg.norm(head[0] - head[1]) == pytest.approx(0.5 * cam.scale)
 
-    def test_camera_normal_contains_the_arrow(self, scene: Scene) -> None:
-        n = scene._facing_normal((0, 0, 1))
+    def test_camera_normal_contains_the_arrow(self, cam: Camera) -> None:
+        n = _Canvas(cam)._facing_normal((0, 0, 1))
         assert np.dot(n, [0, 0, 1]) == pytest.approx(0.0)
 
     @pytest.mark.parametrize(
@@ -486,7 +497,7 @@ class TestArrow:
     ) -> None:
         """For an oblique camera no face is undistorted; the widest is chosen."""
         d = vecview.unit(direction)
-        n = Scene(camera)._facing_normal(d)
+        n = _Canvas(camera)._facing_normal(d)
         chosen = np.linalg.norm(camera.direction(np.cross(n, d)))
         e1 = vecview.unit(np.cross(d, [0.3, 0.5, 0.7]))
         e2 = np.cross(d, e1)
@@ -498,16 +509,17 @@ class TestArrow:
 
     def test_rejects_an_arrow_along_the_projection_ray(self, scene: Scene, cam: Camera) -> None:
         assert isinstance(cam, vecview.ParallelCamera)
+        scene.arrow(
+            0, (0, 0, 0), cam.view, 1.0, normal="camera", shaft_w=0.1, head_w=0.3, head_len=0.3
+        )
         with pytest.raises(ValueError, match="projection ray"):
-            scene.arrow(
-                0, (0, 0, 0), cam.view, 1.0, normal="camera", shaft_w=0.1, head_w=0.3, head_len=0.3
-            )
+            scene.render()
 
     def test_records_one_call(self, scene: Scene) -> None:
         scene.arrow(
             0, (0, 0, 0), (0, 0, 1), 1.0, normal="camera", shaft_w=0.1, head_w=0.3, head_len=0.3
         )
-        assert len(scene.with_camera(scene.cam).items) == 1
+        assert len(drawn(scene.with_camera(scene.camera))) == 1
 
 
 class TestGaussian:
@@ -524,7 +536,7 @@ class TestGaussian:
         assert [el.id for el in defs.elements or []] == ["spot-profile"]
 
     def test_gradient_maps_onto_the_projected_axes(self, spot: Scene, cam: Camera) -> None:
-        (gradient,) = spot.defs
+        (gradient,) = definitions(spot)
         assert isinstance(gradient, svg.RadialGradient)
         (matrix,) = gradient.gradientTransform or []
         assert isinstance(matrix, svg.Matrix)
@@ -536,7 +548,7 @@ class TestGaussian:
         assert (c + e, d + f) == pytest.approx(expected, abs=1e-3)
 
     def test_profile_is_gaussian_and_reaches_zero_at_the_rim(self, spot: Scene) -> None:
-        (gradient,) = spot.defs
+        (gradient,) = definitions(spot)
         assert isinstance(gradient, svg.RadialGradient)
         stops = [s for s in gradient.elements or [] if isinstance(s, svg.Stop)]
         offsets = np.array([float(s.offset or 0) for s in stops])
@@ -558,10 +570,10 @@ class TestGaussian:
             def visible(self, faces, *, tol=0.0):  # type: ignore[no-untyped-def]
                 return list(faces)
 
+        scene = Scene(Pinhole(1.0))
+        scene.gaussian(0, (0, 0, 0), (1, 0, 0), (0, 1, 0), 1, 1, id="s", color="red")
         with pytest.raises(TypeError, match="parallel projection"):
-            Scene(Pinhole(1.0)).gaussian(
-                0, (0, 0, 0), (1, 0, 0), (0, 1, 0), 1, 1, id="s", color="red"
-            )
+            scene.render()
 
 
 class TestPrismWalls:
@@ -632,3 +644,124 @@ class TestPrismWalls:
         scene.prism_walls(0, [(-1, -1), (1, -1), (1, 1), (-1, 1)], 0.0, 0.5)
         clone = scene.with_camera(vecview.ObliqueCamera.cabinet(10.0))
         assert self.subpaths(clone) != self.subpaths(scene)
+
+
+class TestObjectsAndCamera:
+    """A scene records objects; a camera is only needed to render it."""
+
+    def build(self) -> Scene:
+        scene = Scene(pad=4.0)
+        scene.sort_by_depth(1)
+        scene.sphere(1, (0, 0, 0), 1.0, fill="#c33")
+        scene.cylinder(1, (0, 0, 0), (2, 0, 0), 0.2, fill="#888")
+        return scene
+
+    def test_drawing_needs_no_camera(self) -> None:
+        scene = self.build()
+        assert scene.camera is None and not scene.is_empty
+
+    def test_rendering_without_a_camera_says_so(self) -> None:
+        with pytest.raises(ValueError, match="no camera"):
+            self.build().render()
+
+    def test_a_camera_can_be_passed_or_set(self, cam: Camera) -> None:
+        scene = self.build()
+        passed = str(scene.render(cam))
+        scene.camera = cam
+        assert scene.to_svg_document() == passed
+
+    def test_rendering_is_pure(self, cam: Camera) -> None:
+        scene = self.build()
+        other = vecview.ObliqueCamera.cabinet(10.0)
+        first = str(scene.render(cam))
+        assert str(scene.render(other)) != first
+        assert str(scene.render(cam)) == first
+
+    def test_save_takes_a_camera(self, cam: Camera, tmp_path) -> None:
+        out = self.build().save(tmp_path / "s.svg", cam)
+        assert out.read_text(encoding="utf-8") == str(self.build().render(cam))
+
+    def test_bbox_follows_the_camera(self, cam: Camera) -> None:
+        scene = self.build()
+        top = vecview.OrthographicCamera(0.0, 90.0, 10.0)
+        assert not np.allclose(np.array(scene.bbox(cam)), np.array(scene.bbox(top)))
+
+    def test_jupyter_needs_a_camera(self, cam: Camera) -> None:
+        scene = self.build()
+        assert scene._repr_svg_() is None
+        scene.camera = cam
+        assert scene._repr_svg_() == scene.to_svg_document()
+
+    def test_with_camera_copies_the_record(self, cam: Camera) -> None:
+        scene = self.build()
+        view = scene.with_camera(cam)
+        scene.sphere(1, (5, 0, 0), 1.0)
+        assert len(drawn(view)) == 2 and len(drawn(scene.with_camera(cam))) == 3
+
+
+class TestEagerChecks:
+    """Mistakes that do not depend on the camera are reported where they are made."""
+
+    def test_a_tube_needs_two_points(self) -> None:
+        with pytest.raises(ValueError, match="two points"):
+            Scene().tube(0, [(0, 0, 0)], 0.1)
+
+    def test_an_arrow_normal_is_a_vector_or_camera(self) -> None:
+        with pytest.raises(ValueError, match="camera"):
+            Scene().arrow(
+                0, (0, 0, 0), (1, 0, 0), 1, normal="viewer", shaft_w=0.1, head_w=0.2, head_len=0.2
+            )  # type: ignore[arg-type]
+
+    def test_a_prism_footprint_must_be_simple(self) -> None:
+        bowtie = [(0, 0), (1, 1), (1, 0), (0, 1)]
+        with pytest.raises(ValueError, match="footprint"):
+            Scene().prism_walls(0, bowtie, 0.0, 1.0)
+
+    def test_a_solid_needs_an_axis(self) -> None:
+        with pytest.raises(ValueError, match="coincide"):
+            Scene().cone(0, (1, 1, 1), (1, 1, 1), 0.3)
+
+
+class TestNamedCameras:
+    """A scene holds named cameras, one active, as a 3D application does."""
+
+    @pytest.fixture
+    def scene(self) -> Scene:
+        scene = Scene(
+            "main",
+            cameras={
+                "main": OrthographicCamera(35.0, 24.0, 10.0),
+                "cabinet": vecview.ObliqueCamera.cabinet(10.0),
+            },
+        )
+        scene.sphere(0, (0, 0, 0), 1.0)
+        scene.faces(0, vecview.box_faces((2, 0, 0), (1, 1, 1)), cull=True)
+        return scene
+
+    def test_render_takes_a_name(self, scene: Scene) -> None:
+        by_name = str(scene.render("cabinet"))
+        assert by_name == str(scene.render(scene.cameras["cabinet"]))
+        assert by_name != str(scene.render())
+
+    def test_the_active_camera_is_chosen_by_name(self, scene: Scene) -> None:
+        assert scene.camera is scene.cameras["main"]
+        scene.camera = "cabinet"
+        assert scene.to_svg_document() == str(scene.render("cabinet"))
+
+    def test_an_active_name_follows_its_entry(self, scene: Scene) -> None:
+        replacement = OrthographicCamera.isometric(10.0)
+        scene.cameras["main"] = replacement
+        assert scene.camera is replacement
+
+    def test_an_unknown_name_is_refused(self, scene: Scene) -> None:
+        with pytest.raises(KeyError, match="no camera named 'top'"):
+            scene.camera = "top"
+        with pytest.raises(KeyError, match="'cabinet', 'main'"):
+            scene.render("top")
+
+    def test_with_camera_keeps_the_named_cameras(self, scene: Scene) -> None:
+        view = scene.with_camera("cabinet")
+        assert set(view.cameras) == {"main", "cabinet"}
+        assert view.to_svg_document() == str(scene.render("cabinet"))
+        view.cameras["top"] = OrthographicCamera(0.0, 90.0, 10.0)
+        assert "top" not in scene.cameras

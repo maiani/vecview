@@ -36,7 +36,7 @@ class TestSphere:
         (circle,) = scene.render().elements or []
         assert isinstance(circle, svg.Circle)
         assert circle.r == pytest.approx(5.0)
-        assert (circle.cx, circle.cy) == pytest.approx(scene.cam.at((1, 2, 3)), abs=0.01)
+        assert (circle.cx, circle.cy) == pytest.approx(scene.camera.at((1, 2, 3)), abs=0.01)
 
     def test_oblique_outline_is_the_ellipse_that_bounds_the_ball(self) -> None:
         cam = ObliqueCamera.cabinet(10.0)
@@ -59,8 +59,9 @@ class TestSphere:
         for x in range(3):
             scene.sphere(0, (x, 0, 0), 0.4, fill="#cc3333", highlight="#ffffff")
         scene.sphere(0, (0, 2, 0), 0.4, fill="#3333cc", highlight="#ffffff")
-        assert [d.id for d in scene.defs] == ["ball-cc3333-ffffff", "ball-3333cc-ffffff"]
-        assert scene.render().elements[1].fill == "url(#ball-cc3333-ffffff)"  # type: ignore[index, union-attr]
+        defs, first, *_ = scene.render().elements or []
+        assert [d.id for d in defs.elements] == ["ball-cc3333-ffffff", "ball-3333cc-ffffff"]
+        assert first.fill == "url(#ball-cc3333-ffffff)"
 
     def test_highlight_needs_a_fill(self) -> None:
         with pytest.raises(ValueError, match="fill"):
@@ -170,7 +171,8 @@ class TestSlicedCylinder:
 
     def test_highlight_shares_one_gradient(self) -> None:
         scene = self.build(fill="#888888", highlight="#eeeeee")
-        assert [d.id for d in scene.defs] == ["core-shade"]
+        defs = (scene.render().elements or [])[0]
+        assert [d.id for d in defs.elements] == ["core-shade"]
 
     def test_rejects_zero_slices(self) -> None:
         with pytest.raises(ValueError, match="slices"):

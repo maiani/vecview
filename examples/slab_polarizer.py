@@ -1,43 +1,37 @@
-"""Outreach picture: a spin-textured altermagnetic slab as a frequency-tunable polarizer.
+"""A spin-textured altermagnetic slab acting as a frequency-tunable polarizer.
 
-Two beams strike the same slab at normal incidence, each drawn with both of the
-polarizations the material distinguishes at that frequency -- its principal axes.  In
-each case the component along the principal absorption axis theta_+ is drunk by the slab
-and the orthogonal one exits.  Because theta_+ swings by ~90 deg across the optical
-crossover, the two beams leave polarized along nearly perpendicular directions: the
-headline of the paper in one picture.
+Two beams strike the slab at normal incidence, each drawn as its incoming linear
+polarization split into the slab's two eigenmodes.  The component along the
+absorption axis theta_+ decays inside the slab and the orthogonal one passes
+through.  Because theta_+ swings by about 90 deg between the low- and
+high-frequency regimes, the two beams leave polarized along nearly
+perpendicular directions.
 
-Schematic, at the author's direction: the two absorption axes are drawn at the values the
-two regimes *mean* rather than at one particular frequency's model output.
+The absorption axes are drawn at the values the two regimes stand for, rather
+than at one frequency's model output:
 
-    phi_q      = 22.5 deg, as in Fig. 3(b)
-    locked     theta_+ = 0 deg      -- exactly on a crystal axis
-    tracking   theta_+ = 67.5 deg   -- the tracking law 90 deg - phi_q
+    phi_q      = 22.5 deg           orientation of the spin texture
+    locked     theta_+ = 0 deg      on a crystal axis
+    tracking   theta_+ = 67.5 deg   90 deg - phi_q, the high-frequency asymptote
 
-Both are faithful to the physics: the model gives 1.3 deg at omega = 0.25, and 67.5 deg is
-the asymptote theta_+ approaches from above in the tracking regime (78.6 deg at
-omega = 0.80, 75.2 at 0.895).  Drawing the asymptote rather than a finite-frequency value
-also gives the widest angle to the crystal axes, 22.5 deg, which is what makes the
-locked/tracking contrast legible.  Note the angle cannot be widened beyond that by picking
-a real frequency: theta_+ is furthest off axis right at the crossover, where the dichroism
-dips to its minimum and "one polarization gets through" stops being true.
-The higher-frequency beam is also drawn with a shorter wavelength.  That ratio is
-compressed relative to the true 3.2x, purely so both beams stay legible.
+The asymptote also gives the widest angle to the crystal axes, 22.5 deg, which is
+what keeps the contrast between the regimes legible.  The high-frequency beam is
+drawn with a shorter wavelength, the ratio compressed so both waves stay legible.
 
-Camera notes, learned the hard way:
-  * Elevation is a real trade-off.  Too low (~24 deg) and the slab plane is so
-    foreshortened that both polarization crosses collapse to a similar shallow X,
-    destroying the 90 deg flip -- the whole point.  Too high (~40 deg) and the slab
-    reads as a flat plan view with no visible underside.  Set to 24 deg at the author's
-    direction, to open up the region below the slab.  That is the low end: the two
-    polarization crosses are only ~45 deg apart here and differ mainly in orientation
-    rather than shape.  If it needs to go lower, carry the flip in face-on polarization
-    dials (as outreach-1 does with its purple axis boxes) rather than in the projected
-    crosses.
-  * The visible side walls at this azimuth are x = +LX/2 and y = +LY/2.
+Choosing the camera:
+  * Elevation trades the polarization crosses against the slab's underside.  Too
+    low and the slab plane foreshortens until both crosses collapse to the same
+    shallow X, hiding the 90-degree flip; too high and the slab reads as a plan
+    view with no underside.  24 deg is the low end of what works; below it, show
+    the flip in face-on dials rather than in projected crosses.
+  * An in-plane direction near the camera azimuth projects to almost nothing,
+    which constrains the incoming polarization; see THETA_IN.
+
+The soft beam glows are screen-space rectangles placed from the camera, so the
+scene is rebuilt for each projection rather than rendered under another camera.
 
 Usage:
-    python examples/slab_polarizer.py [--grey]
+    python examples/slab_polarizer.py [--grey] [--projection {trimetric,...,all}]
 """
 
 from __future__ import annotations
@@ -67,7 +61,7 @@ THETA_IN = 130.0
 AMP_IN = 0.52
 THETA_LOW = 0.0  # locked: on the crystal axis
 THETA_HIGH = 67.5  # tracking: 90 deg - phi_q
-Q_TEXTURE = 0.7  # schematic real-space pitch, as in Fig. 1
+Q_TEXTURE = 0.7  # schematic real-space pitch of the spin texture
 
 # --- geometry -------------------------------------------------------------
 LX, LY, THICK = 11.0, 9.0, 0.9
@@ -112,14 +106,10 @@ GREY = dict(
 def draw_slab(sc: Scene, colors) -> None:
     """The slab, drawn as a box with only its camera-facing walls.
 
-    `cull=True` culls by outward normal at draw time, so *which* walls those are
-    is the camera's business.  This used to be a comment reading "the camera sits
-    in the (+x, +y) octant, so these two walls are the visible ones" over two
-    hand-listed corner pairs -- true at this azimuth, silently wrong at another.
-
-    Culling inside `faces` rather than with `cam.visible` here is what lets the
-    finished scene be reprojected: a cabinet camera sees `-y` where this one sees
-    `+y`, and caller-side culling would have baked in the wrong answer.
+    `cull=True` culls by outward normal when the scene is rendered, so *which*
+    walls those are is the camera's business: a cabinet camera sees `-y` where
+    this one sees `+y`.  Listing the visible walls by hand, or culling with
+    `cam.visible` here, would bake in one camera's answer.
 
     Splitting by *name* is camera-independent, so it stays safe: the top is
     translucent so the texture beneath it reads, the walls solid so the slab has
@@ -145,7 +135,7 @@ def draw_slab(sc: Scene, colors) -> None:
 
 
 def draw_phase_lines(sc: Scene, colors, layer: int = 14) -> None:
-    """Lines of constant helix phase on the slab face -- the visual language of Fig. 1."""
+    """Lines of constant helix phase on the slab face."""
     qh = vecview.in_plane_dir(PHI_Q)
     perp = np.array([-qh[1], qh[0], 0.0])
     t = np.linspace(-11.0, 11.0, 800)
@@ -167,7 +157,7 @@ def draw_phase_lines(sc: Scene, colors, layer: int = 14) -> None:
 
 
 def draw_texture(sc: Scene, colors, layer: int = 15) -> None:
-    """Fig. 1's checkerboard Neel helix, sparse enough to survive foreshortening."""
+    """A checkerboard Neel helix, sparse enough to survive foreshortening."""
     nx, ny = 11, 9
     x, y = np.meshgrid(
         np.linspace(-LX / 2 + 0.75, LX / 2 - 0.75, nx),
@@ -228,11 +218,9 @@ def draw_beam(
 
     The component amplitudes are the physical ones for a linear polarization at THETA_IN:
     cos(THETA_IN - theta_+) = 0.625 and 0.781.  That matters for legibility as well as
-    honesty.  An earlier version used arbitrary amplitudes (0.44, 0.273) which happened to
-    project to near-equal screen size with opposite sign in the low beam, so the two
-    traces crossed at every node and chained into lens shapes instead of reading as sines.
-    Each trace is an exact sine either way (checked to 1e-16); it is the *pair* that has
-    to be kept visually separable.
+    honesty: two amplitudes that project to near-equal screen size with opposite sign
+    make the traces cross at every node and chain into lens shapes, instead of reading
+    as two sines.
     """
     top = np.array([center[0], center[1], H_IN])
     hit = np.array([center[0], center[1], 0.0])
@@ -255,9 +243,9 @@ def draw_beam(
             ],
         )
     )
-    x_beam, y_top = sc.cam.at(top + np.array([0, 0, 1.4]))
-    _, y_bot = sc.cam.at(np.array([center[0], center[1], -THICK - H_OUT - 1.4]))
-    half = 1.05 * sc.cam.scale
+    x_beam, y_top = sc.camera.at(top + np.array([0, 0, 1.4]))
+    _, y_bot = sc.camera.at(np.array([center[0], center[1], -THICK - H_OUT - 1.4]))
+    half = 1.05 * sc.camera.scale
     sc.rect2d(6, x_beam - half, y_top, 2 * half, y_bot - y_top, fill=f"url(#gh{tag})")
 
     ray = dict(stroke=beam_color, stroke_width=1.5, stroke_opacity=0.55)
@@ -323,9 +311,8 @@ def draw_beam(
     )
 
     # Locked vs tracking, without words: grey crystal-axis ticks at each landing spot,
-    # with the absorption axis theta_+ drawn over them.  For the low beam theta_+ = 1.3
-    # deg sits *on* the x tick; for the high beam it lies well off both.  That contrast is
-    # exactly the locked/tracking distinction, and it is geometrically true.
+    # with the absorption axis theta_+ drawn over them.  For the low beam theta_+ lies
+    # *on* the x tick; for the high beam it lies well off both.
     sc.polygon(
         17,
         vecview.circle_shape(hit + np.array([0, 0, 0.02]), 0.62, [0, 0, 1]),
@@ -374,7 +361,7 @@ def draw_beam(
         text_anchor="middle",
         font_weight="bold",
     )
-    # the Letter's own terms for the two regimes
+    # the regime's name, under the beam's label
     sc.text(
         31,
         top + np.array([0, 0, 2.3]),
@@ -389,16 +376,15 @@ def draw_beam(
 
 
 def build(cam: Camera | None = None, grey: bool = False) -> Scene:
-    """Assemble the scene.
+    """Assemble the scene for one camera.
 
     Returns the Scene rather than a rendered document, so a caller can render it
-    at its own padding, reproject it with `Scene.with_camera`, or hand
-    `to_svg_document()` to a larger figure.
+    at its own padding or hand `to_svg_document()` to a larger figure.
 
-    The camera is a parameter because two things here are derived from it: the
-    beam landing spots, via `screen_basis`, and the slab's visible walls. Both
-    have to be recomputed per projection, which is why a scene meant to be
-    reprojected takes its camera rather than making one.
+    The camera is a parameter because the beam landing spots come from it, via
+    `screen_basis`, and so do the screen-space glows behind the beams, via
+    `cam.at`.  Both are worked out here, before the scene sees them, so another
+    camera needs another build.
     """
     colors = GREY if grey else COLOR
     if cam is None:
@@ -408,7 +394,7 @@ def build(cam: Camera | None = None, grey: bool = False) -> Scene:
     front = FRONT * down
 
     spots = [-SPOT * horiz + front, +SPOT * horiz + front]
-    for c in spots:  # guard: a beam off the slab is a silent disaster
+    for c in spots:  # a beam that misses the slab would still draw, so check
         assert abs(c[0]) < LX / 2 - 0.8 and abs(c[1]) < LY / 2 - 0.8, (
             f"beam lands off the slab at ({c[0]:.2f}, {c[1]:.2f})"
         )
@@ -467,13 +453,12 @@ def main() -> None:
 
     wanted = list(PROJECTIONS) if args.projection == "all" else [args.projection]
 
-    # This scene is rebuilt per projection rather than reprojected with
-    # `Scene.with_camera`. `with_camera` replays world-space calls exactly, but
-    # `draw_beam` also emits screen-space glow columns via `rect2d`, positioned
-    # from `cam.at(...)` at build time. Those are screen space by definition, so
-    # a replay leaves them where the first camera put them -- correct by the rule,
-    # visibly wrong in the picture. Reach for `with_camera` when a scene is
-    # world-space throughout; rebuild when it is not.
+    # This scene is rebuilt per projection rather than rendered under another
+    # camera: `draw_beam` places screen-space glow columns with `rect2d`, from
+    # `cam.at(...)`, while building.  Screen space stays where it was put, so
+    # another camera would leave the glows where the first one put them.  A scene
+    # that is world-space throughout, like `altermagnetic_dot`, is built once and
+    # rendered under each camera.
     for name in wanted:
         view = build(PROJECTIONS[name](SCALE), args.grey)
         suffix = "_grey" if args.grey else ""
@@ -482,7 +467,7 @@ def main() -> None:
         # Rasterizing is deliberately not vecview's job; cairosvg is example-only.
         cairosvg.svg2png(url=str(out), write_to=str(stem.with_suffix(".png")), scale=1.0)
         doc = view.render()
-        ratios = ", ".join(f"{r:.2f}" for r in view.cam.foreshortening())
+        ratios = ", ".join(f"{r:.2f}" for r in view.camera.foreshortening())
         print(f"{name:>10}  {doc.width:>5.0f}x{doc.height:<5.0f}  axes {ratios}  -> {out.name}")
 
 

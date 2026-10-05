@@ -185,5 +185,6 @@ class TestScenePlane:
 
     def test_rejects_a_degenerate_plane(self, cam: OrthographicCamera) -> None:
         scene = Scene(cam)
+        scene.plane(10, (0, 0, 0), (1, 0, 0), (2, 0, 0), id="plot")
         with pytest.raises(ValueError, match="degenerate"):
-            scene.plane(10, (0, 0, 0), (1, 0, 0), (2, 0, 0), id="plot")
+            scene.render()

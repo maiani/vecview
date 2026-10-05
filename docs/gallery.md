@@ -14,6 +14,7 @@ uv run python examples/gallery --docs   # and refresh the SVGs on this page
 ```
 
 Each script also runs on its own, `uv run python examples/gallery/perovskite.py`.
+The mirror planes need the `occlusion` extra, and are skipped without it.
 
 ## Crystal structure
 
@@ -96,6 +97,19 @@ A copper coil wound on a core. The coil is one tube along a
 core and comes round in front of it again.
 
 `examples/gallery/solenoid.py`
+
+## Mirror planes
+
+![The three mirror planes of a cubic cell](gallery/mirror_planes.svg)
+
+The three mirror planes of a cubic cell, crossing at its centre. Each plane is
+partly in front of and partly behind each of the others — a cycle that no order of
+drawing whole planes gets right. With
+[exact visibility](scenes.md#exact-visibility) each plane is clipped to what shows
+of it, the body diagonal is dashed exactly where a plane hides it, and the cell's
+dashed back edges disappear where the planes cover them.
+
+`examples/gallery/mirror_planes.py`
 
 ## Devices
 

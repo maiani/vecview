@@ -24,18 +24,19 @@ What it exercises, in one picture:
 * ``Scene.arrow(normal="camera")`` for spins along z and a legend frame that
   read at full width from any viewpoint;
 * ``Scene.text`` anchored at world points, so labels follow the geometry;
-* ``Scene.with_camera``: the scene is world-space throughout, so it is built
-  once and replayed for each projection. The layout -- the wire runs, the
-  legend frame -- was tuned for the paper's camera; the other projections show
-  the replay, not finished layouts, and the frame meets the ground symbol in
-  some of them.
+* objects and cameras kept apart: the scene is world-space throughout, so it is
+  built once and holds its four projections as named cameras, "main" active,
+  and each render picks one by name. The layout -- the wire runs, the legend
+  frame -- was tuned for the main camera; the other projections show the same
+  objects, not finished layouts, and the frame meets the ground symbol in some
+  of them.
 
-This is the sketch from the paper's first figure, minus its TeX labels: there a
-composition tool fills ``Scene.slot`` groups with typeset fragments; here the
-labels are plain SVG text so the example needs nothing beyond vecview.
+The labels are plain SVG text, so the example needs nothing beyond vecview.  For
+typeset labels, reserve ``Scene.slot`` groups instead and let the tool that
+composes the page fill them with TeX fragments.
 
 Usage:
-    python examples/altermagnetic_dot.py [--projection {paper,isometric,dimetric,cabinet,all}]
+    python examples/altermagnetic_dot.py [--projection {main,isometric,dimetric,cabinet,all}]
 """
 
 from __future__ import annotations
@@ -446,9 +447,18 @@ def circuit(scene: Scene) -> None:
         label(scene, 4.7 * c + (0, 0, Z_GAS + T_LEAD), name, "center", (0.0, 0.0), f"label-{name}")
 
 
-def build(camera: Camera) -> Scene:
+PROJECTIONS: dict[str, Callable[[float], Camera]] = {
+    "main": lambda s: OrthographicCamera(azim_deg=-65.0, elev_deg=36.0, scale=s),
+    "isometric": OrthographicCamera.isometric,
+    "dimetric": OrthographicCamera.dimetric,
+    "cabinet": ObliqueCamera.cabinet,
+}
+
+
+def build() -> Scene:
     check_structure()
-    scene = Scene(camera, pad=2.0)
+    cameras = {name: projection(SCALE) for name, projection in PROJECTIONS.items()}
+    scene = Scene("main", cameras=cameras, pad=2.0)
     heterostructure(scene)
     densities(scene)
     electrodes(scene)
@@ -457,35 +467,27 @@ def build(camera: Camera) -> Scene:
     return scene
 
 
-PROJECTIONS: dict[str, Callable[[float], Camera]] = {
-    "paper": lambda s: OrthographicCamera(azim_deg=-65.0, elev_deg=36.0, scale=s),
-    "isometric": OrthographicCamera.isometric,
-    "dimetric": OrthographicCamera.dimetric,
-    "cabinet": ObliqueCamera.cabinet,
-}
-
-
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
         "--projection",
-        default="paper",
+        default="main",
         choices=["all", *PROJECTIONS],
         help="which projection to render; 'all' writes one file each",
     )
     args = ap.parse_args()
     OUT.mkdir(exist_ok=True)
 
-    # Everything is world-space, so one build replays exactly under any camera.
-    scene = build(PROJECTIONS["paper"](SCALE))
-    wanted = list(PROJECTIONS) if args.projection == "all" else [args.projection]
+    # Everything is world-space, so the objects are built once and each of the
+    # scene's cameras only renders them.
+    scene = build()
+    wanted = list(scene.cameras) if args.projection == "all" else [args.projection]
     for name in wanted:
-        view = scene.with_camera(PROJECTIONS[name](SCALE))
-        out = view.save(OUT / f"altermagnetic_dot_{name}.svg")
+        out = scene.save(OUT / f"altermagnetic_dot_{name}.svg", name)
         # Rasterizing is deliberately not vecview's job; cairosvg is example-only.
         # A scale of 6.25 is 600 dpi for this print-size scene.
         cairosvg.svg2png(url=str(out), write_to=str(out.with_suffix(".png")), scale=6.25)
-        doc = view.render()
+        doc = scene.render(name)
         mm = 25.4 / 96
         print(f"{name:>10}  {doc.width * mm:5.1f} x {doc.height * mm:<5.1f} mm  -> {out.name}")
 

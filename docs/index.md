@@ -64,20 +64,25 @@ scene.save("slab.svg")
 
 The viewBox is fitted to the content, so nothing needs centring by hand.
 
-## One scene, several projections
+## Objects and cameras
 
-A finished scene can be re-rendered under any camera. The replay is exact — it
-even redoes which walls `cull=True` selects, which a cabinet camera answers
-differently from an orthographic one:
+A scene records objects, and holds any number of named cameras, one of them
+active — as a 3D application does. A camera is only needed to render, and any
+camera will do. Rendering is exact — it even redoes which walls `cull=True`
+selects, which a cabinet camera answers differently from an orthographic one:
 
 ```python
-for name, cam in {
-    "isometric": vecview.OrthographicCamera.isometric(62),
-    "dimetric": vecview.OrthographicCamera.dimetric(62),
-    "cabinet": vecview.ObliqueCamera.cabinet(62),
-}.items():
-    scene.with_camera(cam).save(f"slab_{name}.svg")
+scene.cameras.update(
+    isometric=vecview.OrthographicCamera.isometric(62),
+    dimetric=vecview.OrthographicCamera.dimetric(62),
+    cabinet=vecview.ObliqueCamera.cabinet(62),
+)
+for name in scene.cameras:
+    scene.save(f"slab_{name}.svg", name)
 ```
+
+The camera given to `Scene(...)`, or set later as `scene.camera` — a camera, or a
+name from `scene.cameras` — is the active one, which `to_svg_document` uses.
 
 ## Flat content inside the scene
 
@@ -96,7 +101,9 @@ three layers, and no automatic rule orders them correctly against a partially
 transparent face.
 
 A lattice of hundreds of atoms is the opposite case, and a layer can opt in to
-[sorting by depth](scenes.md#sorting-by-depth) for it. The curved solids —
+[sorting by depth](scenes.md#sorting-by-depth) for it — or, with the `occlusion`
+extra, to [exact visibility](scenes.md#exact-visibility), which clips every
+element to what shows of it and dashes lines where they pass behind. The curved solids —
 spheres, cylinders, cones, solid arrows, tubes — have exact outlines under every
 parallel projection, so a sorted layer of them stays a small, editable file. See
 the [gallery](gallery.md).

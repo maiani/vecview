@@ -26,16 +26,39 @@ All notable changes to this project are documented here, following
   dropped or restyled (dashed), optionally one path per edge and trimmed at the
   vertices.
 - `Scene.sphere_curve` -- a curve on a sphere, split exactly where it passes behind.
+- `sort_by_depth(layer, exact=True)` -- exact visibility, with the new
+  `occlusion` extra (`shapely`, `contourpy`).  Every surface keeps its native
+  element, clipped to what no opaque surface hides: exactly between planes, and
+  to a sub-pixel contour of the closed-form depths where a sphere, cylinder,
+  cone, arrow, or tube is involved.  Lines are split where they pass behind a
+  surface, and the hidden part dropped or drawn in a `back` style.  Opaque
+  surfaces are painted so that what hides another comes after it.
+- `Scene.polyline(..., back=...)` -- the style of the parts an exact layer hides.
 - `Scene._repr_svg_`, so a scene displays inline in Jupyter.
 - `text` and `text2d` accept a list of `svg.TSpan` runs, for subscripts.
 - `arc_shape`, `helix`, `surface_faces`, `convex_polyhedron`, and `trim_corners`.
 - `examples/gallery/` -- a perovskite cell, the fcc Brillouin zone, C60, the Bloch
-  sphere, a gapped Dirac cone, a Néel skyrmion, and a solenoid, each from one
+  sphere, a gapped Dirac cone, a Néel skyrmion, a solenoid, and crossing mirror
+  planes in an exact layer, each from one
   script; `python examples/gallery --docs` builds them all into the new Gallery
   page.
 
 ### Changed
 
+- **A scene holds objects and cameras; a camera renders them.** Drawing calls
+  only record, and nothing is projected until `render`, `save`, `bbox`, or
+  `to_svg_document`. As in a 3D application, `scene.cameras` holds named
+  cameras and `scene.camera` is the active one (formerly `scene.cam`), set by
+  name or directly; the zero-argument `to_svg_document` uses it.
+  `Scene(camera=None, *, cameras=None, pad, background)`, and `render(camera=None,
+  *, pad, background)`, `save(path, camera=None)`, and `bbox(camera=None)` take a
+  camera or a name. `with_camera` returns a copy with a different active camera.
+  Output is byte-identical to before.
+- Errors that need no camera -- a self-crossing footprint, a one-point tube, a
+  highlight without a fill -- still raise at the call; those that need one -- a
+  plane seen edge-on, an arrow along the projection ray -- raise on render.
+- `Scene.items` and `Scene.defs` are gone; they belonged to one projection, and
+  now live on the private canvas a render builds.
 - `prism_walls` builds its path through the shared helper; output is unchanged.
 
 ## [0.1.2] - 2026-10-05

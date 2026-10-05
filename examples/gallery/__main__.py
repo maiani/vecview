@@ -26,6 +26,7 @@ FIGURES = [
     "dirac_cone",
     "skyrmion",
     "solenoid",
+    "mirror_planes",  # needs the occlusion extra
 ]
 
 
@@ -35,9 +36,7 @@ def devices() -> dict[str, Callable[[], Scene]]:
     altermagnetic_dot = importlib.import_module("altermagnetic_dot")
     slab_polarizer = importlib.import_module("slab_polarizer")
     return {
-        "altermagnetic_dot": lambda: altermagnetic_dot.build(
-            altermagnetic_dot.PROJECTIONS["paper"](altermagnetic_dot.SCALE)
-        ),
+        "altermagnetic_dot": altermagnetic_dot.build,  # its active camera is "main"
         "slab_polarizer": lambda: slab_polarizer.build(
             OrthographicCamera(slab_polarizer.AZIM, slab_polarizer.ELEV, slab_polarizer.SCALE),
             False,
@@ -52,14 +51,27 @@ def main() -> None:
     builders: dict[str, Callable[[], Scene]] = {
         name: importlib.import_module(name).build for name in FIGURES
     }
+    try:
+        import contourpy  # noqa: F401
+        import shapely  # noqa: F401
+    except ImportError:
+        print("mirror_planes: skipped, needs pip install 'vecview[occlusion]'")
+        builders.pop("mirror_planes")
     builders.update(devices())
     for name, build in builders.items():
         began = time.perf_counter()
         scene = build()
         built = time.perf_counter() - began
+        began = time.perf_counter()
+        document = scene.render()
+        rendered = time.perf_counter() - began
         path = export(scene, name, docs=args.docs)
         size = path.stat().st_size / 1024
-        print(f"{name:>18}  {len(scene.items):>5} elements  {built * 1000:6.0f} ms  {size:6.0f} kB")
+        count = len(document.elements or [])
+        print(
+            f"{name:>18}  {count:>5} elements  build {built * 1000:4.0f} ms"
+            f"  render {rendered * 1000:5.0f} ms  {size:5.0f} kB"
+        )
 
 
 if __name__ == "__main__":

@@ -28,6 +28,10 @@ on its own side.
   - `projections.py` holds the concrete projections: `OrthographicCamera` and
     `ObliqueCamera`.
   - `scene.py` is the **only** module that imports `svg`.
+- `_occlusion.py` is private: exact visibility for `sort_by_depth(exact=True)`.
+  The canvas describes each element of an exact layer as a `Surface` (outline
+  plus a depth that goes on smoothly past its edge) or a `Line`, lazily, and
+  `resolve` clips and splits them. Keep closed-form depths closed-form.
 - `_vec.py` and `_types.py` are private. Re-export from `__init__.py` what should
   be public; `unit` is the only helper promoted so far.
 - Geometry that needs a camera to be computed does not belong in `shapes.py`.
@@ -39,9 +43,12 @@ on its own side.
   answer for a perspective camera, which would subclass `Camera` directly.
 - `Scene.plane` reserves a group and nothing more. This package must not parse,
   normalize, or embed foreign SVG; a consumer fills the group by id.
-- `Scene` records every call so `with_camera` can replay it. A method that fans
-  out to other public methods must wrap the fan-out in `_delegating()`, or the
-  replay duplicates the work.
+- `Scene` records objects and nothing else; it never projects. Every public
+  drawing method validates what it can without a camera and appends one record.
+  `_Canvas` holds a camera and implements each method of the same name; rendering
+  replays the record onto a fresh canvas. Camera-dependent work and errors
+  belong in `_Canvas`, and a canvas never records, so its methods may call each
+  other freely.
 
 ## Deliberate non-features
 
@@ -49,13 +56,16 @@ Do not add these without the user changing the design first:
 
 - **Automatic depth sorting across layers** (a z-buffer, or sorting a layer that
   did not ask). Layers are the model. A beam crossing a translucent slab has
-  three parts that no automatic depth rule orders correctly. The painter's
-  algorithm exists only inside a layer passed to `Scene.sort_by_depth`, for many
-  separate objects; its known failures are fixed by cutting geometry back
-  (`edges(trim=)`, `trim_corners`) or into pieces (`cylinder(slices=)`, `tube`
-  chunks), not by a smarter global sort.
+  three parts that no automatic depth rule orders correctly. Depth only ever
+  acts inside a layer passed to `Scene.sort_by_depth`: as the painter's
+  algorithm, whose failures are fixed by cutting geometry back (`edges(trim=)`,
+  `trim_corners`) or into pieces (`cylinder(slices=)`, `tube` chunks), or, with
+  `exact=True`, as exact visibility by clipping.
 - **Rasterizing or PDF export.** Runtime dependencies stay `numpy` and `svg.py`;
-  a test in `tests/test_package_metadata.py` enforces it.
+  a test in `tests/test_package_metadata.py` enforces it. `shapely` and
+  `contourpy` are the optional `occlusion` extra: only `_occlusion.py` imports
+  them, inside `resolve`, so nothing but an exact layer needs them, and its
+  tests use `pytest.importorskip`.
 - **Shading, materials, or lighting models.** This draws schematics, not renders.
   `highlight=` gradients are a fill style fixed on screen, with no light
   direction; keep them that way.
@@ -85,8 +95,9 @@ Do not add these without the user changing the design first:
   invisible until it culls the wrong wall.
 - Test a projection through `foreshortening()`, not through its construction
   angles: the ratios are what the axonometric classification is defined by.
-- `with_camera` must stay byte-identical to rebuilding from scratch. The
-  parametrized test in `tests/test_scene.py` covers all five projections.
+- Rendering under a camera must stay byte-identical to building the scene with
+  that camera from the start. The parametrized test in `tests/test_scene.py`
+  covers all five projections.
 - `tests/test_document.py` pins what a consumer relies on: a parseable
   standalone document, a viewBox agreeing with `width`/`height`, geometry inside
   it, and deterministic bytes. It must not import a consumer.

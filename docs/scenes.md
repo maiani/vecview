@@ -1,12 +1,38 @@
 # Scenes and layers
 
 ```python
-Scene(cam, pad=26.0, background=None)
+Scene(camera=None, *, cameras=None, pad=26.0, background=None)
 ```
 
-A `Scene` collects SVG elements built from world-space geometry and assembles them
-into one document. `pad` and `background` are the defaults `render` and
-`to_svg_document` use; both can be overridden per `render` call.
+A `Scene` holds objects in world space and the cameras that look at them, the way
+a 3D application does. Every drawing call only *records* an object; nothing is
+projected until the scene is rendered, and then the record is replayed against a
+camera:
+
+```python
+scene = vecview.Scene(pad=28, background="#ffffff")
+scene.sphere(10, (0, 0, 0), 1.0, fill="#c33")
+
+scene.cameras["main"] = vecview.OrthographicCamera(35, 24, 62)
+scene.cameras["cabinet"] = vecview.ObliqueCamera.cabinet(62)
+scene.camera = "main"  # the active camera
+
+scene.save("main.svg")  # the active camera
+scene.save("cabinet.svg", "cabinet")  # another, by name
+scene.render(vecview.OrthographicCamera.isometric(62))  # or any camera at all
+```
+
+`cameras` is a plain dict of named cameras, and `camera` is the **active** one:
+`render`, `save`, and `bbox` use it unless given another camera or a name, and
+`to_svg_document` — the zero-argument embedding contract — always uses it. Set by
+name, the active camera follows its entry if the entry is replaced; it can also be
+set to a camera directly, or left `None` while the scene is built. `pad` and
+`background` are the defaults `render` uses.
+
+Mistakes that do not depend on the camera — a footprint that crosses itself, a
+tube of one point, a highlight with no fill — raise where the call is made.
+Those that do — a plane seen edge-on, an arrow along the projection ray — raise
+when that camera renders.
 
 ## The layer stack
 
@@ -37,7 +63,7 @@ that made it — a sphere by its centre, a cylinder by its axis midpoint, a poly
 by its vertices. Equal depths keep insertion order, so the output stays
 deterministic, and screen-space elements, which have no depth, go on top. Other
 layers are untouched, and the setting is recorded, so
-[`with_camera`](#rendering-one-scene-several-ways) re-sorts for the new camera.
+[another camera](#rendering-one-scene-several-ways) re-sorts.
 
 It is for **many separate objects that do not interpenetrate**: the atoms and
 bonds of a lattice, the arrows of a spin texture, the quads of a surface. There,
@@ -54,11 +80,50 @@ It is a heuristic, and two cases defeat it:
   A single key cannot describe either. Cut the long one into
   [slices](#long-objects).
 
-What it cannot do at all is order a beam inside a translucent slab: the beam
-above, the attenuated segment inside, and the emerging beam below are three draw
-calls at three layers, and no automatic rule orders them correctly against a
-partially transparent face. That case still belongs on separate layers, decided
-by hand.
+Both have a fix that keeps the layer fast and dependency-free, and exact
+visibility removes the need for either.
+
+### Exact visibility
+
+```python
+scene.sort_by_depth(10, exact=True)  # pip install 'vecview[occlusion]'
+```
+
+With `exact=True` visibility is decided point by point rather than element by
+element. Every surface keeps its native SVG element — a `<circle>` stays a circle
+— clipped to the part of it that no opaque surface hides, so a bond can run into
+an atom's centre, two planes can cut through each other, and a coil can wrap an
+unsliced core. Every line is cut where an opaque surface hides it, and the hidden
+part is dropped, or drawn in the `back` style that `polyline`, `edges`, and
+`sphere_curve` take — a ray dashed where it passes behind an atom:
+
+```python
+scene.polyline(10, [start, end], back={"stroke_dasharray": "4 3"}, stroke="#000")
+```
+
+How exact is exact:
+
+- Between two **planar** surfaces — faces, polygons, quads of a mesh — the
+  boundary is a straight line, computed exactly.
+- Wherever a **sphere, cylinder, cone, arrow, or tube** is involved, the depth of
+  each surface is known in closed form at every point of the screen, and the
+  boundary is the zero contour of the difference, traced to half a screen unit
+  and then simplified to a twentieth of one.
+- **Lines** are split where they cross behind a surface, refined by bisection.
+- **Translucent** surfaces (`fill_opacity` or `opacity` below 1) hide nothing, but
+  are clipped by what is in front of them. Soft `gaussian` spots never hide.
+- Opaque surfaces are painted so that whatever hides another comes after it, and
+  each hidden one runs on a little under the edge in front of it, so their
+  anti-aliased edges never leave a hairline of background between them.
+
+It costs a little: every partly hidden element gains a `<clipPath>`, and a layer
+of a few hundred solids takes a second or so to render, against milliseconds for
+plain sorting. It needs `shapely` and `contourpy`, which only exact layers import.
+
+What no visibility rule can do is order a beam inside a translucent slab: a
+translucent face hides nothing, so the beam above, the attenuated segment
+inside, and the emerging beam below are three draw calls at three layers,
+decided by hand.
 
 `Camera.depth()` is there if you want to order something yourself, and
 back-face culling of a convex solid is
@@ -249,7 +314,7 @@ exactly where it passes behind the sphere, with the same `back` and `back_layer`
 A point on the sphere faces the camera when `(p - center) · view ≥ 0`, and the
 curve is cut where that changes sign.
 
-Both re-split under [`with_camera`](#rendering-one-scene-several-ways).
+Both re-split for [each camera](#rendering-one-scene-several-ways).
 
 ## Screen-space calls
 
@@ -395,17 +460,19 @@ outline the hull is wrong; use `prism_walls`.
 ## Rendering one scene several ways
 
 ```python
-scene = build(OrthographicCamera(35, 24, 62))
-scene.with_camera(OrthographicCamera.isometric(62)).save("iso.svg")
-scene.with_camera(ObliqueCamera.cabinet(62)).save("cabinet.svg")
+scene = build()  # objects, and named cameras
+for name in scene.cameras:
+    scene.save(f"device_{name}.svg", name)
 ```
 
-`with_camera` returns the same scene projected by a different camera. Every call
-made through the scene's own methods is recorded and replayed, so the result is
-byte-identical to building from scratch with that camera — including which walls
-`cull=True` selects.
+Rendering is a pure function of the recorded objects and the camera, so a scene
+renders under any number of cameras, and each result is byte-identical to building
+the scene with that camera from the start — including which walls `cull=True`
+selects. `with_camera(camera)` returns a copy with a different active camera — a
+name or a camera — for handing one scene, seen two ways, to a tool that only
+calls `to_svg_document`.
 
-Two things behave as their names promise rather than as a reprojection might
+Two things behave as their names promise rather than as a new camera might
 suggest:
 
 - **Screen-space calls stay put.** `rect2d`, `text2d`, and anything handed to
@@ -413,14 +480,15 @@ suggest:
   space means. They do not follow the geometry.
 - **Caller-side camera math is already baked in.** A point placed via `cam.at()`
   or a face list filtered by `cam.visible()` was resolved before the scene saw it.
-  A scene meant to be reprojected should take its camera as an argument and derive
-  such positions inside — and use `cull=True` rather than culling itself.
+  Prefer what the scene resolves itself — `cull=True`, `normal="camera"`, a
+  `slot` — and a scene needs no camera until it is rendered.
 
 Where a scene mixes in screen-space work, rebuild it per camera instead. The
 `slab_polarizer` example does exactly that, and says why: its soft beam glows are
-`rect2d` columns positioned from `cam.at(...)`, so a replay would leave them where
-the first camera put them. The `altermagnetic_dot` example is the opposite case:
-world-space throughout, it is built once and replayed with `with_camera`.
+`rect2d` columns positioned from `cam.at(...)`, so another camera would leave them
+where the first one put them. The `altermagnetic_dot` example is the opposite
+case: world-space throughout, it is built once, holds its four projections as
+named cameras, and renders each by name.
 
 World-space arrays are held by reference, not copied, so do not mutate them after
 adding.

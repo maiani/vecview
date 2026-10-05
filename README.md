@@ -18,6 +18,7 @@ VecView is not yet on PyPI. Install it from a checkout (Python 3.12 or newer):
 
 ```bash
 python -m pip install -e /path/to/vecview
+python -m pip install -e "/path/to/vecview[occlusion]"  # exact visibility: shapely, contourpy
 ```
 
 ## Quick start
@@ -63,11 +64,14 @@ Five, all parallel, so parallel edges stay parallel:
 
 `foreshortening()` reports the ratios for any camera, and `axonometry()` names
 the class an orthographic one falls into; both read the projection rather than
-how it was built. A finished scene re-renders under any camera, byte-identical
-to building it from scratch with that camera:
+how it was built. A scene records objects and holds named cameras, one active,
+as a 3D application does. It renders under any camera, byte-identical to building
+it from scratch with that camera, and needs none until then:
 
 ```python
-scene.with_camera(vecview.ObliqueCamera.cabinet(62)).save("cabinet.svg")
+scene.cameras["cabinet"] = vecview.ObliqueCamera.cabinet(62)
+scene.save("cabinet.svg", "cabinet")
+scene.camera = "cabinet"  # the active camera, which to_svg_document uses
 ```
 
 `Camera` promises only `project`, `at`, `depth`, and `visible`. `direction`,
@@ -87,6 +91,10 @@ right.
 A lattice of hundreds of atoms is the opposite case. `scene.sort_by_depth(layer)`
 opts one layer in to the painter's algorithm: its elements are drawn back to
 front, ties keep insertion order, and every other layer is untouched.
+`sort_by_depth(layer, exact=True)` goes further and decides visibility point by
+point: each element keeps its native shape, clipped to what shows of it, so
+planes can cross and a bond can run into an atom, and lines are dashed exactly
+where they pass behind something.
 `Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case,
 the back faces of a convex solid.
 
@@ -191,21 +199,21 @@ the final page.
 
 The [gallery](docs/gallery.md) has the figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
-solenoid — each from one script:
+solenoid, crossing mirror planes — each from one script:
 
 ```bash
 uv run python examples/gallery                                # all of them
 
 uv run python examples/slab_polarizer.py                      # one projection
 uv run python examples/slab_polarizer.py --projection all     # all five
-uv run python examples/altermagnetic_dot.py --projection all  # a device sketch, replayed
+uv run python examples/altermagnetic_dot.py --projection all  # a device sketch, under four cameras
 ```
 
-`slab_polarizer` is an outreach picture of a polarizing slab, rebuilt per
+`slab_polarizer` is a picture of a polarizing slab, rebuilt per
 projection because it mixes in screen-space glows. `altermagnetic_dot` is a
 quantum-dot device sketch with arc-shaped gates, Gaussian densities, and a bias
-circuit; being world-space throughout, it is built once and replayed under each
-camera with `with_camera`.
+circuit; being world-space throughout, it is built once, holds its projections
+as named cameras, and renders each by name.
 
 ## Development
 
