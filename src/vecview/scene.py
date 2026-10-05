@@ -1756,13 +1756,12 @@ class Scene:
         Args:
             layer: Draw order.
             faces: Faces to draw, typically from :func:`~vecview.shapes.box_faces`.
-            cull: Drop back faces at draw time, using this scene's camera.
-                Prefer this over filtering with :meth:`Camera.visible` yourself
-                whenever the scene might be reprojected: culling done by the
-                caller bakes in *that* camera's answer, so
-                :meth:`with_camera` would keep the original walls and quietly
-                draw the wrong ones. With ``cull=True`` the full set is recorded
-                and the new camera decides.
+            cull: Drop back faces when rendering, using the camera that renders.
+                Prefer this over filtering with :meth:`Camera.visible` yourself:
+                culling done by the caller bakes in *that* camera's answer, so
+                any other camera would keep the original walls and quietly draw
+                the wrong ones. With ``cull=True`` the full set is recorded and
+                each camera decides.
             **style: SVG presentation attributes, shared by every face.
 
         An ``id`` is suffixed per face rather than repeated, since duplicate ids
@@ -1843,8 +1842,8 @@ class Scene:
         ``(dx, dy)``, and records ``align`` as ``data-align``, so a consumer can
         line its content up against the anchor at whatever size it ends up.  A
         ``w`` by ``h`` box aligned the same way grows the fitted viewBox, so
-        content of that size is not clipped.  Under :meth:`with_camera` the
-        anchor is reprojected, so the slot follows the geometry.
+        content of that size is not clipped.  Each camera projects the anchor
+        afresh, so the slot follows the geometry.
 
         Args:
             layer: Draw order, so geometry on a higher layer can cover the content.
@@ -1876,7 +1875,7 @@ class Scene:
             scene.faces(30, [f for f in fin if f.name == "+z"], fill="#e2b56a")
 
         The outline is the convex hull of the projected vertices, so it is only
-        the silhouette of a convex solid.  It is recomputed by :meth:`with_camera`.
+        the silhouette of a convex solid.  Each camera recomputes it.
 
         Args:
             layer: Draw order.
@@ -1916,8 +1915,8 @@ class Scene:
             z1: Height of the top.
             **style: SVG presentation attributes of the path.
 
-        Culling uses this scene's camera, so :meth:`with_camera` redraws the
-        walls the new camera faces.
+        Culling uses the camera that renders, so each camera draws the walls it
+        faces.
         """
         prism_faces(footprint, z0, z1)  # rejects a footprint that is not a simple polygon
         self._add("prism_walls", layer, footprint, z0, z1, **style)
@@ -1940,9 +1939,9 @@ class Scene:
 
         ``normal="camera"`` turns the arrow about its own axis to show the
         widest face it can, so it reads from any viewpoint -- a spin along
-        ``z``, say.  The normal is resolved from this scene's camera when drawn,
-        so :meth:`with_camera` turns the arrow to the new camera too.  Computing
-        that normal yourself from ``cam.view`` would bake in the original one.
+        ``z``, say.  The normal is resolved from the camera that renders, so
+        every camera sees the arrow turned toward it.  Computing that normal
+        yourself from ``cam.view`` would bake in one camera's answer.
 
         Args:
             normal: Normal of the plane the arrow lies flat in, or ``"camera"``.
@@ -2311,7 +2310,7 @@ class Scene:
                 An ``id`` becomes ``{id}-front`` and ``{id}-back``, suffixed
                 ``-0``, ``-1``, ... per edge when ``separate``.
 
-        Culling uses this scene's camera, so :meth:`with_camera` re-splits.
+        Culling uses the camera that renders, so each camera splits afresh.
         """
         given = list(faces)
         base = style.pop("id", None)

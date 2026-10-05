@@ -150,9 +150,9 @@ can, so a spin along `z` reads from any viewpoint:
 scene.arrow(22, base, (0, 0, 1), 1.05, normal="camera", shaft_w=0.1, head_w=0.34, head_len=0.34)
 ```
 
-The normal is resolved from the scene's camera when the arrow is drawn, so a
-[reprojection](#rendering-one-scene-several-ways) turns it too. Computing it
-yourself from `cam.view` bakes in the original camera — and for an oblique
+The normal is resolved from the camera that renders, so
+[every camera](#rendering-one-scene-several-ways) sees the arrow turned toward it.
+Computing it yourself from `cam.view` bakes in one camera's answer — and for an oblique
 camera, `view` does not even give the widest face. An arrow pointing along the
 projection ray has no face to show and raises `ValueError`.
 
@@ -191,10 +191,10 @@ box = vecview.box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
 scene.faces(10, box, cull=True, fill="#cfd6e0")
 ```
 
-Prefer that over filtering with `Camera.visible` yourself whenever the scene might
-be [reprojected](#rendering-one-scene-several-ways): culling done by the caller
-bakes in *that* camera's answer, and a cabinet camera sees `-y` where a 35°
-orthographic one sees `+y`. With `cull=True` the full set is recorded and the new
+Prefer that over filtering with `Camera.visible` yourself: culling done by the
+caller bakes in *that* camera's answer, and a cabinet camera sees `-y` where a 35°
+orthographic one sees `+y`, so [another camera](#rendering-one-scene-several-ways)
+would draw the wrong walls. With `cull=True` the full set is recorded and the
 camera decides.
 
 An `id` passed to `faces` is **suffixed per face** rather than repeated on each —
@@ -419,7 +419,7 @@ A `w` by `h` box, aligned the same way, grows the fitted viewBox so content of
 that size is not clipped. Nothing is drawn; a consumer fills the group by `id`
 and lines its content up against the anchor using `data-align` — see
 [Embedding a scene](embedding.md#filling-a-slot). Because the anchor is a world
-point, a [reprojection](#rendering-one-scene-several-ways) moves the slot with
+point, [each camera](#rendering-one-scene-several-ways) moves the slot with
 the geometry, which a hand-placed `rect2d` would not.
 
 ## Seamless solids
@@ -476,7 +476,7 @@ Two things behave as their names promise rather than as a new camera might
 suggest:
 
 - **Screen-space calls stay put.** `rect2d`, `text2d`, and anything handed to
-  `add` are replayed at the same screen coordinates, because that is what screen
+  `add` stay at the same screen coordinates, because that is what screen
   space means. They do not follow the geometry.
 - **Caller-side camera math is already baked in.** A point placed via `cam.at()`
   or a face list filtered by `cam.visible()` was resolved before the scene saw it.

@@ -123,7 +123,7 @@ integration costs no import in either direction.
 ## Next
 
 - [Cameras](cameras.md) — the hierarchy, the five projections, `screen_basis`, culling
-- [Scenes and layers](scenes.md) — the layer stack, reprojection, embedded planes
+- [Scenes and layers](scenes.md) — objects and cameras, the layer stack, embedded planes
 - [Shapes](shapes.md) — the world-space geometry catalogue
 - [Gallery](gallery.md) — the figures everyone draws, each from one script
 - [Embedding a scene](embedding.md) — handing the output to a larger document

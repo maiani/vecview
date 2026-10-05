@@ -188,13 +188,14 @@ ones"*.
 What it does **not** do is resolve one object occluding another. That is the
 [layer stack's](scenes.md) job, deliberately.
 
-!!! tip "Prefer `cull=True` when the scene may be reprojected"
+!!! tip "Prefer `cull=True` in a scene"
 
     Culling here bakes in *this* camera's answer. A cabinet camera sees `-y`
     where a 35° orthographic one sees `+y`, so
-    [`Scene.with_camera`](scenes.md#rendering-one-scene-several-ways) would keep
-    the original walls and quietly draw the wrong ones. Pass the full set to
-    `Scene.faces(..., cull=True)` instead and let the camera decide at draw time.
+    [rendering with another camera](scenes.md#rendering-one-scene-several-ways)
+    would keep the original walls and quietly draw the wrong ones. Pass the full
+    set to `Scene.faces(..., cull=True)` instead and let each camera decide when
+    it renders.
 
 `faces_camera(normal)` is the single-normal form, and takes a `tol` above `0` to
 also drop faces seen so nearly edge-on that they project to slivers.

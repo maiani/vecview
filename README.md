@@ -105,7 +105,7 @@ World-space calls on `Scene`:
 - `polygon`, `polyline`, `text`, and `faces` draw projected geometry;
   `faces(..., id="slab")` suffixes the id per face (`slab-pz`, `slab-px`, …).
 - `arrow(..., normal="camera")` turns an arrow about its own axis to show its
-  widest face, resolved at draw time so a reprojection turns it too. An explicit
+  widest face, resolved by the camera that renders, so every camera sees it. An explicit
   normal also works.
 - `silhouette(layer, solid)` fills the projected convex hull of a solid as one
   polygon. Drawn in the wall colour under the cap, it removes the hairline seams
@@ -182,7 +182,7 @@ scene.slot(45, (5.5, 4.5, 0), 20, 10, id="label-x", align="west", dx=1.6)
 ```
 
 The group records `align` as `data-align`, the `w` by `h` box grows the fitted
-viewBox, and `with_camera` reprojects the anchor.
+viewBox, and each camera projects the anchor afresh.
 
 ## Output
 
