@@ -10,7 +10,7 @@ solids.
 import vecview
 from vecview import outlines
 
-wire = outlines.regular(6, 0.4)                      # a hexagonal nanowire, flat side down
+wire = outlines.regular(6, 0.4)  # a hexagonal nanowire, flat side down
 al = outlines.film(wire, [0, 1, 2], thickness=0.07)  # Al on its three top facets
 
 # The sections lie across a wire running along x, resting on z = 0.
