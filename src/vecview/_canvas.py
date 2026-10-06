@@ -130,7 +130,6 @@ class _Canvas:
         self._hi: Array = np.array([-np.inf, -np.inf])
         self._depths: dict[int, float] = {}
         self._sorted: set[int] = set()
-        self._exact: set[int] = set()
         self._shapes: dict[int, Callable[[], Shape | None]] = {}
         self._opaque: set[int] = set()
         self._rank: dict[int, int] = {}
@@ -149,7 +148,7 @@ class _Canvas:
         """Assemble the document, fitting the viewBox to the content plus ``pad``."""
         if self.is_empty:
             raise ValueError("cannot render an empty scene: no geometry to fit a viewBox to")
-        if self._exact:
+        if self._sorted:
             self._occlude()
         lo, hi = self._lo - pad, self._hi + pad
         # One rounding for the viewBox and the background, so the one covers the other.
@@ -186,18 +185,16 @@ class _Canvas:
         """Mean depth of world points: the key one element sorts by."""
         return float(np.mean(self.cam.depth(pts3)))
 
-    def sort_by_depth(self, layer: int, *, exact: bool = False) -> None:
-        """Order ``layer`` back to front by depth instead of by insertion."""
+    def sort_by_depth(self, layer: int) -> None:
+        """Decide visibility in ``layer`` by depth instead of by insertion."""
         self._sorted.add(int(layer))
-        if exact:
-            self._exact.add(int(layer))
 
     # --- occlusion --------------------------------------------------------
     def _shape(self, build: Callable[[], Shape | None]) -> None:
-        """Describe the element just emitted, for an exact layer to resolve.
+        """Describe the element just emitted, for a sorted layer to resolve.
 
-        Kept as a thunk: only the layers that ask for exact visibility pay for
-        building the shapes.
+        Kept as a thunk: only the layers sorted by depth pay for building the
+        shapes.
         """
         self._shapes[self._seq - 1] = build
 
@@ -303,7 +300,7 @@ class _Canvas:
     def _paint_order(
         self, members: Sequence[tuple[int, Shape]], seen: Sequence[Visibility]
     ) -> None:
-        """Order an exact layer's opaque surfaces so whatever hides another comes after it.
+        """Order a sorted layer's opaque surfaces so whatever hides another comes after it.
 
         Clipped, opaque surfaces overlap only along their edges, and there the
         one in front must be painted last.  A topological sort of "hides part
@@ -342,11 +339,11 @@ class _Canvas:
             ready.sort(key=key)
 
     def _occlude(self) -> None:
-        """Resolve every exact layer: clip surfaces to what shows, split lines."""
+        """Resolve every sorted layer: clip surfaces to what shows, split lines."""
         from vecview._occlusion import resolve
 
         outcome: dict[int, tuple[Shape, Visibility]] = {}
-        for layer in sorted(self._exact):
+        for layer in sorted(self._sorted):
             seqs = [seq for at, seq, _ in self.items if at == layer and seq in self._shapes]
             built = [(seq, self._shapes[seq]()) for seq in seqs]
             members = [(seq, shape) for seq, shape in built if shape is not None]
@@ -835,11 +832,11 @@ class _Canvas:
         )
 
     def _order(self, item: tuple[int, int, svg.Element]) -> tuple[int, int, float, int]:
-        """Sort key: layer, then depth within a depth-sorted layer, then insertion.
+        """Sort key: layer, then visibility within a depth-sorted layer, then insertion.
 
-        In an exact layer the opaque surfaces come first, in the order
-        :meth:`_paint_order` found, and everything translucent or stroked is
-        then painted back to front over them.
+        In a sorted layer the opaque surfaces come first, in the order
+        :meth:`_paint_order` found, everything translucent or stroked is then
+        painted back to front over them, and screen-space elements go on top.
         """
         layer, seq, _ = item
         if layer not in self._sorted:

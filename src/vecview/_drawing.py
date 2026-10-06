@@ -128,7 +128,7 @@ class _Drawing:
     ) -> None:
         """Open path through projected world points; unfilled unless asked.
 
-        In a layer sorted with ``exact=True``, the parts an opaque surface hides
+        In a layer passed to :meth:`sort_by_depth`, the parts an opaque surface hides
         are dropped, or drawn with ``{**style, **back}`` when ``back`` is given
         -- a ray dashed where it passes behind an atom.  Elsewhere ``back`` has
         no effect.
@@ -475,8 +475,8 @@ class _Drawing:
         to ellipses whose common tangents have a closed form.  The end disk that
         faces the camera, if any, is drawn over the body as a native
         ``<ellipse>`` (or ``<circle>``).  Everything goes into one ``<g>``, so
-        the solid is one object in Inkscape and one element for
-        :meth:`sort_by_depth`, keyed by its axis midpoint.
+        the solid is one object in Inkscape, clipped as one where
+        :meth:`sort_by_depth` finds it hidden.
 
         Args:
             layer: Draw order.
@@ -493,12 +493,10 @@ class _Drawing:
                 lightest toward the upper left: a fill style, not a lighting
                 model.  Needs ``fill`` and ``id``; the gradient is ``{id}-shade``.
             slices: Cut the solid into this many lengths along its axis, each
-                its own ``<g>`` keyed by its own midpoint, for a long cylinder
-                in a layer passed to :meth:`sort_by_depth`.  Keyed by its
-                centre alone, a core with a coil wound round it sorts wholly in
-                front of the far turns and wholly behind the near ones; sliced,
-                each turn meets the slice it wraps.  The slices overlap a little
-                and the outline is stroked along the sides only, so the result
+                its own ``<g>``.  Depth sorting does not need it -- a coil wraps
+                an unsliced core -- so it is only for a solid wanted in
+                separately selectable lengths.  The slices overlap a little and
+                the outline is stroked along the sides only, so the result
                 looks like one solid -- except with a translucent fill, where
                 the overlaps show.
             **style: SVG presentation attributes. An ``id`` goes on the group;
@@ -633,9 +631,10 @@ class _Drawing:
         the call reads like any filled shape.  For an oblique camera the width
         is the mean of the projected radius over directions, an approximation.
 
-        The curve is cut into pieces of ``chunk`` segments, one ``<g>`` each, so
-        in a layer passed to :meth:`sort_by_depth` a tube can pass over and
-        under itself and others, as a coil does.  Neighbouring pieces overlap,
+        The curve is cut into pieces of ``chunk`` segments, one ``<g>`` each.  In
+        a layer passed to :meth:`sort_by_depth` each piece is a surface of its
+        own, so a tube can pass over and under itself, as a coil seen at an
+        angle does; one piece never hides another part of itself.  Neighbouring pieces overlap,
         and the outline of each stops a segment short of its body, so no seam
         shows where they meet.  The tube's own two ends are
         square.
@@ -644,7 +643,8 @@ class _Drawing:
             layer: Draw order.
             pts3: The centre line, shape ``(n, 3)``, with ``n >= 2``.
             radius: Tube radius, in world units.
-            chunk: Segments per piece; shorter sorts more finely.
+            chunk: Segments per piece; shorter lets a tightly bent tube hide
+                itself more finely.
             **style: ``fill`` (default black) and ``stroke`` (default none)
                 colour the tube and its outline, ``stroke_width`` (default
                 ``1``) is the outline width, and anything else -- ``opacity``,
@@ -686,15 +686,13 @@ class _Drawing:
             back: Style overrides for the hidden edges, or ``None`` to omit them.
             back_layer: Draw order of the hidden edges; defaults to ``layer``.
                 Put it below a translucent solid's faces so they veil it.
-            separate: Emit one ``<path>`` per edge, each keyed by its own
-                midpoint, so that in a layer passed to :meth:`sort_by_depth`
-                the edges interleave with other objects -- the cell edges of a
-                crystal among its atoms.
+            separate: Emit one ``<path>`` per edge, each with its own id, so
+                the edges can be selected one by one.
             trim: Shorten every edge by this much, in world units, at both
                 ends, so it stops at the surface of an atom or marker sitting
-                on each vertex.  A line through the centre of a sphere cannot
-                be depth-sorted against it, since part of it is inside; one
-                that starts on the surface can.
+                on each vertex.  Otherwise, in a layer sorted by depth, the
+                part of an edge inside the atom is hidden and drawn in the
+                ``back`` style -- a dash across the atom.
             **style: SVG presentation attributes; ``fill`` defaults to none.
                 An ``id`` becomes ``{id}-front`` and ``{id}-back``, suffixed
                 ``-0``, ``-1``, ... per edge when ``separate``.

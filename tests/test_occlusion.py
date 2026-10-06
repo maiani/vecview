@@ -1,4 +1,4 @@
-"""Exact visibility: ``sort_by_depth(layer, exact=True)``.
+"""Exact visibility: ``sort_by_depth(layer)``.
 
 Visibility is checked as geometry: a clip region must contain the points where
 its element is in front, and exclude the points where something else is.
@@ -21,9 +21,11 @@ pytest.importorskip("contourpy")
 CAM = OrthographicCamera(35.0, 24.0, 40.0)
 
 
-def scene(exact: bool = True) -> Scene:
+def scene(sort: bool = True) -> Scene:
+    """A scene whose layer 0 is depth-sorted, or, for comparison, drawn in order."""
     out = Scene(CAM)
-    out.sort_by_depth(0, exact=exact)
+    if sort:
+        out.sort_by_depth(0)
     return out
 
 
@@ -158,10 +160,10 @@ class TestLines:
         assert "ray-hidden" not in by_id(s.render())
 
     def test_an_unobstructed_line_is_left_alone(self) -> None:
-        plain, exact = scene(exact=False), scene()
-        for s in (plain, exact):
+        plain, sorted_ = scene(sort=False), scene()
+        for s in (plain, sorted_):
             s.polyline(0, [(0, 0, 0), (1, 1, 1)], stroke="#000", id="ray")
-        assert plain.to_svg_document() == exact.to_svg_document()
+        assert plain.to_svg_document() == sorted_.to_svg_document()
 
     def test_cell_edges_hidden_by_a_plane_disappear(self) -> None:
         s = scene()
@@ -169,7 +171,7 @@ class TestLines:
             0, vecview.box_faces((0, 0, 0), (2, 2, 2)), back={"stroke_dasharray": "2"}, id="cell"
         )
         s.polygon(0, vecview.rect_shape((0, 0, 0), (1, 0, 0), (0, 1, 0), 2, 2), fill="#58d", id="m")
-        before = scene(exact=False)
+        before = scene(sort=False)
         before.edges(
             0, vecview.box_faces((0, 0, 0), (2, 2, 2)), back={"stroke_dasharray": "2"}, id="cell"
         )
@@ -206,7 +208,7 @@ class TestContract:
         s.sphere(0, (1.2, 0, 0), 0.8, fill="#33c", id="b")
         other = vecview.ObliqueCamera.cabinet(40.0)
         rebuilt = Scene(other)
-        rebuilt.sort_by_depth(0, exact=True)
+        rebuilt.sort_by_depth(0)
         rebuilt.sphere(0, (0, 0, 0), 1.0, fill="#c33", id="a")
         rebuilt.sphere(0, (1.2, 0, 0), 0.8, fill="#33c", id="b")
         assert str(s.render(other)) == rebuilt.to_svg_document()

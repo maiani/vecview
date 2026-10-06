@@ -34,8 +34,8 @@ on its own side.
   - Only the rendering modules import `svg`: `scene.py` and the private
     `_elements.py`, `_canvas.py`, and `_solids.py`. `shapes.py`, `camera.py`,
     `projections.py`, `_occlusion.py`, `_place.py`, and `_drawing.py` never do.
-- `_occlusion.py` is private: exact visibility for `sort_by_depth(exact=True)`.
-  The canvas describes each element of an exact layer as a `Surface` (outline
+- `_occlusion.py` is private: exact visibility for `sort_by_depth(layer)`.
+  The canvas describes each element of a sorted layer as a `Surface` (outline
   plus a depth that goes on smoothly past its edge) or a `Line`, lazily, and
   `resolve` clips and splits them. Keep closed-form depths closed-form.
 - `_vec.py` and `_types.py` are private. Re-export from `__init__.py` what should
@@ -86,10 +86,9 @@ Do not add these without the user changing the design first:
 - **Automatic depth sorting across layers** (a z-buffer, or sorting a layer that
   did not ask). Layers are the model. A beam crossing a translucent slab has
   three parts that no automatic depth rule orders correctly. Depth only ever
-  acts inside a layer passed to `Scene.sort_by_depth`: as the painter's
-  algorithm, whose failures are fixed by cutting geometry back (`edges(trim=)`,
-  `trim_corners`) or into pieces (`cylinder(slices=)`, `tube` chunks), or, with
-  `exact=True`, as exact visibility by clipping.
+  acts inside a layer passed to `Scene.sort_by_depth`, and there it is exact
+  visibility by clipping -- there is no painter's-algorithm mode, so do not add
+  geometry workarounds for one (cutting solids into pieces so they sort).
 - **Rasterizing or PDF export.** Runtime dependencies stay `numpy`, `svg.py`,
   `shapely`, and `contourpy`; a test in `tests/test_package_metadata.py`
   enforces it. The last two are required because robust polygon clipping and

@@ -56,55 +56,29 @@ what sits on it, 30 for labels.
 ### Sorting by depth
 
 ```python
-scene.sort_by_depth(30)
+scene.sort_by_depth(10)
 ```
 
 Layers are the model, and a scene never reorders a layer on its own. A layer
-passed to `sort_by_depth` opts in to the painter's algorithm: its world-space
-elements are drawn farthest first, each keyed by the mean depth of the points
-that made it — a sphere by its centre, a cylinder by its axis midpoint, a polygon
-by its vertices. Equal depths keep insertion order, so the output stays
-deterministic, and screen-space elements, which have no depth, go on top. Other
-layers are untouched, and the setting is recorded, so
-[another camera](#rendering-one-scene-several-ways) re-sorts.
-
-It is for **many separate objects that do not interpenetrate**: the atoms and
-bonds of a lattice, the arrows of a spin texture, the quads of a surface. There,
-assigning layers by hand is not an option, and sorting is close to exact — exact
-for non-overlapping spheres of one radius.
-
-It is a heuristic, and two cases defeat it:
-
-- **A line or face running into a sphere's centre.** Part of it is inside the
-  ball, so no order is right. Cut it back to the surface — `edges(trim=r)`,
-  [`trim_corners`](shapes.md#polyhedra), or a bond whose ends you move to the atom
-  surfaces — and it sorts exactly.
-- **Long objects that each cover part of the other**, like a coil round a core.
-  A single key cannot describe either. Cut the long one into
-  [slices](#long-objects).
-
-Both have a fix that keeps the layer fast and dependency-free, and exact
-visibility removes the need for either.
-
-### Exact visibility
-
-```python
-scene.sort_by_depth(10, exact=True)
-```
-
-With `exact=True` visibility is decided point by point rather than element by
-element. Every surface keeps its native SVG element — a `<circle>` stays a circle
-— clipped to the part of it that no opaque surface hides, so a bond can run into
-an atom's centre, two planes can cut through each other, and a coil can wrap an
-unsliced core. Every line is cut where an opaque surface hides it, and the hidden
-part is dropped, or drawn in the `back` style that `polyline`, `edges`, and
-`sphere_curve` take — a ray dashed where it passes behind an atom:
+passed to `sort_by_depth` has its visibility decided by depth instead, point by
+point rather than element by element. Every surface keeps its native SVG element
+— a `<circle>` stays a circle — clipped to the part of it that no opaque surface
+hides, so a bond can run into an atom's centre, two planes can cut through each
+other, and a coil can wrap its core. A surface hidden entirely is dropped. Every
+line is cut where an opaque surface hides it, and the hidden part is dropped, or
+drawn in the `back` style that `polyline`, `edges`, and `sphere_curve` take — a
+ray dashed where it passes behind an atom:
 
 ```python
 scene.polyline(10, [start, end], back={"stroke_dasharray": "4 3"}, stroke="#000")
 ```
 
-How exact is exact:
+It is for anything whose overlaps no fixed order gets right: the atoms and bonds
+of a lattice, the arrows of a spin texture, the quads of a surface, a coil round
+a core, crossing planes. Other layers are untouched, and the setting is recorded,
+so [another camera](#rendering-one-scene-several-ways) decides afresh.
+
+How exact it is:
 
 - Between two **planar** surfaces — faces, polygons, quads of a mesh — the
   boundary is a straight line, computed exactly.
@@ -116,17 +90,20 @@ How exact is exact:
 - **Lines** are split where they cross behind a surface, refined by bisection.
   Text, slots, and planes are never clipped or split.
 - **Translucent** surfaces (`fill_opacity` or `opacity` below 1) hide nothing, but
-  are clipped by what is in front of them. Soft `gaussian` spots never hide.
+  are clipped by what is in front of them, and are painted back to front over
+  the opaque ones. Soft `gaussian` spots never hide. Screen-space elements go on
+  top, in the order they were drawn.
 - Opaque surfaces are painted so that whatever hides another comes after it, and
   each hidden one runs on a little under the edge in front of it, so their
   anti-aliased edges never leave a hairline of background between them.
 
-It costs a little: every partly hidden element gains a `<clipPath>`, named
+It costs something: every partly hidden element gains a `<clipPath>`, named
 `{id}-visible` after the element (or `visible-{n}` for one without an id), and
 the hidden part of a line with an id becomes a second path, `{id}-hidden`. A
-layer of a few hundred solids takes a second or so to render, against
-milliseconds for plain sorting. Only exact layers load `shapely` and
-`contourpy`, so plain scenes do not pay for them.
+layer of a few hundred solids takes a second or two to render, where a layer
+drawn in order takes milliseconds, and its SVG can be twice the size.
+`shapely` and `contourpy`, which do the clipping, load only when a sorted layer
+first renders.
 
 What no visibility rule can do is order a beam inside a translucent slab: a
 translucent face hides nothing, so the beam above, the attenuated segment
@@ -290,14 +267,14 @@ so curved solids have **exact, closed-form outlines**, and each is drawn as one:
   radius; under an oblique camera the width is an average, an approximation.
   `fill` is the tube's colour (default black), `stroke` its outline (default
   none), and `stroke_width` the outline's width (default 1); its two ends are
-  cut square. It is cut into pieces of `chunk` segments so that in a sorted layer
-  it passes over and under itself; neighbouring pieces overlap and each outline
+  cut square. It is cut into pieces of `chunk` segments, each a surface of its own
+  in a sorted layer, so that it passes over and under itself; neighbouring pieces overlap and each outline
   stops short of its body, so no seam shows.
 
 A sphere is one element and every other solid one `<g>`, so it is one object in
-an editor and one key for [`sort_by_depth`](#sorting-by-depth). The exceptions
-are the pieces of a tube and the slices of a [long cylinder](#long-objects),
-each its own `<g>` so that each can sort on its own.
+an editor and is clipped as one by [`sort_by_depth`](#sorting-by-depth). The
+exceptions are the pieces of a tube, each its own surface so that a tube can
+hide part of itself, and the slices of a [sliced cylinder](#long-objects).
 
 An `id` goes on the sphere or the group, and the parts are named from it:
 
@@ -333,13 +310,12 @@ arrow's two parts.
 scene.cylinder(10, (-2, 0, 0), (2, 0, 0), 0.8, slices=20, id="core")
 ```
 
-Keyed by its centre alone, a long cylinder sorts wholly in front of everything
-on its far half and wholly behind everything on its near half — a coil wound
-round it comes out wrong at both ends. `slices` cuts it into lengths along its
-axis, each its own `<g>` keyed by its own midpoint, so each turn meets the slice
-it wraps. The slices overlap a little and the outline is stroked along the sides
-only, so the result still looks like one solid — except with a translucent fill,
-where the overlaps show.
+`slices` cuts a cylinder into lengths along its axis, each its own `<g>`.
+[Depth sorting](#sorting-by-depth) does not need it — a coil wraps an unsliced
+core exactly — so it is only for a solid wanted in separately selectable lengths.
+The slices overlap a little and the outline is stroked along the sides only, so
+the result still looks like one solid — except with a translucent fill, where
+the overlaps show.
 
 Sliced, the groups are `{id}-0`, `{id}-1`, …, each holding `{id}-{k}-body` and,
 when there is a stroke, the outline `{id}-{k}-edge`; the end disks keep their
@@ -365,9 +341,11 @@ scene.edges(30, zone, back={"stroke_dasharray": "5 4"}, back_layer=5, stroke="#2
 scene.faces(20, zone, cull=True, fill="#a9c8ea", fill_opacity=0.2)
 ```
 
-`separate=True` emits one `<path>` per edge, keyed by its own midpoint, so cell
-edges interleave with atoms in a sorted layer; `trim` shortens each edge at both
-ends, to stop at the surface of an atom on each corner. The faces must share
+`separate=True` emits one `<path>` per edge, each with its own id, so edges can
+be selected one by one. `trim` shortens each edge at both ends, to stop at the
+surface of an atom on each corner; otherwise, in a sorted layer, the part of the
+edge inside the atom counts as hidden and is drawn in the `back` style — a dash
+across the atom. The faces must share
 vertices exactly where they meet, as every solid from
 [`shapes`](shapes.md) does.
 
@@ -417,7 +395,7 @@ top-level element the call emits carries them, and nothing inside it does.**
 | `cylinder`, `cone`, `arrow3d` | the solid's `<g>`, not the body and end disks inside it |
 | `cylinder(slices=n)`, `tube` | every slice or chunk `<g>` |
 | `plane`, `slot` | the reserved group, around whatever a consumer fills it with |
-| a line split by an [exact layer](#exact-visibility) | both the visible and the hidden part |
+| a line split by an [depth-sorted layer](#sorting-by-depth) | both the visible and the hidden part |
 
 So `.gate` selects four gates' faces, and `.atom` selects each sphere once,
 however many parts a solid is drawn with. Elements handed to `add` keep whatever

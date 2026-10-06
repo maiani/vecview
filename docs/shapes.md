@@ -258,15 +258,15 @@ every vertex triple against every vertex — instant for the tens of vertices of
 zone or a coordination polyhedron, and not meant for a mesh of thousands.
 
 `trim_corners` cuts a disk of `radius` out of every corner of every face, for a
-polyhedron with an atom on each vertex. A face running into a sphere's centre
-cannot be [depth-sorted](scenes.md#sorting-by-depth) against it, since part of the
-face is inside the ball; cut back to the surface, it can. Pair it with
+polyhedron with an atom on each vertex whose faces must themselves stop at the
+atoms. A [depth-sorted layer](scenes.md#sorting-by-depth) does not need it: it
+clips each face exactly where an atom hides it. Pair it with
 `Scene.edges(trim=radius)`:
 
 ```python
 octahedron = vecview.convex_polyhedron(oxygens)
 scene.faces(10, vecview.trim_corners(octahedron, r_o), fill="#6f9fd8", fill_opacity=0.35)
-scene.edges(10, octahedron, separate=True, trim=r_o, stroke="#2d5c94")
+scene.edges(10, octahedron, trim=r_o, stroke="#2d5c94")
 ```
 
 ## Cutaways

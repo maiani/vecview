@@ -59,7 +59,7 @@ class Scene(_Drawing):
     depth-sorted unless it asks to be with :meth:`sort_by_depth`: for a schematic
     with a beam passing through a translucent slab, deciding what occludes what
     by hand is worth more than getting it automatically and almost right, while
-    for a lattice of hundreds of atoms the painter's algorithm is the only
+    for a lattice of hundreds of atoms deciding visibility by depth is the only
     practical answer.  :meth:`Camera.visible` handles the one case where the
     answer is unambiguous -- the back faces of a convex solid.
 
@@ -69,7 +69,7 @@ class Scene(_Drawing):
     gates -- so a stylesheet, a selector, or Inkscape can reach them together.
     Each top-level element a call emits carries the classes: every face of
     :meth:`faces`, both strokes of :meth:`edges`, every piece of a sliced or
-    chunked solid, and both parts of a line an exact layer splits.  The
+    chunked solid, and both parts of a line a depth-sorted layer splits.  The
     elements inside a solid's ``<g>`` do not repeat them, so a selector
     matches each object once.
 
@@ -233,41 +233,31 @@ class Scene(_Drawing):
         return out
 
     # --- drawing ----------------------------------------------------------
-    def sort_by_depth(self, layer: int, *, exact: bool = False) -> None:
-        """Order ``layer`` back to front by depth instead of by insertion.
+    def sort_by_depth(self, layer: int) -> None:
+        """Decide what hides what in ``layer`` by depth, instead of by draw order.
 
-        The painter's algorithm, opted into one layer at a time.  Every
-        world-space element drawn at ``layer`` is keyed by the mean depth of
-        the points that produced it -- a sphere by its centre, a cylinder by its
-        axis midpoint, a polygon by its vertices -- and drawn farthest first.
-        Equal depths keep insertion order, and screen-space elements, which have
-        no depth, go on top in insertion order.  Other layers are untouched.
-
-        This is for many separate objects that do not interpenetrate: the atoms
-        and bonds of a lattice, the arrows of a spin texture, the quads of a
-        surface.  It is a heuristic, exact for non-overlapping spheres of one
-        radius and good for small, similar pieces, and it cannot order two long
-        objects that each cover part of the other.
-
-        ``exact=True`` lifts that limit by deciding visibility point by point
-        instead.  Each surface keeps its native element, clipped to the part of
-        it that no opaque surface hides -- found exactly between two planar
-        surfaces, and elsewhere traced on a grid of half a screen unit, at
-        most 160 steps across an overlap -- so a bond can
-        run into an atom's centre, two planes can cross, and a coil can wrap an
-        unsliced core.  Each line is cut where an opaque surface hides it; the
-        hidden part is dropped, or drawn in the ``back`` style of
+        Visibility is decided point by point.  Each surface keeps its native
+        element, clipped to the part of it that no opaque surface hides --
+        found exactly between two planar surfaces, and elsewhere traced on a
+        grid of half a screen unit, at most 160 steps across an overlap -- so a
+        bond can run into an atom's centre, two planes can cross, and a coil
+        can wrap its core.  Each line is cut where an opaque surface hides it;
+        the hidden part is dropped, or drawn in the ``back`` style of
         :meth:`polyline`, :meth:`edges`, or :meth:`sphere_curve`.  Translucent
-        surfaces hide nothing but are clipped by what is in front of them.  It
-        is
-        slower, and adds one ``<clipPath>`` per partly hidden element.
+        surfaces hide nothing but are clipped by what is in front of them, and
+        are painted back to front over the opaque ones.  Screen-space elements
+        go on top in insertion order.  Other layers are untouched.
+
+        It costs more than drawing in order -- up to a few seconds for a layer
+        of hundreds of solids -- and adds one ``<clipPath>`` per partly hidden
+        element.
 
         A beam inside a translucent slab still belongs on separate layers: a
         translucent face hides nothing, so no rule of visibility orders it.
 
         The setting is recorded, so rendering with another camera re-sorts.
         """
-        self._add("sort_by_depth", layer, exact=exact)
+        self._add("sort_by_depth", layer)
 
     def add(self, layer: int, element: svg.Element) -> None:
         """Add a ready-made ``svg.py`` element at ``layer``, bypassing projection."""

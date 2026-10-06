@@ -548,10 +548,10 @@ def convex_polyhedron(vertices: Points3, *, tol: float = 1e-9) -> list[Face]:
 def trim_corners(faces: Iterable[Face], radius: float, n: int = 8) -> list[Face]:
     """Faces with a disk of ``radius`` cut out at every corner.
 
-    For a polyhedron with an atom or marker on each vertex.  A face that runs
-    into the centre of a sphere cannot be depth-sorted against it, since part
-    of the face is inside the ball; cut back to the sphere's surface, it can.
-    The ball meets each face plane in a disk about the vertex, so the corner is
+    For a polyhedron with an atom or marker on each vertex, when its faces
+    must themselves stop at the atoms.  A layer sorted by depth does not need
+    this -- it clips each face exactly where an atom hides it.  The ball meets
+    each face plane in a disk about the vertex, so the corner is
     replaced by an inward arc of ``n`` segments, centred on the vertex, from
     one edge to the other.  Name and normal are kept.
 

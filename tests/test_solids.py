@@ -22,7 +22,8 @@ IDS = ["trimetric", "isometric", "cabinet"]
 
 
 def ids(scene: Scene) -> list[str | None]:
-    return [el.id for el in (scene.render().elements or [])]
+    """The drawn elements' ids in paint order, leaving out ``<defs>``."""
+    return [el.id for el in (scene.render().elements or []) if not isinstance(el, svg.Defs)]
 
 
 def circle_points(center: np.ndarray, axis: np.ndarray, r: float, n: int = 720) -> np.ndarray:
@@ -287,7 +288,9 @@ class TestSortByDepth:
         scene = Scene(cam)
         if sort:
             scene.sort_by_depth(1)
-        near, far = 2.0 * cam.view, -2.0 * cam.view
+        # Offset on screen, so the near sphere hides only part of the far one.
+        right, _ = cam.screen_basis(cam.view)
+        near, far = 2.0 * cam.view, -2.0 * cam.view + 0.6 * right
         scene.sphere(1, near, 0.5, id="near")
         scene.sphere(1, far, 0.5, id="far")
         scene.text2d(1, 0, 0, "label", id="label")
@@ -298,7 +301,7 @@ class TestSortByDepth:
         scene = self.build(OrthographicCamera(35.0, 24.0, 10.0), sort=False)
         assert ids(scene) == ["other-layer", "near", "far", "label"]
 
-    def test_a_sorted_layer_draws_far_to_near_with_screen_space_on_top(self) -> None:
+    def test_a_sorted_layer_paints_what_hides_last_with_screen_space_on_top(self) -> None:
         scene = self.build(OrthographicCamera(35.0, 24.0, 10.0), sort=True)
         assert ids(scene) == ["other-layer", "far", "near", "label"]
 
@@ -308,6 +311,14 @@ class TestSortByDepth:
         for k in range(4):
             scene.sphere(0, (0, k, 0), 0.2, id=f"s{k}")  # all at one depth from +x
         assert ids(scene) == ["s0", "s1", "s2", "s3"]
+
+    def test_a_wholly_hidden_surface_is_dropped(self) -> None:
+        cam = OrthographicCamera(35.0, 24.0, 10.0)
+        scene = Scene(cam)
+        scene.sort_by_depth(0)
+        scene.sphere(0, 2.0 * cam.view, 0.5, id="near")
+        scene.sphere(0, -2.0 * cam.view, 0.4, id="behind")
+        assert ids(scene) == ["near"]
 
     def test_reprojection_resorts(self) -> None:
         scene = self.build(OrthographicCamera(35.0, 24.0, 10.0), sort=True)

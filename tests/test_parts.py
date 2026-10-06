@@ -149,10 +149,12 @@ class TestLayers:
         part.sphere(0, (0, 0, 0), 0.3, id="atom")
         scene = Scene(CAM)
         scene.sort_by_depth(10)
-        scene.place(10, part, at=-3.0 * CAM.view, id="far")
-        scene.place(10, part, at=3.0 * CAM.view, id="near")
+        right, _ = CAM.screen_basis(CAM.view)  # each partly hides the one behind it
+        scene.place(10, part, at=-3.0 * CAM.view - 0.4 * right, id="far")
+        scene.place(10, part, at=3.0 * CAM.view + 0.4 * right, id="near")
         scene.place(10, part, id="mid")
-        assert [el.id for el in scene.render().elements or []] == [
+        drawn = [el for el in scene.render().elements or [] if not isinstance(el, svg.Defs)]
+        assert [el.id for el in drawn] == [
             "far-atom",
             "mid-atom",
             "near-atom",

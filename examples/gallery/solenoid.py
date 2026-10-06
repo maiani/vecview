@@ -1,11 +1,11 @@
 """A solenoid: a copper coil wound on a core, and the field it makes.
 
-The coil is one ``tube`` along a ``helix``, cut into short pieces that sort by
-depth together with the core, itself sliced along its length, so each turn
-passes behind the core and comes round in front of it again without a layer
-assigned per half-turn.  The return field lines are dashed, in the plane of the axis.
+The coil is one ``tube`` along a ``helix``, in a layer sorted by depth with the
+core, so each turn passes behind the core and comes round in front of it again
+without a layer assigned per half-turn.  The return field lines are dashed, in
+the plane of the axis.
 
-Uses: ``helix``, ``tube``, ``cylinder(slices=..., highlight=...)``, ``arrow3d``,
+Uses: ``helix``, ``tube``, ``cylinder(highlight=...)``, ``arrow3d``,
 ``sort_by_depth``.
 """
 
@@ -59,7 +59,6 @@ def build() -> Scene:
         stroke="#525c68",
         stroke_width=1.0,
         end_style={"fill": "#c4ccd5", "stroke": "#525c68"},
-        slices=2 * TURNS,
         id="core",
     )
 

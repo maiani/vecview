@@ -2,12 +2,12 @@
 
 Each pair of planes cuts through the other, so every plane is partly in front
 of and partly behind each of the others: no order of drawing whole planes is
-right.  With ``sort_by_depth(..., exact=True)`` each plane is clipped to the part
+right.  In a layer sorted by depth each plane is clipped to the part
 of it that shows, the lines where planes meet are hidden only by the third
 plane, the body diagonal fades to a faint dash exactly where a plane hides it,
 and the cell's hidden edges are dropped where the planes cover them.
 
-Uses: ``sort_by_depth(exact=True)``, ``polyline(back=...)``, ``edges(trim=...)``,
+Uses: ``sort_by_depth``, ``polyline(back=...)``, ``edges(trim=...)``,
 ``rect_shape``, and ``sphere``.
 """
 
@@ -35,7 +35,7 @@ PLANES = {  # normal axis: fill, edge
 def build() -> Scene:
     camera = OrthographicCamera(azim_deg=-35.0, elev_deg=28.0, scale=190.0)
     scene = Scene(camera, pad=14.0, background="#ffffff")
-    scene.sort_by_depth(10, exact=True)
+    scene.sort_by_depth(10)
 
     cell = vecview.box_faces((0, 0, 0), (1, 1, 1))
     scene.edges(

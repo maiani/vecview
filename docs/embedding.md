@@ -137,15 +137,15 @@ landed first — a silent wrong colour rather than an error.
 
 The ids a scene generates derive from the ones you give, so they are as unique
 as yours: `slab-pz` per face, `{id}-profile` for a Gaussian's gradient,
-`{id}-shade` for a cylinder's, `{id}-visible` for the clip path of an
-[exact layer](scenes.md#exact-visibility). Two are not:
+`{id}-shade` for a cylinder's, `{id}-visible` for the clip path of a
+[depth-sorted layer](scenes.md#sorting-by-depth). Two are not:
 
 - A sphere's highlight gradient is named after its colours,
   `ball-{fill}-{highlight}`. Every scene defines it identically, so a collision
   is harmless.
-- An element with no id that an exact layer clips gets `visible-{n}`, numbered
+- An element with no id that a sorted layer clips gets `visible-{n}`, numbered
   within its own scene, so two such scenes on one page can collide. Give the
-  elements of an exact layer ids when the scene will share a page.
+  elements of a sorted layer ids when the scene will share a page.
 
 ## Export
 

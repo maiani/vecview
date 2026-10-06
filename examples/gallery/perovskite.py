@@ -3,10 +3,10 @@
 The B cation sits in a translucent BO6 octahedron, the A cations on the cell
 corners, and the cell edges are dashed where the cell hides them.  Atoms, cell
 edges, and octahedron faces share one depth-sorted layer, so every overlap is
-resolved back to front without hand-assigned layers.
+resolved without hand-assigned layers.
 
 Uses: ``sort_by_depth``, ``sphere(highlight=...)``, ``convex_polyhedron``,
-``trim_corners``, and ``edges(separate=True, trim=...)``.
+and ``edges(trim=...)``.
 """
 
 from __future__ import annotations
@@ -51,34 +51,24 @@ def build() -> Scene:
         10,
         cell,
         back={"stroke_dasharray": "5 4", "stroke_width": 1.0, "stroke_opacity": 0.6},
-        separate=True,
-        trim=ATOMS["A"].radius,
+        trim=ATOMS["A"].radius,  # stop at the atoms rather than dash inside them
         id="cell",
         stroke="#2b2b2b",
         stroke_width=1.3,
         stroke_linecap="round",
     )
 
-    # The octahedron's corners sit inside the oxygens.  Cut back to their
-    # surfaces, its faces and edges depth-sort against them exactly.
-    octahedron = vecview.convex_polyhedron(oxygens)
-    r_o = ATOMS["O"].radius
+    # Translucent, so every face shows, and stroked, so its edges are clipped
+    # with it wherever an oxygen in front hides them.
     scene.faces(
         10,
-        vecview.trim_corners(octahedron, r_o),
+        vecview.convex_polyhedron(oxygens),
         fill="#6f9fd8",
         fill_opacity=0.35,
-        id="octahedron",
-    )
-    scene.edges(
-        10,
-        octahedron,
-        back={},
-        separate=True,
-        trim=r_o,
         stroke="#2d5c94",
         stroke_width=1.0,
-        id="octahedron-edge",
+        stroke_linejoin="round",
+        id="octahedron",
     )
 
     def atom(kind: str, at: np.ndarray, id: str) -> None:

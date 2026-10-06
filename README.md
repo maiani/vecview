@@ -95,12 +95,10 @@ Deciding occlusion by hand is worth more than getting it automatically and almos
 right.
 
 A lattice of hundreds of atoms is the opposite case. `scene.sort_by_depth(layer)`
-opts one layer in to the painter's algorithm: its elements are drawn back to
-front, ties keep insertion order, and every other layer is untouched.
-`sort_by_depth(layer, exact=True)` goes further and decides visibility point by
-point: each element keeps its native shape, clipped to what shows of it, so
-planes can cross and a bond can run into an atom, and lines are dropped or dashed
-exactly where they pass behind something.
+has one layer decide visibility by depth, point by point: each element keeps its
+native shape, clipped to what shows of it, so planes can cross, a coil can wrap
+its core, and a bond can run into an atom, and lines are dropped or dashed
+exactly where they pass behind something. Every other layer is untouched.
 `Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case,
 the back faces of a convex solid.
 

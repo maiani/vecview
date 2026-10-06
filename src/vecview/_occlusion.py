@@ -1,6 +1,6 @@
-"""Exact visibility for a layer passed to ``Scene.sort_by_depth(layer, exact=True)``.
+"""Exact visibility for a layer passed to ``Scene.sort_by_depth(layer)``.
 
-The painter's algorithm orders whole elements, so it fails wherever two
+Ordering whole elements by depth fails wherever two
 elements each hide part of the other.  Here every element of the layer is
 described by where it covers the screen and how deep its nearest surface is at
 each screen point, and visibility is decided point by point:

@@ -1,7 +1,7 @@
 """Curved solids on the canvas: spheres, cylinders, cones, solid arrows, and tubes.
 
 Each has an exact outline under any parallel projection, as one native element
-or group, and describes its exact depth for an exact layer.
+or group, and describes its exact depth for a depth-sorted layer.
 """
 
 from __future__ import annotations

@@ -41,6 +41,12 @@ All notable changes to this project are documented here, following
 
 ### Changed
 
+- `sort_by_depth(layer)` always decides visibility exactly, point by point:
+  surfaces are clipped where an opaque surface hides them, lines are split, and
+  a surface hidden entirely is dropped.  The painter's algorithm keyed on each
+  element's mean depth is gone, and with it the need to cut geometry so it
+  sorts: a coil wraps an unsliced core.  A sorted layer renders in up to a few
+  seconds and can double in size, from its clip paths.
 - `shapely` and `contourpy` are required dependencies, alongside `numpy` and
   `svg.py`, and the `occlusion` extra is gone: exact visibility always works,
   and robust polygon clipping is needed beyond it, for booleans on outlines.
@@ -54,6 +60,11 @@ All notable changes to this project are documented here, following
   selecting by id -- or a `url(#...)` fill -- would silently reach the wrong
   element.  Ids a call derives (`slab-pz`, `{id}-body`, `{id}-profile`) are
   checked too, so a hand-written id that collides with one is caught.
+
+### Removed
+
+- `sort_by_depth(..., exact=True)`: every sorted layer is exact now, so the
+  keyword is gone and passing it raises `TypeError`.
 
 ### Fixed
 

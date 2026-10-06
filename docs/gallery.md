@@ -22,11 +22,12 @@ Each script also runs on its own, `uv run python examples/gallery/perovskite.py`
 A cubic perovskite ABO₃ cell: A cations on the corners, the B cation inside a
 translucent BO₆ octahedron, and the cell edges dashed where the cell hides them.
 Atoms, edges, and octahedron faces share one
-[depth-sorted layer](scenes.md#sorting-by-depth). The octahedron comes from its
-six corners alone through [`convex_polyhedron`](shapes.md#polyhedra), and both
-its faces and the cell edges are cut back to the atom surfaces with
-[`trim_corners`](shapes.md#polyhedra) and `edges(trim=...)`, which is what makes
-the depth order exact where they meet.
+[depth-sorted layer](scenes.md#sorting-by-depth), so each face of the
+octahedron is clipped exactly where an oxygen in front hides it. The octahedron
+comes from its six corners alone through
+[`convex_polyhedron`](shapes.md#polyhedra), drawn as stroked faces so its edges
+are clipped with them, and the cell edges stop at the atom surfaces with
+`edges(trim=...)`, so their dashed hidden parts never cross an atom.
 
 `examples/gallery/perovskite.py`
 
@@ -91,9 +92,9 @@ lattice site, and the depth sort handles every overlap at any viewing angle.
 ![A solenoid](gallery/solenoid.svg)
 
 A copper coil wound on a core. The coil is one tube along a
-[`helix`](shapes.md#arcs-and-helices), and the core is a cylinder cut into
-[slices](scenes.md#long-objects) along its length, so each turn passes behind the
-core and comes round in front of it again.
+[`helix`](shapes.md#arcs-and-helices), sharing a
+[depth-sorted layer](scenes.md#sorting-by-depth) with the core, so each turn
+passes behind the core and comes round in front of it again.
 
 `examples/gallery/solenoid.py`
 
@@ -108,9 +109,9 @@ Majorana modes, one on each dot. The wire and every film are cross-sections
 [extruded](shapes.md#extrusions) along `x`: the Al is a shell on the three facets that face its evaporation
 source plus a slab on the dielectric, and each contact a shell over the wire
 plus a pad on either side. They share a
-[depth-sorted layer](scenes.md#sorting-by-depth) as convex pieces, the wire cut
-wherever a film begins or ends, since which contact hides which part of the
-wire depends on the side the camera is on. Every kind of
+[depth-sorted layer](scenes.md#sorting-by-depth), since which contact hides
+which part of the wire depends on the side the camera is on; the wire's facets
+under a film are left out, so no two faces lie flush against each other. Every kind of
 object carries a [class](scenes.md#classes) — `.gate`, `.plunger`,
 `.superconductor`, `.lead` — so all the gates select together in an editor.
 
@@ -122,8 +123,8 @@ object carries a [class](scenes.md#classes) — `.gate`, `.plunger`,
 
 The three mirror planes of a cubic cell, crossing at its centre. Each plane is
 partly in front of and partly behind each of the others — a cycle that no order of
-drawing whole planes gets right. With
-[exact visibility](scenes.md#exact-visibility) each plane is clipped to what shows
+drawing whole planes gets right. In a
+[depth-sorted layer](scenes.md#sorting-by-depth) each plane is clipped to what shows
 of it, the body diagonal is dashed exactly where a plane hides it, and the cell's
 dashed back edges disappear where the planes cover them.
 

@@ -116,9 +116,8 @@ three layers, and no automatic rule orders them correctly against a partially
 transparent face.
 
 A lattice of hundreds of atoms is the opposite case, and a layer can opt in to
-[sorting by depth](scenes.md#sorting-by-depth) for it — or to
-[exact visibility](scenes.md#exact-visibility), which clips every
-element to what shows of it and dashes lines where they pass behind. The curved solids —
+[sorting by depth](scenes.md#sorting-by-depth) for it, which clips every element
+to what shows of it and drops or dashes lines where they pass behind. The curved solids —
 spheres, cylinders, cones, solid arrows, tubes — have exact outlines under every
 parallel projection, so a sorted layer of them stays a small, editable file. See
 the [gallery](gallery.md).
