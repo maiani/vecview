@@ -14,7 +14,7 @@ import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import svg
@@ -593,7 +593,7 @@ class _Canvas:
                     clip = f"{name}-visible" if name else f"visible-{seq}"
                     region = svg.Path(d=_path(rings, closed=True), clip_rule="evenodd")
                     self.defs.append(svg.ClipPath(id=clip, elements=[region]))
-                    element.clip_path = f"url(#{clip})"  # type: ignore[attr-defined]
+                    element.clip_path = f"url(#{clip})"  # ty: ignore[unresolved-attribute]
                     items.append((layer, seq, element))
             elif seen.hidden:
                 rebuilt = shape.rebuild(seen.visible, seen.hidden)
@@ -716,7 +716,7 @@ class _Canvas:
         if given and isinstance(given[0], Face):
             pts = np.vstack([face.points for face in given if isinstance(face, Face)])
         else:
-            pts = as_points(given)
+            pts = as_points(cast(Points3, given))
         p = self.cam.project(pts)
         outline = p[convex_hull(p)]
         self._grow(outline)
@@ -1310,8 +1310,9 @@ class _Canvas:
         ends: dict[tuple[tuple[float, ...], ...], Array] = {}
         shown: dict[tuple[tuple[float, ...], ...], bool] = {}
         for face in given:
-            ring = np.asarray(face.points, dtype=np.float64)
-            for a, b in zip(ring, np.roll(ring, -1, axis=0), strict=True):
+            ring: Array = np.asarray(face.points, dtype=np.float64)
+            for start, end in zip(ring, np.roll(ring, -1, axis=0), strict=True):
+                a, b = cast(Array, start), cast(Array, end)
                 key = tuple(sorted((tuple(np.round(a, 9)), tuple(np.round(b, 9)))))
                 if key not in ends:
                     along = unit(b - a) * trim
@@ -1464,13 +1465,14 @@ class _Canvas:
             anchor = style.get("text_anchor", "start")
             x0 = x if anchor == "start" else (x - w if anchor == "end" else x - w / 2)
             self._grow(np.array([[x0, y - 0.82 * size], [x0 + w, y + 0.25 * size]]))
+        content: dict[str, Style] = {"text": s} if isinstance(s, str) else {"elements": list(s)}
         self._emit(
             layer,
             svg.Text(
                 x=round(x, 2),
                 y=round(y, 2),
                 font_size=size,
-                **({"text": s} if isinstance(s, str) else {"elements": list(s)}),
+                **content,
                 **style,
             ),
             depth,

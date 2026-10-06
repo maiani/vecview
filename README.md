@@ -227,7 +227,7 @@ as named cameras, and renders each by name.
 uv sync --all-extras
 uv run ruff format --check .
 uv run ruff check .
-uv run mypy src
+uv run ty check
 uv run pytest
 ```
 

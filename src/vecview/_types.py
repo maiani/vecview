@@ -2,7 +2,7 @@
 
 ``numpy`` accepts a wide range of array-likes.  These aliases name the shapes
 the public API actually cares about -- a single 3D point, and a sequence of them
--- so signatures stay readable under ``mypy --strict``.
+-- so signatures stay readable when type checking.
 """
 
 from __future__ import annotations

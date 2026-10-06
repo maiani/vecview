@@ -74,7 +74,7 @@ Do not add these without the user changing the design first:
 
 - Supported Python: 3.12 and newer.
 - `uv sync --all-extras` for a full environment.
-- Run `uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src`,
+- Run `uv run ruff format --check .`, `uv run ruff check .`, `uv run ty check`,
   and `uv run pytest` before reporting a change complete.
 - Run `uv run python examples/slab_polarizer.py --projection all`,
   `uv run python examples/altermagnetic_dot.py --projection all`, and

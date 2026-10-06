@@ -45,6 +45,8 @@ All notable changes to this project are documented here, following
 
 ### Changed
 
+- Use ty for type checking in development and CI instead of mypy.
+
 - **A scene holds objects and cameras; a camera renders them.** Drawing calls
   only record, and nothing is projected until `render`, `save`, `bbox`, or
   `to_svg_document`. As in a 3D application, `scene.cameras` holds named

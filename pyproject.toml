@@ -39,7 +39,7 @@ occlusion = ["shapely>=2.0", "contourpy>=1.2"]
 [dependency-groups]
 dev = [
   "build>=1.2",
-  "mypy>=1.10",
+  "ty>=0.0.84",
   "pytest>=8.0",
   "pytest-cov>=5.0",
   "ruff>=0.12",
@@ -73,22 +73,17 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
+# Keep library signatures annotated; ty checks their types.
+extend-select = ["ANN001", "ANN002", "ANN003", "ANN201", "ANN202", "ANN204", "ANN205", "ANN206"]
 select = ["B", "E", "F", "I", "N", "RUF", "S", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 # S314: tests parse SVG this package just generated, not untrusted input.
-"tests/**" = ["S101", "S314"]
-"examples/**" = ["S101"]
+"tests/**" = ["ANN", "S101", "S314"]
+"examples/**" = ["ANN", "S101"]
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
-packages = ["vecview"]
-mypy_path = "src"
-
-[[tool.mypy.overrides]]
-module = ["svg.*", "cairosvg.*", "shapely.*", "contourpy.*"]
-ignore_missing_imports = true
+[tool.ty.src]
+include = ["src"]
 
 [tool.coverage.run]
 branch = true
