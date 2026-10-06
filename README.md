@@ -9,7 +9,7 @@ renders to byte-identical SVG, and the output opens in Inkscape.
   <img src="https://raw.githubusercontent.com/maiani/vecview/v0.2.0/docs/images/readme.svg" alt="A gate-defined quantum dot on a layered slab, with leads, gates, spin densities and a bias circuit" width="640">
 </p>
 
-<p align="center"><sub>A device sketch: layered solids, Gaussian densities, solid arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md">gallery</a>.</sub></p>
+<p align="center"><sub>A device sketch: layered solids, Gaussian densities, camera-facing arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md">gallery</a>.</sub></p>
 
 VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
@@ -99,8 +99,8 @@ opts one layer in to the painter's algorithm: its elements are drawn back to
 front, ties keep insertion order, and every other layer is untouched.
 `sort_by_depth(layer, exact=True)` goes further and decides visibility point by
 point: each element keeps its native shape, clipped to what shows of it, so
-planes can cross and a bond can run into an atom, and lines are dashed exactly
-where they pass behind something.
+planes can cross and a bond can run into an atom, and lines are dropped or dashed
+exactly where they pass behind something.
 `Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case,
 the back faces of a convex solid.
 
@@ -146,7 +146,8 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | Function | Returns |
 | --- | --- |
 | `box_faces(center, size)` | an axis-aligned box as six named, correctly wound `Face`s |
-| `prism_faces(footprint, z0, z1)` | a convex footprint extruded along `z`, culling like a box |
+| `prism_faces(footprint, z0, z1)` | any simple footprint, convex or not, extruded along `z`, culling like a box |
+| `annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg)` | an arc-shaped footprint, such as a gate |
 | `rect_shape`, `circle_shape`, `ellipse_shape` | flat outlines in any plane |
 | `arrow_shape`, `double_arrow_shape` | flat arrows with a shaft and head |
 | `sine_ribbon` | a transverse wave along an axis, for `polyline`; the amplitude may be an envelope |
@@ -194,13 +195,13 @@ viewBox, and each camera projects the anchor afresh.
 ## Output
 
 `Scene.save(path)` writes the document; `Scene.to_svg_document()` returns it as
-a string. In Jupyter a scene displays itself inline. That method is the whole embedding contract: any tool that accepts an
-object exposing it can place a scene, without VecView knowing about the tool.
-The fitted viewBox usually does *not* start at `0, 0`, so a consumer must honour
-its origin. See [Embedding a scene](https://github.com/maiani/vecview/blob/v0.2.0/docs/embedding.md).
+a string, rendered by the active camera. That method is the whole embedding
+contract: any tool that accepts an object exposing it can place a scene, without
+VecView knowing about the tool. The fitted viewBox usually does *not* start at
+`0, 0`, so a consumer must honour its origin. See [Embedding a scene](https://github.com/maiani/vecview/blob/v0.2.0/docs/embedding.md).
 
-Rasterizing and PDF export are out of scope; they belong to whatever assembles
-the final page.
+In Jupyter a scene displays itself inline. Rasterizing and PDF export are out of
+scope; they belong to whatever assembles the final page.
 
 ## Examples
 
@@ -232,7 +233,8 @@ uv run ty check
 uv run pytest
 ```
 
-Run both examples with `--projection all` after touching geometry or projection: mirrored content, or a beam that misses the slab, is the
+Run both device examples with `--projection all`, and the gallery, after touching
+geometry or projection: mirrored content, or a beam that misses the slab, is the
 usual sign of a projection bug.
 
 ## Related projects

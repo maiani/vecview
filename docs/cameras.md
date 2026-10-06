@@ -5,26 +5,14 @@ parallel world edges stay parallel on screen and no perspective distortion creep
 into a lattice or a repeated texture. That single property is what the rest of the
 package leans on.
 
-## The hierarchy
-
-```
-Camera                    the projection contract, and nothing more
-├── ParallelCamera        affine: screen offsets are position-independent
-│   ├── OrthographicCamera    axonometric, aimed by azimuth and elevation
-│   └── ObliqueCamera         cavalier and cabinet
-└── PerspectiveCamera     not implemented; would subclass Camera directly
+```python
+cam = vecview.OrthographicCamera(azim_deg=35, elev_deg=24, scale=62)
+iso = vecview.OrthographicCamera.isometric(62)
+cabinet = vecview.ObliqueCamera.cabinet(62)
 ```
 
-`Camera` is abstract and promises only four things: `project`, `at`, `depth`, and
-`visible`. Everything else lives on `ParallelCamera`, and the split is load-bearing
-rather than tidy-minded. `direction`, `screen_basis`, `foreshortening`, and
-`plane_matrix` all assume that a screen offset does not depend on *where* in the
-scene you are — true for a parallel projection, false for a perspective one. A
-future `PerspectiveCamera` would therefore hang off `Camera` directly, and keeping
-those four one level down is what stops them from becoming a silent wrong answer.
-
-`visible` is abstract for the same reason: a parallel camera decides from a face's
-outward normal alone, while a perspective camera has to ask where the face *is*.
+A camera is only needed to render: a [scene](scenes.md) records objects and
+holds any number of named cameras, and each renders the same objects.
 
 ## Which projection to choose
 
@@ -41,9 +29,14 @@ outward normal alone, while a perspective camera has to ask where the face *is*.
 projection itself rather than how it was constructed:
 
 ```python
-OrthographicCamera(45, 35.264, 62).axonometry()  # "isometric"
+OrthographicCamera(45, ISOMETRIC_ELEV_DEG, 62).axonometry()  # "isometric"
+OrthographicCamera(45, 35.264, 62).axonometry()  # "dimetric": close is not equal
 OrthographicCamera(35, 24, 62).foreshortening()  # (0.663, 0.852, 0.914)
 ```
+
+The ratios are in units of `scale`. `axonometry(tol=1e-6)` compares them to
+within `tol`, so an elevation rounded to three decimals is honestly reported as
+dimetric.
 
 ## OrthographicCamera
 
@@ -51,9 +44,10 @@ OrthographicCamera(35, 24, 62).foreshortening()  # (0.663, 0.852, 0.914)
 OrthographicCamera(azim_deg, elev_deg, scale, origin=(0, 0, 0))
 ```
 
-`azim_deg` and `elev_deg` give the direction the camera looks *from*, `scale` is
-SVG user units per world unit, and `origin` is the world point that lands on the
-SVG origin. Because `right` and `up` are genuinely orthonormal here, this class
+`azim_deg` and `elev_deg` give the direction the camera looks *from* (azimuth
+counter-clockwise from `+x`, elevation above the `xy` plane), `scale` is SVG user
+units per world unit, and `origin` is the world point that lands on the SVG
+origin. Because `right` and `up` are genuinely orthonormal here, this class
 exposes them:
 
 | Attribute | Meaning |
@@ -61,16 +55,21 @@ exposes them:
 | `cam.right` | World direction projecting to screen `+x` |
 | `cam.up` | World direction projecting to screen *up* (SVG `−y`) |
 | `cam.view` | Unit vector from the scene **toward** the camera |
+| `cam.azim_deg`, `cam.elev_deg` | The angles it was built from |
+
+`view`, `scale`, `origin`, and `matrix` (the `(2, 3)` map from world
+displacements to screen ones, before `scale`) exist on every parallel camera.
 
 ### Isometric
 
 ```python
-OrthographicCamera.isometric(scale, azim_deg=45)
+OrthographicCamera.isometric(scale, azim_deg=45, origin=(0, 0, 0))
 ```
 
 All three axes foreshorten to `0.8165`, and the two horizontal axes land at
 exactly 30° below the horizon — which is why a 30-60 set square draws an
-isometric view.
+isometric view. Both numbers are exported: `ISOMETRIC_RATIO` is `√(2/3)` and
+`ISOMETRIC_ELEV_DEG` the elevation `35.264…°` that produces it.
 
 **Both angles are forced, not just the elevation.** Requiring the horizontal axes
 to share a ratio gives
@@ -86,7 +85,7 @@ measure true length. Pass a correspondingly larger `scale` if you want that.
 ### Dimetric
 
 ```python
-OrthographicCamera.dimetric(scale, ratio=0.5)
+OrthographicCamera.dimetric(scale, ratio=0.5, origin=(0, 0, 0))
 ```
 
 The azimuth is fixed at 45°, which is what makes `x` and `y` share a ratio at any
@@ -115,18 +114,49 @@ into face-on 2D insets rather than fighting the projection.
 ## ObliqueCamera
 
 ```python
-ObliqueCamera.cavalier(scale, angle_deg=45)
-ObliqueCamera.cabinet(scale, angle_deg=45)
-ObliqueCamera(scale, depth_ratio=0.5, angle_deg=45)
+ObliqueCamera.cavalier(scale, angle_deg=45, origin=(0, 0, 0))  # depth_ratio=1
+ObliqueCamera.cabinet(scale, angle_deg=45, origin=(0, 0, 0))  # depth_ratio=0.5
+ObliqueCamera(scale, depth_ratio=0.5, angle_deg=45, origin=(0, 0, 0))
 ```
 
 The `xz` plane is drawn at true shape and true angle — world `x` along screen
 `+x`, world `z` straight up — while world `y` recedes at `angle_deg` above the
-horizon, foreshortened by `depth_ratio`.
+horizon, foreshortened by `depth_ratio`. The camera looks from the `−y` side, so
+of a box it sees the `-y` face drawn true, with `+x` and `+z` (for the usual
+angles between 0° and 90°). `depth_ratio` must be positive, and `angle_deg` must
+not be a multiple of 180°, which would lay `y` along the horizontal.
 
 Oblique is **not** axonometric: its rays are not perpendicular to the projection
 plane, so no choice of azimuth and elevation reproduces it. It is still parallel,
 so every guarantee this package rests on continues to hold.
+
+## The hierarchy
+
+```
+Camera                    the projection contract, and nothing more
+├── ParallelCamera        affine: screen offsets are position-independent
+│   ├── OrthographicCamera    axonometric, aimed by azimuth and elevation
+│   └── ObliqueCamera         cavalier and cabinet
+└── PerspectiveCamera     not implemented; would subclass Camera directly
+```
+
+`Camera` is abstract and promises only four things: `project`, `at`, `depth`, and
+`visible`. The affine machinery lives on `ParallelCamera`, and the split is
+load-bearing rather than tidy-minded. `direction`, `screen_basis`,
+`foreshortening`, and `plane_matrix` all assume that a screen offset does not
+depend on *where* in the scene you are — true for a parallel projection, false
+for a perspective one. A future `PerspectiveCamera` would therefore hang off
+`Camera` directly, and keeping those four one level down is what stops them from
+becoming a silent wrong answer.
+
+`visible` is abstract for the same reason: a parallel camera decides from a face's
+outward normal alone, while a perspective camera has to ask where the face *is*.
+
+The same line runs through a scene. Polygons, lines, faces, edges, text, and
+slots need only the `Camera` contract. The curved solids, `plane`, `gaussian`,
+`sphere_curve`, and `arrow(normal="camera")` rely on the affine map, as does
+exact visibility for anything but flat polygons, and they raise `TypeError` when
+rendered by any other camera.
 
 ## Projecting
 
@@ -170,6 +200,31 @@ one raises `ValueError` rather than returning something arbitrary.
     rectangle — in the plane geometrically, yet visually pasted on, with no
     foreshortening cue. See [Embedding a scene](embedding.md#orientation).
 
+## `plane_matrix` — flat content in a world plane
+
+```python
+a, b, c, d, e, f = cam.plane_matrix(origin, u_edge, v_edge)
+```
+
+The six coefficients of an SVG `matrix(a b c d e f)` that sends content
+coordinates in `[0, 1]²` onto the rectangle spanned by `u_edge` and `v_edge` at
+`origin`, as this camera projects it. `origin` is the content's top-left corner,
+and the edges are not normalized: their lengths are the rectangle's size.
+[`Scene.plane`](scenes.md#embedding-flat-content) puts this matrix on a group,
+which is the usual way to use it.
+
+The map is exact, not an approximation. A parallel projection is an affine map
+of world space; restricted to a plane and composed with the plane's affine
+parametrization, it is still affine, and an affine map of the content is exactly
+what `matrix` expresses. A perspective camera would give a homography instead,
+which `matrix` cannot represent — one more reason `plane_matrix` lives on
+`ParallelCamera`.
+
+A rectangle that is degenerate, or seen exactly edge-on, projects to a line and
+raises `ValueError`. Content comes out upright and unmirrored only when `a > 0`
+and `d > 0`; [Orientation](embedding.md#orientation) explains how to choose the
+edges.
+
 ## Back-face culling
 
 `box_faces` returns all six faces of a box. `visible` keeps the ones whose outward
@@ -180,10 +235,10 @@ slab = vecview.box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
 scene.faces(10, cam.visible(slab), fill="#cfd6e0")
 ```
 
-For a convex solid this is exactly right, and always leaves three walls of a box.
-It replaces the kind of comment that goes stale the moment the azimuth moves —
-*"the camera sits in the (+x, +y) octant, so these two walls are the visible
-ones"*.
+For a convex solid this is exactly right; from a general viewpoint it leaves
+three walls of a box. It replaces the kind of comment that goes stale the moment
+the azimuth moves — *"the camera sits in the (+x, +y) octant, so these two walls
+are the visible ones"*.
 
 What it does **not** do is resolve one object occluding another. That is the
 [layer stack's](scenes.md) job, deliberately.
@@ -197,5 +252,30 @@ What it does **not** do is resolve one object occluding another. That is the
     set to `Scene.faces(..., cull=True)` instead and let each camera decide when
     it renders.
 
-`faces_camera(normal)` is the single-normal form, and takes a `tol` above `0` to
-also drop faces seen so nearly edge-on that they project to slivers.
+`faces_camera(normal)` is the single-normal form. It and `visible` take a `tol`;
+raise it above `0` to also drop faces seen so nearly edge-on that they project
+to slivers.
+
+## A parallel projection of your own
+
+```python
+ParallelCamera(matrix, view, scale, origin=(0, 0, 0))
+```
+
+`OrthographicCamera` and `ObliqueCamera` are both this class with a particular
+`matrix` and `view`. Build one directly for a projection they do not cover, such
+as a plan view straight down `z`:
+
+```python
+plan = vecview.ParallelCamera([[1, 0, 0], [0, -1, 0]], view=(0, 0, 1), scale=40)
+```
+
+`matrix` is the `(2, 3)` map from world displacements to screen ones before
+`scale`: row 0 gives screen `x`, row 1 screen `y`, which grows *downward*, hence
+the `-1`. `view` points from the scene toward the camera, and decides culling: a
+face is visible when its outward normal has a positive dot product with it. It
+need not be perpendicular to the screen, and for an oblique projection it is
+not. Depth is measured along `view` too, so for depth sorting to be right it
+should point along the projection rays: the direction `matrix` sends to zero. A
+matrix that is not `(2, 3)`, or that collapses the scene to a line, raises
+`ValueError`.

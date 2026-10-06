@@ -26,13 +26,16 @@ scene.render(vecview.OrthographicCamera.isometric(62))  # or any camera at all
 `render`, `save`, and `bbox` use it unless given another camera or a name, and
 `to_svg_document` — the zero-argument embedding contract — always uses it. Set by
 name, the active camera follows its entry if the entry is replaced; it can also be
-set to a camera directly, or left `None` while the scene is built. `pad` and
-`background` are the defaults `render` uses.
+set to a camera directly, or left `None` while the scene is built. Setting it to
+a name the scene does not hold raises `KeyError`, as does rendering by one;
+rendering with no camera at all raises `ValueError`. `pad` and `background` are
+the defaults `render` uses, and plain attributes you can change later.
 
 Mistakes that do not depend on the camera — a footprint that crosses itself, a
 tube of one point, a highlight with no fill — raise where the call is made.
-Those that do — a plane seen edge-on, an arrow along the projection ray — raise
-when that camera renders.
+Those that do — a plane seen edge-on, an arrow along the projection ray, a
+sphere under a camera that is not a `ParallelCamera` — raise when that camera
+renders.
 
 ## The layer stack
 
@@ -107,18 +110,23 @@ How exact is exact:
   boundary is a straight line, computed exactly.
 - Wherever a **sphere, cylinder, cone, arrow, or tube** is involved, the depth of
   each surface is known in closed form at every point of the screen, and the
-  boundary is the zero contour of the difference, traced to half a screen unit
-  and then simplified to a twentieth of one.
+  boundary is the zero contour of the difference, traced on a grid of half a
+  screen unit (at most 160 steps across an overlap) and simplified to a
+  twentieth of one.
 - **Lines** are split where they cross behind a surface, refined by bisection.
+  Text, slots, and planes are never clipped or split.
 - **Translucent** surfaces (`fill_opacity` or `opacity` below 1) hide nothing, but
   are clipped by what is in front of them. Soft `gaussian` spots never hide.
 - Opaque surfaces are painted so that whatever hides another comes after it, and
   each hidden one runs on a little under the edge in front of it, so their
   anti-aliased edges never leave a hairline of background between them.
 
-It costs a little: every partly hidden element gains a `<clipPath>`, and a layer
-of a few hundred solids takes a second or so to render, against milliseconds for
-plain sorting. It needs `shapely` and `contourpy`, which only exact layers import.
+It costs a little: every partly hidden element gains a `<clipPath>`, named
+`{id}-visible` after the element (or `visible-{n}` for one without an id), and
+the hidden part of a line with an id becomes a second path, `{id}-hidden`. A
+layer of a few hundred solids takes a second or so to render, against
+milliseconds for plain sorting. It needs `shapely` and `contourpy`, which only
+exact layers import.
 
 What no visibility rule can do is order a beam inside a translucent slab: a
 translucent face hides nothing, so the beam above, the attenuated segment
@@ -133,16 +141,19 @@ back-face culling of a convex solid is
 
 ```python
 scene.polygon(layer, points3, **style)  # filled polygon
-scene.polyline(layer, points3, **style)  # open path, fill="none" by default
-scene.faces(layer, faces, **style)  # one polygon per Face, one style
+scene.polyline(layer, points3, back=None, **style)  # open path, fill="none" by default
+scene.faces(layer, faces, cull=False, **style)  # one polygon per Face, one style
 scene.text(layer, point3, s, dx=0, dy=0, size=22, **style)
+scene.arrow(layer, origin, direction, length, normal=..., shaft_w=..., head_w=..., head_len=...)
+scene.gaussian(layer, center, u, v, a, b, id=..., color=..., opacity=1.0, extent=2.0, stops=9)
 ```
 
 Style keyword arguments pass straight through to `svg.py`, so Python's
 underscores map to SVG's hyphens: `stroke_width` → `stroke-width`,
 `fill_opacity` → `fill-opacity`, `text_anchor` → `text-anchor`.
 
-`arrow` draws [`arrow_shape`](shapes.md#arrows) as a polygon, with one addition:
+`arrow` draws [`arrow_shape`](shapes.md#arrows) as a polygon, taking the same
+arguments (including `pivot="tail"`) with one addition:
 `normal="camera"` turns the arrow about its own axis to show the widest face it
 can, so a spin along `z` reads from any viewpoint:
 
@@ -169,8 +180,9 @@ It is one polygon filled by a radial gradient mapped through the plane's affine
 transform, so it foreshortens with the plane — where nested translucent ellipses
 would take many elements and show their steps. The profile is shifted to reach
 exactly zero at `extent` half-widths (default `2`), where the polygon ends, so
-there is no rim. The gradient lands in `<defs>` as `{id}-profile`. Like `plane`,
-it needs a parallel camera.
+there is no rim. `u` and `v` must be perpendicular; `stops` samples the profile,
+and more is smoother. The `id` is required, because the gradient lands in
+`<defs>` as `{id}-profile`. Like `plane`, it needs a parallel camera.
 
 The profile is faithful, so it reads more compact than a stack of nested
 translucent contours, which overweights the tails. Where two spots overlap, the
@@ -181,10 +193,12 @@ one.
 
 `text` anchors at a projected world point and then offsets by `dx`/`dy` in
 *screen* units — the right frame for "just above the label's anchor", which
-should not shift when the camera turns.
+should not shift when the camera turns. `size` is the font size in screen units.
+Unless the style says otherwise, text is set in `DejaVu Sans, Verdana,
+sans-serif` with fill `#222222`.
 
 `faces` draws exactly the faces it is handed. Pass `cull=True` to drop back faces
-at draw time using the scene's own camera:
+when rendering, using whichever camera renders:
 
 ```python
 box = vecview.box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
@@ -202,8 +216,8 @@ duplicate ids are invalid SVG and break selection downstream. `+` is not a legal
 XML name character, so the sign is spelled out:
 
 ```python
-scene.faces(10, cam.visible(slab), fill="#cfd6e0", id="slab")
-# -> slab-pz, slab-px, slab-py
+scene.faces(10, slab, cull=True, fill="#cfd6e0", id="slab")
+# -> slab-px, slab-py, slab-pz under the 35° camera; slab-px, slab-my, slab-pz under cabinet
 ```
 
 Ids must be unique across the whole document, and rendering checks it: an id
@@ -232,9 +246,26 @@ scene.cylinder(
 )
 scene.cone(layer, base, apex, radius, end=True, end_style=None, highlight=None, **style)
 scene.arrow3d(
-    layer, origin, direction, length, shaft_r=..., head_r=..., head_len=..., pivot="tail", **style
+    layer,
+    origin,
+    direction,
+    length,
+    shaft_r=...,
+    head_r=...,
+    head_len=...,
+    pivot="tail",
+    end_style=None,
+    highlight=None,
+    **style,
 )
 scene.tube(layer, points3, radius, chunk=4, **style)
+```
+
+```python
+scene.sort_by_depth(10)
+scene.sphere(10, (0, 0, 0), 0.4, fill="#c33", highlight="#f4b6b6", id="o1")
+scene.sphere(10, (1.5, 0, 0), 0.3, fill="#ccc", highlight="#fff", id="h1")
+scene.cylinder(10, (0.4, 0, 0), (1.2, 0, 0), 0.1, ends=False, fill="#999", id="bond")
 ```
 
 A parallel projection maps a sphere onto an ellipse and a circle onto an ellipse,
@@ -253,30 +284,48 @@ so curved solids have **exact, closed-form outlines**, and each is drawn as one:
   the group by which end is nearer, so it reads as a solid from every side. The
   flat [`arrow`](#world-space-calls) is still the better choice when an arrow
   seen end-on must stay legible.
-- `tube` follows a world-space curve — a coil, a field line. It is drawn as wide
-  round-joined strokes, which is exact for an orthographic camera, since a tube
-  projects to its centre line thickened by its radius. `fill` is the tube's colour
-  and `stroke` its outline. It is cut into pieces of `chunk` segments so that in a
-  sorted layer it passes over and under itself; neighbouring pieces overlap and
-  each outline stops short of its body, so no seam shows.
+- `tube` follows a world-space curve of at least two points — a coil, a field
+  line. It is drawn as wide round-joined strokes, which is exact for an
+  orthographic camera, since a tube projects to its centre line thickened by its
+  radius; under an oblique camera the width is an average, an approximation.
+  `fill` is the tube's colour (default black), `stroke` its outline (default
+  none), and `stroke_width` the outline's width (default 1); its two ends are
+  cut square. It is cut into pieces of `chunk` segments so that in a sorted layer
+  it passes over and under itself; neighbouring pieces overlap and each outline
+  stops short of its body, so no seam shows.
 
-Each solid is one `<g>` (or, for a sphere, one element), so it is one object in
-an editor and one key for [`sort_by_depth`](#sorting-by-depth). An `id` goes on
-the group and is suffixed for the parts: `{id}-body`, `{id}-body-end0`,
-`{id}-head`, `{id}-shaft`, `{id}-3` for the fourth tube piece.
+A sphere is one element and every other solid one `<g>`, so it is one object in
+an editor and one key for [`sort_by_depth`](#sorting-by-depth). The exceptions
+are the pieces of a tube and the slices of a [long cylinder](#long-objects),
+each its own `<g>` so that each can sort on its own.
+
+An `id` goes on the sphere or the group, and the parts are named from it:
+
+| Call | Parts |
+| --- | --- |
+| `cylinder`, `cone` | `{id}-body`, and the end disk `{id}-body-end0` at `p0` or `base`, or `{id}-body-end1` at `p1` |
+| `arrow3d` | `{id}-shaft` and `{id}-head`, with their disks `{id}-shaft-end0` and `{id}-head-end0` |
+| `tube` | one group per piece: `{id}-0`, `{id}-1`, … |
+
+An end disk is drawn only when it faces the camera that renders, so which of
+them exist depends on the camera.
 
 ### Highlights
 
 `highlight="#ffffff"` shades a solid: a sphere with a radial gradient from the
-highlight near its upper left to its `fill` at the rim, a cylinder or cone with a
-linear gradient across its width. This is a **fill style, not a lighting model**
+highlight near its upper left to its `fill` at the rim, a cylinder, cone, or solid
+arrow with a linear gradient across its width. It needs a `fill` colour to shade
+toward, and raises `ValueError` at the call without one. This is a **fill style,
+not a lighting model**
 — the highlight sits in the same place on screen whatever the camera, and there
 is no light direction, material, or shading per face.
 
 Spheres of one colour pair share one gradient, `ball-{fill}-{highlight}`, so a
-lattice of a thousand atoms in two colours adds two definitions. A cylinder's
-gradient depends on its geometry, so it needs an `id` and is named `{id}-shade`
-(or `{id}-body-shade` through the group).
+lattice of a thousand atoms in two colours adds two definitions. Every other
+solid's gradient depends on its geometry, so it needs an `id` and is named after
+the part it shades: `{id}-body-shade` for a cylinder or cone, `{id}-shaft-shade`
+and `{id}-head-shade` for a solid arrow, and `{id}-shade` for a sliced cylinder,
+whose slices share one.
 
 ### Long objects
 
@@ -291,6 +340,10 @@ axis, each its own `<g>` keyed by its own midpoint, so each turn meets the slice
 it wraps. The slices overlap a little and the outline is stroked along the sides
 only, so the result still looks like one solid — except with a translucent fill,
 where the overlaps show.
+
+Sliced, the groups are `{id}-0`, `{id}-1`, …, each holding `{id}-{k}-body` and,
+when there is a stroke, the outline `{id}-{k}-edge`; the end disks are
+`{id}-end0` and `{id}-end1`.
 
 ## Hidden lines
 
@@ -313,14 +366,26 @@ scene.faces(20, zone, cull=True, fill="#a9c8ea", fill_opacity=0.2)
 
 `separate=True` emits one `<path>` per edge, keyed by its own midpoint, so cell
 edges interleave with atoms in a sorted layer; `trim` shortens each edge at both
-ends, to stop at the surface of an atom on each corner.
+ends, to stop at the surface of an atom on each corner. The faces must share
+vertices exactly where they meet, as every solid from
+[`shapes`](shapes.md) does.
 
 `sphere_curve` draws a curve lying on a sphere — an equator, a meridian — split
 exactly where it passes behind the sphere, with the same `back` and `back_layer`.
 A point on the sphere faces the camera when `(p - center) · view ≥ 0`, and the
-curve is cut where that changes sign.
+curve is cut where that changes sign. `closed=True` joins the last point back to
+the first, as for a circle:
 
-Both re-split for [each camera](#rendering-one-scene-several-ways).
+```python
+scene.sphere(10, (0, 0, 0), 1.0, fill="#dfe8f3", fill_opacity=0.4)
+equator = vecview.circle_shape((0, 0, 0), 1.0, normal=(0, 0, 1))
+dashed = {"stroke_dasharray": "3 3"}
+scene.sphere_curve(20, (0, 0, 0), equator, closed=True, back=dashed, back_layer=5, stroke="#333")
+```
+
+An `id` becomes `{id}-front` and `{id}-back` for both calls, suffixed `-0`, `-1`,
+… per edge when `separate`. Both re-split for
+[each camera](#rendering-one-scene-several-ways).
 
 ## Classes
 
@@ -368,10 +433,15 @@ scene.text2d(layer, x, y, s, size=22, grow=True, **style)
 For things that belong to the picture rather than the world: a backdrop, a
 gradient wash behind a beam, a corner annotation.
 
+Coordinates are SVG user units in the frame the camera projects into, so `x` and
+`y` usually come from `cam.at(...)` or `bbox()`. That is caller-side camera math,
+which another camera [does not redo](#rendering-one-scene-several-ways).
+
 `rect2d` is **excluded from the bounding box by default** (`grow=False`) — that is
 the point of it. A soft glow deliberately extends past the geometry, and letting
 it inflate the fitted viewBox would leave a wide dead margin. Pass `grow=True`
-when the rectangle really is part of the content.
+when the rectangle really is part of the content. `text2d` grows the box by
+default, as a label should, and takes `s` and the font defaults as `text` does.
 
 ## Bounds and the fitted viewBox
 
@@ -379,17 +449,21 @@ when the rectangle really is part of the content.
 by hand, and the document size follows the content:
 
 ```python
-lo, hi = scene.bbox()  # screen-space min/max corners
-scene.is_empty  # nothing contributing to the box yet
+lo, hi = scene.bbox()  # screen-space min/max corners, under the active camera
+lo, hi = scene.bbox("cabinet")  # or under another, by name or directly
+scene.is_empty  # True until something is drawn
 ```
 
-Text bounds are **estimated** from a nominal glyph width, not measured — real
-advance widths would mean loading the font. The estimate is generous enough to
-keep a label from being clipped, but do not treat `bbox` as exact where text is
+`bbox` projects the scene just as `render` does, but leaves out `pad`. Text
+bounds are **estimated** from a nominal glyph width, not measured — real advance
+widths would mean loading the font. The estimate is generous enough to keep a
+label from being clipped, but do not treat `bbox` as exact where text is
 involved.
 
-Rendering an empty scene raises `ValueError`: there is no content to fit a
-viewBox to, and a zero-size document is never what was wanted.
+Rendering raises `ValueError` when nothing grows the box: there is no content to
+fit a viewBox to, and a zero-size document is never what was wanted. `is_empty`
+counts drawing calls, not the box, so a scene holding only a `rect2d` or an `add`
+is not empty and still cannot render.
 
 ## Definitions
 
@@ -413,7 +487,8 @@ scene.add(layer, svg.Circle(cx=0, cy=0, r=4, fill="red"))
 
 `add` takes any `svg.py` element at a layer, bypassing projection and the
 bounding box. Use it for anything the primitives do not cover; you are not
-fenced in by them.
+fenced in by them. Its coordinates are screen coordinates, like those of
+`rect2d`, and in a sorted layer it has no depth, so it goes on top.
 
 ## Embedding flat content
 
@@ -429,7 +504,8 @@ and sheared with the geometry, rather than pasted on top of the picture.
 Nothing is drawn: this package does not parse or embed foreign SVG. A consumer
 fills the group by `id`, normalizing its content to the unit square. See
 [Embedding a scene](embedding.md) for that side, and
-[`Camera.plane_matrix`](cameras.md) for why the transform is exact.
+[`plane_matrix`](cameras.md#plane_matrix-flat-content-in-a-world-plane) for why
+the transform is exact. It needs a parallel camera.
 
 - `origin` is the content's **top-left** corner, since SVG `y` grows downward.
 - `u_edge` runs along content `+x`, `v_edge` along content `+y` (downward). Their
@@ -455,7 +531,9 @@ It reserves an **empty group** translated to the anchor, the projected point
 offset by `(dx, dy)` in screen units, and records `align` as `data-align`.
 `align` names the point of the content's box that sits on the anchor: `"west"`
 puts the anchor at the middle of the box's left edge, so the content extends to
-the right. The nine values are `"center"` and the eight compass points.
+the right. The nine values are `"center"` (the default) and the eight compass
+points; anything else raises `ValueError` at the call. `w`, `h`, `dx`, and `dy`
+are screen units, and the offsets default to zero.
 
 A `w` by `h` box, aligned the same way, grows the fitted viewBox so content of
 that size is not clipped. Nothing is drawn; a consumer fills the group by `id`
@@ -477,10 +555,12 @@ neighbouring walls meet, in `cairosvg` and Inkscape alike: each shared edge is
 anti-aliased against the background twice. That is worst on a curved footprint,
 which is many thin facets.
 
-`prism_walls` culls the walls of an extruded footprint with the scene's own
-camera, merges each run of consecutive facing walls into one strip — along the
-base, back along the top — and emits all strips as one `<path>`. Draw the cap
-over it. It handles non-convex footprints.
+`prism_walls(layer, footprint, z0, z1, **style)` culls the walls of an extruded
+footprint with the camera that renders, merges each run of consecutive facing
+walls into one strip — along the base, back along the top — and emits all strips
+as one `<path>`. Draw the cap over it. It handles non-convex footprints, and
+rejects one that is not a simple polygon at the call, as
+[`prism_faces`](shapes.md#prisms) does.
 
 Walls-then-cap is **exact at any height** when the walls are unstroked and the
 cap faces the camera:
@@ -495,9 +575,17 @@ the same solid shows through. For a low extrusion that hidden part is a sliver
 and does not matter; for a tall non-convex prism it can. There is no depth sort
 to fix it, by design — leave such walls unstroked and stroke the cap instead.
 
-`silhouette` is the older, simpler tool for a *convex* solid given as faces or
-points: it fills the convex hull of the projected vertices. For a non-convex
-outline the hull is wrong; use `prism_walls`.
+`silhouette(layer, solid, **style)` is the older, simpler tool for a *convex*
+solid given as faces or as world points: it fills the convex hull of the
+projected vertices as one polygon, recomputed by each camera.
+
+```python
+fin = vecview.prism_faces(footprint, 0.0, 0.3)
+scene.silhouette(30, fin, fill="#b98a40", id="lead-walls")
+scene.faces(30, fin[:1], fill="#e2b56a", id="lead")
+```
+
+For a non-convex outline the hull is wrong; use `prism_walls`.
 
 ## Rendering one scene several ways
 
@@ -512,7 +600,8 @@ renders under any number of cameras, and each result is byte-identical to buildi
 the scene with that camera from the start — including which walls `cull=True`
 selects. `with_camera(camera)` returns a copy with a different active camera — a
 name or a camera — for handing one scene, seen two ways, to a tool that only
-calls `to_svg_document`.
+calls `to_svg_document`. The copy has its own record and its own dict of named
+cameras, so drawing into either scene afterwards leaves the other alone.
 
 Two things behave as their names promise rather than as a new camera might
 suggest:
@@ -538,16 +627,20 @@ adding.
 ## Output
 
 ```python
-document = scene.render(pad=None, background=None)  # an svg.SVG object
-text = scene.to_svg_document()  # a complete SVG document string
-path = scene.save("scene.svg")  # writes it, returns the Path
+document = scene.render(camera=None, pad=None, background=None)  # an svg.SVG object
+text = scene.to_svg_document()  # a complete SVG document string, active camera
+path = scene.save("scene.svg", camera=None)  # writes it, returns the Path
 ```
 
-Rendering does not consume the scene — call it as often as you like, and keep
+`render` and `save` take a camera or a name, and default to the active one;
+`render`'s `pad` and `background` default to the scene's. `to_svg_document`
+takes nothing, which is the point of it: a consumer calls it without knowing
+anything about the scene. Rendering does not consume the scene — call it as often as you like, and keep
 adding afterwards.
 
 In a Jupyter notebook a scene displays itself: it implements `_repr_svg_`, which
-returns the document, or nothing while the scene is still empty.
+returns the document, or nothing while the scene has no active camera or nothing
+drawn.
 
 Only SVG is written. PNG and PDF export are left to the consumer, which is what
 holds the runtime dependencies to `numpy` and `svg.py`. Run `cairosvg` over the

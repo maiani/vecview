@@ -17,20 +17,27 @@ uv run ty check
 uv run pytest
 ```
 
-The examples are also part of the surface being maintained:
+The examples are also part of the surface being maintained. Run them after
+touching geometry or projection, and look at `examples/out/gallery/*.png` after
+touching a solid, an outline, or the depth sort:
 
 ```bash
 uv run python examples/slab_polarizer.py --projection all
 uv run python examples/altermagnetic_dot.py --projection all
+uv run python examples/gallery            # --docs also refreshes docs/gallery/
 ```
+
+They are the realistic end-to-end check, and their correctness is visible:
+mirrored or upside-down content, or a beam that misses the slab, is the usual
+symptom of a projection bug.
 
 ## The name
 
-The distribution and import name is **`vecview`**. Check PyPI name availability
-immediately before the first publication.
+The distribution and import name is **`vecview`**, published on
+[PyPI](https://pypi.org/project/vecview/). In prose the project is VecView.
 
 If it needs to change in the future, the rename is mechanical — the import name
-appears nowhere outside `src/vecview/`, its own tests, and the docs:
+appears only in this repository's own code, tests, examples, metadata, and docs:
 
 ```bash
 git grep -l vecview | xargs sed -i 's/vecview/newname/g'
@@ -47,9 +54,14 @@ dimetric, and trimetric cases.
   belong to a consumer, not here. A test enforces this. Exact visibility uses
   `shapely` and `contourpy` from the optional `occlusion` extra, imported only
   when an exact layer renders.
-- **Keep the three-way split**: `shapes` knows only numbers, `camera` knows
-  projection, `scene` is the only module that touches `svg.py`. Geometry that
-  needs a camera to be computed does not belong in `shapes`.
+- **Keep the three-way split**: `shapes` knows only numbers, `camera` and
+  `projections` know projection, `scene` is the only module that touches
+  `svg.py`. Geometry that needs a camera to be computed does not belong in
+  `shapes`.
+- **A scene records; a canvas projects.** Each public drawing method on `Scene`
+  validates what it can without a camera and appends one record. Rendering
+  replays the record onto a private canvas holding the camera, which is where
+  camera-dependent work and errors belong.
 - **Layers first.** A layer is depth-sorted only when it asks to be; see
   [Scenes](scenes.md#sorting-by-depth). Back-face culling of convex solids lives
   on `Camera`, not `Scene`.
@@ -70,6 +82,11 @@ dimetric, and trimetric cases.
   structure only.
 - Add a regression test for every projection or winding bug. A wrong normal is
   invisible until it culls the wrong wall.
+- Test a projection through `foreshortening()`, not through its construction
+  angles: the ratios are what the axonometric classification is defined by.
+- Rendering under a camera must stay byte-identical to building the scene with
+  that camera from the start; a parametrized test in `tests/test_scene.py` covers
+  all five projections.
 - `tests/test_document.py` pins the properties a consumer relies on: a parseable
   standalone document, a viewBox that agrees with `width`/`height`, geometry
   inside it, and byte-identical output across calls. It must not import any
@@ -93,8 +110,8 @@ builds both distributions (the wheel from the sdist), and runs
 `twine check --strict` before publishing the same artifacts. Python 3.15 is
 experimental; its job may fail while the supported 3.12–3.14 jobs must pass.
 
-Before the first upload, configure a
-[pending Trusted Publisher on PyPI](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+Publishing goes through a
+[Trusted Publisher on PyPI](https://docs.pypi.org/trusted-publishers/), configured
 with these exact values:
 
 | Field | Value |
@@ -105,7 +122,7 @@ with these exact values:
 | Workflow filename | `publish.yml` |
 | Environment | `pypi` |
 
-Create the matching `pypi` environment in the GitHub repository. Publishing
+The GitHub repository has the matching `pypi` environment. Publishing
 uses GitHub OIDC, with `id-token: write` granted only to the publish job;
 no PyPI API token is needed. See
 [PyPI's publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publisher/).

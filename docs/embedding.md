@@ -1,15 +1,16 @@
 # Embedding a scene
 
-A scene is usually not the whole figure. `vecview` exposes one method for handing
+A scene is usually not the whole figure. VecView exposes one method for handing
 its output to whatever assembles the final page:
 
 ```python
 document = scene.to_svg_document()  # a complete, standalone SVG document string
 ```
 
-That is the entire contract. Any tool that accepts an object with a
-`to_svg_document()` method can place a scene without `vecview` knowing anything
-about it, and without `vecview` gaining a dependency.
+It renders with the scene's active camera, `scene.camera`, and the scene's own
+`pad` and `background`. That is the entire contract. Any tool that accepts an
+object with a `to_svg_document()` method can place a scene without VecView
+knowing anything about it, and without VecView gaining a dependency.
 
 ## What a consumer needs from the document
 
@@ -19,15 +20,19 @@ The document is standalone and self-describing:
 - `width`/`height` always agree with the `viewBox` extents, so scaling by either
   gives the same result
 - every `<defs>` element the content references, inline
-- no external references, fonts, or scripts
+- no external references or scripts
+
+Text names its font rather than embedding it — `DejaVu Sans, Verdana,
+sans-serif` unless a `font_family` is given — so whatever renders the page needs
+that font installed.
 
 ## Honour the viewBox origin
 
-A fitted viewBox generally does **not** start at `0, 0`. `vecview` fits the box to
+A fitted viewBox generally does **not** start at `0, 0`. VecView fits the box to
 the content, so `min_x` and `min_y` are usually negative:
 
 ```xml
-<svg width="904.0" height="808.0" viewBox="-430.1 -184.7 904.0 808.0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-452.1 -206.7 904.3 464.4" width="904.3" height="464.4">
 ```
 
 A consumer placing the scene must compensate, or the drawing lands outside the
@@ -108,11 +113,18 @@ scene = vecview.Scene(cam, pad=6, background=None)
 - **`scale`** does not affect fit — a consumer normalizes it away. It does set
   stroke widths and font sizes *relative* to the geometry, so keep it consistent
   across scenes sharing a page, or one will come out visibly heavier.
+- **The camera** is the active one. To hand over one scene seen two ways, pass
+  `scene.with_camera("cabinet")` — a copy whose active camera is another, by name
+  or directly — rather than switching `scene.camera` back and forth.
+
+`pad` and `background` are plain attributes, so they can also be set after the
+scene is built: `scene.pad = 0`.
 
 ## Ids survive
 
-Ids assigned while building a scene are emitted verbatim, so they stay available
-for selection or restyling after placement:
+Ids assigned while building a scene are emitted verbatim, and rendering refuses a
+document that uses one twice, so they stay reliable handles for selection or
+restyling after placement:
 
 ```python
 scene.polygon(20, marker, id="absorption-axis", fill="#d62828")
@@ -123,9 +135,21 @@ consumer that hoists definitions into one shared `<defs>` may not namespace them
 and two scenes both defining `#glow` leave `url(#glow)` resolving to whichever
 landed first — a silent wrong colour rather than an error.
 
+The ids a scene generates derive from the ones you give, so they are as unique
+as yours: `slab-pz` per face, `{id}-profile` for a Gaussian's gradient,
+`{id}-body-shade` for a cylinder's, `{id}-visible` for the clip path of an
+[exact layer](scenes.md#exact-visibility). Two are not:
+
+- A sphere's highlight gradient is named after its colours,
+  `ball-{fill}-{highlight}`. Every scene defines it identically, so a collision
+  is harmless.
+- An element with no id that an exact layer clips gets `visible-{n}`, numbered
+  within its own scene, so two such scenes on one page can collide. Give the
+  elements of an exact layer ids when the scene will share a page.
+
 ## Export
 
-`vecview` writes SVG only. Rasterizing and PDF are left to the consumer, which is
+VecView writes SVG only. Rasterizing and PDF are left to the consumer, which is
 what holds the runtime dependencies to `numpy` and `svg.py`. For a standalone
 scene, run a converter over the file yourself:
 
@@ -136,6 +160,5 @@ path = scene.save("scene.svg")
 cairosvg.svg2png(url=str(path), write_to="scene.png", scale=2.0)
 ```
 
-One caveat worth knowing before designing around it: a gradient-filled `<mask>`
-does not survive `cairosvg` rasterization — the effect vanishes silently, with no
-warning. Use a gradient *fill* on a plain rectangle instead.
+`cairosvg` silently drops a gradient-filled `<mask>`; see
+[Definitions](scenes.md#definitions) for what to use instead.

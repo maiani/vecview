@@ -3,7 +3,7 @@
 Layered 3D scenes that render to SVG, for scientific schematics.
 
 A small projection layer on top of [`svg.py`](https://pypi.org/project/svg.py/).
-`svg.py` builds the elements; `vecview` supplies what it has no notion of — a
+`svg.py` builds the elements; VecView supplies what it has no notion of — a
 camera, world-space glyph geometry, and an explicit layer stack.
 
 ## Install
@@ -18,14 +18,14 @@ API may change before 1.0. The `occlusion` extra is needed only for exact layers
 
 ## The shape of the package
 
-Three pieces, with a hard line between them:
+Three concerns in four modules, with a hard line between them:
 
 | Module | Knows about |
 | --- | --- |
 | [`shapes`](shapes.md) | Numbers only. Returns world-space `(n, 3)` arrays and `Face` records. No camera, no style, no SVG. |
 | [`camera`](cameras.md) | What a camera *is*: the projection contract, and the affine machinery every parallel projection shares. |
 | [`projections`](cameras.md#orthographiccamera) | The projections shipped: orthographic (isometric, dimetric, trimetric) and oblique (cavalier, cabinet). |
-| [`scene`](scenes.md) | The layer stack and document assembly. The only part that touches `svg.py`. |
+| [`scene`](scenes.md) | Objects, named cameras, the layer stack, and document assembly. The only part that touches `svg.py`. |
 
 That split is what keeps geometry testable as plain numbers, and lets one polygon
 be drawn twice with different fills or reused as a clip path.
@@ -48,9 +48,9 @@ import vecview
 cam = vecview.OrthographicCamera(azim_deg=35, elev_deg=24, scale=62)
 scene = vecview.Scene(cam, pad=28, background="#ffffff")
 
-# The slab: a box, with only the walls this camera can see.
+# The slab: a box, drawing only the walls the rendering camera can see.
 slab = vecview.box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
-scene.faces(10, cam.visible(slab), fill="#cfd6e0", stroke="#8b96a6", stroke_width=1.6)
+scene.faces(10, slab, cull=True, fill="#cfd6e0", stroke="#8b96a6", stroke_width=1.6)
 
 # Two axes on its face, drawn over the slab.
 for angle, color in ((0.0, "#d62828"), (67.5, "#6a2fb5")):
@@ -72,7 +72,10 @@ scene.text(30, (0, 0, 2.0), "polarizer", size=26, text_anchor="middle")
 scene.save("slab.svg")
 ```
 
-The viewBox is fitted to the content, so nothing needs centring by hand.
+The first argument of every drawing call is its layer: lower layers are drawn
+first, so the arrows at 20 sit on the slab at 10. Style keywords such as
+`stroke_width` pass straight to `svg.py`. The viewBox is fitted to the content,
+so nothing needs centring by hand.
 
 ## Objects and cameras
 
@@ -99,7 +102,9 @@ name from `scene.cameras` — is the active one, which `to_svg_document` uses.
 `Scene.plane` reserves a rectangle of a world plane for a plot, an equation, or a
 bitmap, so it lies *in* the picture rather than on top of it. The embedding is
 exact: a parallel projection is affine, so restricted to a plane it is still
-affine — precisely what an SVG `matrix` expresses.
+affine — precisely what an SVG `matrix` expresses. `Scene.slot` is its upright
+sibling, pinning a label to a world point. Both reserve an empty group that the
+tool composing the page fills; see [Embedding a scene](embedding.md).
 
 ## Layers first, depth sorting by request
 
@@ -120,13 +125,13 @@ the [gallery](gallery.md).
 
 ## Related projects
 
-`vecview` is developed alongside [FigWorks](https://github.com/maiani/figworks),
-which composes multi-panel figures, and
-[VecTeX](https://github.com/maiani/vectex), which renders TeX equations to SVG
-fragments. The three form a suite for publication figures, and each is usable on
-its own.
+VecView is developed alongside [FigWorks](https://github.com/maiani/figworks),
+which composes multi-panel figures, and two other producers of editable SVG:
+[VecTeX](https://github.com/maiani/vectex) (TeX equations) and
+[VecWire](https://github.com/maiani/vecwire) (circuit schematics). The four form
+a suite for publication figures, and each is usable on its own.
 
-`vecview` depends on neither and contains no code specific to either. A
+VecView depends on none of them and contains no code specific to any of them. A
 composition layer needs only [`Scene.to_svg_document()`](embedding.md), so the
 integration costs no import in either direction.
 

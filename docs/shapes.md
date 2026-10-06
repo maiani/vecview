@@ -5,8 +5,14 @@ list of `Face` for solids. Nothing in this module knows about a camera, a style,
 or SVG.
 
 That is worth stating plainly because it is what makes the geometry testable as
-numbers, and it means one polygon can be drawn twice with different fills, offset
-and drawn again as a shadow, or handed to `Scene.add` inside a clip path.
+numbers, and it means one polygon can be drawn twice with different fills, or
+offset and drawn again as a shadow. Draw an array with `Scene.polygon` or
+`Scene.polyline`, and a list of faces with `Scene.faces`:
+
+```python
+ring = vecview.circle_shape((0, 0, 0), 1.5, normal=(0, 0, 1))
+scene.polygon(20, ring, fill="none", stroke="#333")
+```
 
 ## Directions
 
@@ -45,21 +51,23 @@ half-extent.**
 
 ```python
 class Face(NamedTuple):
-    name: str  # "+x", "-x", "+y", "-y", "+z", "-z"
-    points: Array  # (4, 3), wound CCW about the normal
+    name: str  # a box's are "+x", "-x", "+y", "-y", "+z", "-z", in that order
+    points: Array  # (n, 3), wound CCW about the normal; (4, 3) for a box
     normal: Array  # outward unit normal
 ```
 
-Carrying the normal alongside the points is what lets
-[`Camera.visible`](cameras.md#back-face-culling) cull back
-faces without the caller reasoning about which octant the camera sits in, and
+Every function below that returns solids returns `Face`s. Carrying the normal
+alongside the points is what lets back-face culling —
+[`Camera.visible`](cameras.md#back-face-culling), or `Scene.faces(..., cull=True)`
+— work without the caller reasoning about which octant the camera sits in, and
 `name` is what lets you style the top differently from the sides:
 
 ```python
 slab = vecview.box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
-walls = cam.visible(slab)
-scene.faces(10, [f for f in walls if f.name == "+z"], fill="#eef1f5", fill_opacity=0.86)
-scene.faces(11, [f for f in walls if f.name != "+z"], fill="#cfd6e0")
+top = [f for f in slab if f.name == "+z"]
+walls = [f for f in slab if f.name != "+z"]
+scene.faces(10, walls, cull=True, fill="#cfd6e0")
+scene.faces(11, top, cull=True, fill="#eef1f5", fill_opacity=0.86)
 ```
 
 A zero-thickness box is legitimate — a bare plane you want to draw with the box
@@ -72,10 +80,11 @@ vecview.prism_faces(footprint, z0, z1)  ->  list[Face]
 ```
 
 A footprint in the `xy` plane, extruded from `z0` to `z1` — a tapered electrode,
-a hexagonal pillar, an arc-shaped gate. The cap is `"+z"` and the base `"-z"`, as for a
-box, so `[f for f in fin if f.name == "+z"]` still picks the top; wall `i` spans
-footprint vertices `i` and `i + 1` and is named `"side-{i}"`. Every face is wound
-counter-clockwise about its outward normal, so `faces(..., cull=True)` works.
+a hexagonal pillar, an arc-shaped gate. The faces come in a fixed order: the cap
+`"+z"`, the base `"-z"`, as for a box, then the walls, wall `i` spanning
+footprint vertices `i` and `i + 1` and named `"side-{i}"`. So `faces[0]` is the
+top, and `faces[2:]` the walls. Every face is wound counter-clockwise about its
+outward normal, so `faces(..., cull=True)` works. `z1` must exceed `z0`.
 
 The footprint may come in either winding and may be non-convex, but it must be
 a **simple polygon**: an outline that crosses or touches itself has no
@@ -94,7 +103,8 @@ anti-aliased edges meet. Draw them with
 vecview.annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg, n=32)
 ```
 
-The footprint of an annular sector, counter-clockwise: the outer arc from
+The footprint of an annular sector about the 2D point `center`, as an `(m, 2)`
+array, counter-clockwise: the outer arc from
 `theta0_deg` to `theta1_deg` in `n` segments, then the inner arc back. With
 `r_in=0` it is a pie wedge. The span must lie strictly between 0° and 360°, since
 a full ring is not a simple polygon. Join it to other outlines yourself to build
@@ -172,8 +182,9 @@ scene.polygon(
 `double_arrow_shape` is the axis or polarization marker: two heads, symmetric
 about `center`, no direction implied.
 
-A `head_len` longer than the whole arrow is clamped rather than producing a
-self-crossing polygon.
+In `arrow_shape`, a `head_len` longer than the whole arrow is clamped rather than
+producing a self-crossing polygon. `double_arrow_shape` does not clamp: keep each
+head shorter than half the `length`.
 
 ## Surfaces
 
