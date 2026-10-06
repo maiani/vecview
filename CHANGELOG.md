@@ -12,7 +12,7 @@ All notable changes to this project are documented here, following
   kind of object -- every gate, every oxygen -- for a stylesheet, a selector in
   the composing tool, or Inkscape to reach together.  Each top-level element a
   call emits carries the classes (every face, both strokes of an edge set, every
-  slice of a sliced solid, both parts of a line an exact layer splits) and the
+  slice of a sliced solid, both parts of a line a depth-sorted layer splits) and the
   elements inside a solid's group do not, so a selector matches each object
   once.  Names that are not strings raise `TypeError` at the call.
 - `Part` and `place` -- objects drawn once, in their own coordinates, and
@@ -38,6 +38,11 @@ All notable changes to this project are documented here, following
   cutaway: faces are clipped and keep their names, and the cut is capped by
   faces named `"cut"` (or `"cut-0"`, ...) lying in the plane, so a section can
   be styled apart.  Non-convex solids work; a cap with a hole raises.
+- `examples/gallery/kitaev_chain.py` -- a minimal Kitaev chain after Dvir et
+  al., Nature 614, 445 (2023): a gated InSb nanowire running past draped Cr/Au
+  contacts, a grounded Al shell of finite thickness that continues onto the
+  dielectric, and a Majorana mode on each dot.
+- A documentation page for `vecview.outlines`.
 
 ### Changed
 
@@ -60,6 +65,13 @@ All notable changes to this project are documented here, following
   selecting by id -- or a `url(#...)` fill -- would silently reach the wrong
   element.  Ids a call derives (`slab-pz`, `{id}-body`, `{id}-profile`) are
   checked too, so a hand-written id that collides with one is caught.
+- Every example is rewritten with the new API -- `Part` and `place` for
+  repeated and mirrored objects, `extrude` and `outlines` for cross-sections,
+  `class_` for every kind of object -- and reads as the obvious way to draw its
+  figure.  The pictures are unchanged apart from the depth-sorted ones.
+- The documentation is checked against the code, page by page: wrong
+  signatures, ids, and claims fixed, every runnable snippet run, and the
+  missing public API documented.
 
 ### Removed
 
