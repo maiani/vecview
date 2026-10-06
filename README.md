@@ -152,6 +152,7 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | --- | --- |
 | `box_faces(center, size)` | an axis-aligned box as six named, correctly wound `Face`s |
 | `prism_faces(footprint, z0, z1)` | any simple footprint, convex or not, extruded along `z`, culling like a box |
+| `extrude(section, along)` | a planar section swept along any vector: a nanowire along `x`, a fin |
 | `annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg)` | an arc-shaped footprint, such as a gate |
 | `rect_shape`, `circle_shape`, `ellipse_shape` | flat outlines in any plane |
 | `arrow_shape`, `double_arrow_shape` | flat arrows with a shaft and head |

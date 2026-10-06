@@ -89,7 +89,9 @@ outward normal, so `faces(..., cull=True)` works. `z1` must exceed `z0`.
 The footprint may come in either winding and may be non-convex, but it must be
 a **simple polygon**: an outline that crosses or touches itself has no
 well-defined outside, and raises `ValueError`. Collinear vertices are fine;
-repeated ones are not.
+repeated ones are not. A clockwise footprint is reversed before the walls are
+numbered, so for one, wall `i` spans vertices `i` and `i + 1` of the *reversed*
+outline; [`extrude`](#extrusions) numbers walls by the outline as given.
 
 For a convex footprint, culling leaves exactly the visible walls. For a
 non-convex one it leaves the walls that *face* the camera, and one of those can
@@ -98,6 +100,34 @@ still sit behind another wall of the same solid.
 Either way, walls drawn one polygon each show hairline seams where their
 anti-aliased edges meet. Draw them with
 [`Scene.prism_walls`](scenes.md#seamless-solids) and the cap over them instead.
+
+### Extrusions
+
+```python
+vecview.extrude(section, along)  ->  list[Face]
+```
+
+A planar cross-section in any plane, swept along any vector: a nanowire along
+`x`, a waveguide, a fin. `prism_faces` is the special case of a section in a
+horizontal plane swept up `z`. The section is the `"start"` face, the section
+moved by `along` is the `"end"` face, and wall `i` spans section vertices `i`
+and `i + 1` **as given**, whichever way the section winds, and is named
+`"side-{i}"`. So a wall can be picked out by the edge it was built on, and its
+id — `wire-side-3` — keeps naming that edge.
+
+```python
+hexagon = vecview.circle_shape((-4, 0, 0.4), 0.4, (1, 0, 0), n=6)
+wire = vecview.extrude(hexagon, (8, 0, 0))
+scene.faces(20, wire, cull=True, fill="#7fae8c", id="wire", class_="semiconductor")
+top_facets = [f for f in wire[2:] if f.normal[2] > 0.1]
+```
+
+Every face is wound counter-clockwise about its outward normal, so it culls
+like a box. `along` need not be perpendicular to the section, which gives a
+slanted prism, but it must leave the section's plane. The section must be a
+simple polygon, convex or not, lying in one plane; anything else raises
+`ValueError`. A regular cross-section is `circle_shape` with a small `n`, as
+above.
 
 ```python
 vecview.annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg, n=32)

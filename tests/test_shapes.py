@@ -295,6 +295,79 @@ def inside(polygon: np.ndarray, point: np.ndarray) -> bool:
     return hit
 
 
+class TestExtrude:
+    HEXAGON = vecview.circle_shape((0, 0, 0), 0.4, (1, 0, 0), n=6)
+    # An L in the yz plane: non-convex, so outward cannot be read off a centroid.
+    L_SECTION = np.array([(0, 0, 0), (0, 3, 0), (0, 3, 1), (0, 1, 1), (0, 1, 3), (0, 0, 3)], float)
+
+    @staticmethod
+    def newell(points: np.ndarray) -> np.ndarray:
+        return np.cross(points, np.roll(points, -1, axis=0)).sum(axis=0)
+
+    @pytest.mark.parametrize(
+        "along", [(5, 0, 0), (-5, 0, 0), (4, 1, 0.5)], ids=["x", "-x", "oblique"]
+    )
+    @pytest.mark.parametrize("reverse", [False, True], ids=["ccw", "cw"])
+    def test_every_face_winds_about_an_outward_normal(self, along: tuple, reverse: bool) -> None:
+        section = self.L_SECTION[::-1] if reverse else self.L_SECTION
+        faces = vecview.extrude(section, along)
+        assert [f.name for f in faces] == ["start", "end"] + [f"side-{i}" for i in range(6)]
+        for face in faces:
+            assert np.dot(self.newell(face.points), face.normal) > 0, face.name
+            assert_in_plane(face.points, face.normal)
+        # Each wall is built on edge i, and its normal points out of the section there.
+        yz = section[:, 1:]
+        for i, face in enumerate(faces[2:]):
+            a, b = section[i], section[(i + 1) % 6]
+            assert {tuple(a), tuple(b)} <= {tuple(p) for p in face.points}, face.name
+            mid = ((a + b) / 2)[1:]
+            assert not inside(yz, mid + 1e-3 * face.normal[1:]), face.name
+            assert inside(yz, mid - 1e-3 * face.normal[1:]), face.name
+
+    def test_caps_are_the_section_and_its_sweep(self) -> None:
+        start, end, *_ = vecview.extrude(self.HEXAGON, (5, 0, 0))
+        assert {tuple(p) for p in start.points} == {tuple(p) for p in self.HEXAGON}
+        assert np.allclose(
+            sorted(map(tuple, end.points)),
+            sorted(map(tuple, self.HEXAGON + np.array([5.0, 0.0, 0.0]))),
+        )
+        assert np.allclose(start.normal, (-1, 0, 0)) and np.allclose(end.normal, (1, 0, 0))
+
+    def test_a_convex_wire_culls_to_the_facets_a_camera_sees(self) -> None:
+        cam = vecview.OrthographicCamera(35.0, 24.0, 62.0)
+        faces = vecview.extrude(self.HEXAGON, (5, 0, 0))
+        for face in cam.visible(faces):
+            assert np.dot(face.normal, cam.view) > 0
+        # Normals point away from the wire's axis, so a convex wire shows its near half.
+        for face in faces[2:]:
+            radial = face.points.mean(axis=0) - np.array([face.points.mean(axis=0)[0], 0, 0])
+            assert np.dot(radial, face.normal) > 0, face.name
+
+    def test_prism_faces_is_extrusion_along_z(self) -> None:
+        foot = [(0, 0), (2, 0), (1, 1)]
+        prism = vecview.prism_faces(foot, 0.5, 2.0)
+        swept = vecview.extrude([(x, y, 0.5) for x, y in foot], (0, 0, 1.5))
+        assert [f.name for f in prism] == ["+z", "-z", "side-0", "side-1", "side-2"]
+        for a, b in zip(prism, [swept[1], swept[0], *swept[2:]], strict=True):
+            assert np.array_equal(a.points, b.points) and np.array_equal(a.normal, b.normal)
+
+    @pytest.mark.parametrize(
+        ("section", "along", "message"),
+        [
+            ([(0, 0, 0), (0, 1, 0)], (1, 0, 0), "three vertices"),
+            ([(0, 0, 0), (0, 1, 0), (0, 1, 0), (0, 0, 1)], (1, 0, 0), "repeated"),
+            ([(0, 0, 0), (0, 1, 0), (0, 2, 0)], (1, 0, 0), "area"),
+            ([(0, 0, 0), (0, 1, 0), (0.5, 1, 1), (0, 0, 1)], (1, 0, 0), "planar"),
+            ([(0, 0, 0), (0, 2, 1), (0, 2, 0), (0, 0, 2)], (1, 0, 0), "simple"),
+            ([(0, 0, 0), (0, 1, 0), (0, 0, 1)], (0, 1, 1), "plane"),
+        ],
+        ids=["two", "repeated", "collinear", "warped", "bowtie", "in-plane"],
+    )
+    def test_rejects_what_has_no_volume_or_outside(self, section, along, message) -> None:  # type: ignore[no-untyped-def]
+        with pytest.raises(ValueError, match=message):
+            vecview.extrude(section, along)
+
+
 class TestNonConvexPrism:
     L_SHAPE = ((0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3))
 

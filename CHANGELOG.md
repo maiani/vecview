@@ -23,6 +23,11 @@ All notable changes to this project are documented here, following
   every id in the part, `class_` is added to its classes, and parts nest.  A
   part holds only world-space calls: no camera, `<defs>`, screen-space calls, or
   depth sorting, which stay the scene's.
+- `extrude(section, along)` -- a planar cross-section in any plane swept along
+  any vector, as correctly wound `Face`s named `"start"`, `"end"`, and
+  `"side-{i}"`.  Wall `i` is built on section edge `i` as given, in either
+  winding, so walls can be picked out by edge.  `prism_faces` is now the
+  special case along `z`, with unchanged output.
 
 ### Changed
 

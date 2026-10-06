@@ -172,21 +172,76 @@ def prism_faces(footprint: Points2, z0: float, z1: float) -> list[Face]:
         raise ValueError("footprint must be a simple polygon: its edges cross or touch")
     if area < 0:
         foot = foot[::-1]  # clockwise: reverse so the cap faces +z
-        edges = np.roll(foot, -1, axis=0) - foot
+    base = np.column_stack([foot, np.full(len(foot), float(z0))])
+    start, end, *walls = extrude(base, (0.0, 0.0, float(z1) - float(z0)))
+    return [end._replace(name="+z"), start._replace(name="-z"), *walls]
 
-    n = len(foot)
-    base = np.column_stack([foot, np.full(n, float(z0))])
-    cap = np.column_stack([foot, np.full(n, float(z1))])
-    faces = [
-        Face("+z", cap, np.array([0.0, 0.0, 1.0])),
-        Face("-z", base[::-1].copy(), np.array([0.0, 0.0, -1.0])),
-    ]
-    for i in range(n):
-        j = (i + 1) % n
-        # For a CCW footprint the outside is to the right of each edge, and
-        # (edge, +z, outward) is right-handed, which winds the wall CCW from outside.
-        outward = unit(np.array([edges[i, 1], -edges[i, 0], 0.0]))
-        faces.append(Face(f"side-{i}", np.array([base[i], base[j], cap[j], cap[i]]), outward))
+
+def extrude(section: Points3, along: Point3) -> list[Face]:
+    """A planar cross-section swept along a vector: a prism in any direction.
+
+    The generalization of :func:`prism_faces` to a section in any plane and a
+    sweep in any direction -- a nanowire along ``x``, a waveguide, a fin.  The
+    section is the ``"start"`` face, the section moved by ``along`` is the
+    ``"end"`` face, and wall ``i`` spans section vertices ``i`` and ``i + 1``
+    and is named ``"side-{i}"`` -- in the order given, whichever way the
+    section winds, so a wall can be picked out by the edge it was built on.
+    Every face is wound counter-clockwise about its outward normal, so it
+    culls like a box.  ``along`` need not be perpendicular to the section; an
+    oblique sweep gives a slanted prism.
+
+    A regular cross-section comes from :func:`circle_shape` with a small
+    ``n``: ``circle_shape((0, 0, 0), r, (1, 0, 0), n=6)`` swept along ``x``
+    is a hexagonal wire.
+
+    Args:
+        section: Simple polygon lying in one plane, shape ``(n, 3)``, in
+            either winding; it may be non-convex. Repeated consecutive
+            vertices are not allowed.
+        along: The sweep, as a world vector; its length is the prism's length.
+
+    Raises:
+        ValueError: If the section has fewer than three vertices, is not
+            planar, encloses no area, crosses or touches itself, or if
+            ``along`` lies in its plane.
+    """
+    pts = as_points(section)
+    if len(pts) < 3:
+        raise ValueError(f"a section needs at least three vertices, got {len(pts)}")
+    sweep = np.asarray(along, dtype=np.float64)
+    lengths = np.linalg.norm(np.roll(pts, -1, axis=0) - pts, axis=1)
+    size = float(lengths.max())
+    if np.any(lengths <= 1e-12 * size):
+        raise ValueError("section has repeated consecutive vertices")
+    # Newell's normal: twice the vector area, robust for non-convex polygons.
+    vector_area = 0.5 * np.cross(pts, np.roll(pts, -1, axis=0)).sum(axis=0)
+    area = float(np.linalg.norm(vector_area))
+    if area <= 1e-12 * size * size:
+        raise ValueError("section encloses no area")
+    normal = vector_area / area
+    if np.abs((pts - pts[0]) @ normal).max() > 1e-9 * size:
+        raise ValueError("section is not planar")
+    u, v = basis_for(normal)
+    if _self_intersects(np.column_stack([(pts - pts[0]) @ u, (pts - pts[0]) @ v])):
+        raise ValueError("section must be a simple polygon: its edges cross or touch")
+    reach = float(np.dot(sweep, normal))
+    if abs(reach) <= 1e-12 * max(size, float(np.linalg.norm(sweep))):
+        raise ValueError("along lies in the section's plane, so the sweep has no volume")
+    # Wind every face counter-clockwise about the sweep's side of the plane,
+    # while wall i keeps the edge from vertex i to i + 1 as the caller gave it.
+    flip = reach < 0
+    if flip:
+        normal = -normal
+    ccw = pts[::-1] if flip else pts
+    faces = [Face("start", ccw[::-1].copy(), -normal), Face("end", ccw + sweep, normal.copy())]
+    for i in range(len(pts)):
+        a, b = pts[i], pts[(i + 1) % len(pts)]
+        if flip:
+            a, b = b, a
+        # The wall's plane holds the edge and the sweep, and (edge, along,
+        # outward) is right-handed for an edge running counter-clockwise.
+        outward = unit(np.cross(b - a, sweep))
+        faces.append(Face(f"side-{i}", np.array([a, b, b + sweep, a + sweep]), outward))
     return faces
 
 
