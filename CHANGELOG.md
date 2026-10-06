@@ -16,6 +16,14 @@ All notable changes to this project are documented here, following
   elements inside a solid's group do not, so a selector matches each object
   once.  Names that are not strings raise `TypeError` at the call.
 
+### Changed
+
+- Rendering raises `ValueError` when two elements share an id, naming every
+  id used more than once.  Duplicate ids are invalid SVG, and a consumer
+  selecting by id -- or a `url(#...)` fill -- would silently reach the wrong
+  element.  Ids a call derives (`slab-pz`, `{id}-body`, `{id}-profile`) are
+  checked too, so a hand-written id that collides with one is caught.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

@@ -301,6 +301,35 @@ class TestClasses:
             Scene().polygon(0, SQUARE, class_=bad)
 
 
+class TestUniqueIds:
+    """Duplicate ids are invalid SVG, so a render refuses to produce them."""
+
+    def test_two_objects_with_one_id(self, scene: Scene) -> None:
+        scene.polygon(0, SQUARE, id="gate")
+        scene.sphere(1, (0, 0, 0), 1.0, id="gate")
+        with pytest.raises(ValueError, match=r"\['gate'\]"):
+            scene.render()
+
+    def test_a_derived_suffix_meets_a_given_id(self, scene: Scene) -> None:
+        scene.faces(0, vecview.box_faces((0, 0, 0), (1, 1, 1)), cull=True, id="slab")
+        scene.polygon(1, SQUARE, id="slab-pz")
+        with pytest.raises(ValueError, match="slab-pz"):
+            scene.render()
+
+    def test_inside_a_solid_and_in_the_definitions(self, scene: Scene) -> None:
+        scene.cylinder(0, (0, 0, 0), (0, 0, 1), 0.2, fill="#888", id="post")
+        scene.gaussian(0, (0, 0, 0), (1, 0, 0), (0, 1, 0), 1, 1, id="spot", color="red")
+        scene.polygon(1, SQUARE, id="post-body")
+        scene.polygon(1, SQUARE, id="spot-profile")
+        with pytest.raises(ValueError, match=r"\['post-body', 'spot-profile'\]"):
+            scene.render()
+
+    def test_shared_definitions_are_not_duplicates(self, scene: Scene) -> None:
+        for k in range(3):
+            scene.sphere(0, (k, 0, 0), 0.4, fill="#c33", highlight="#fcc", id=f"atom-{k}")
+        scene.render()
+
+
 class TestFaceIds:
     def test_ids_are_suffixed_per_face_not_repeated(self, scene: Scene, cam: Camera) -> None:
         """Duplicate ids are invalid SVG and break selection downstream."""

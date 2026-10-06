@@ -317,6 +317,27 @@ def _class_names(value: object) -> tuple[str, ...]:
     return tuple(dict.fromkeys(name for part in parts for name in part.split()))
 
 
+def _check_unique_ids(elements: Iterable[svg.Element]) -> None:
+    """Reject a document in which two elements share an id.
+
+    Duplicate ids are invalid SVG, and a consumer selecting by id silently gets
+    the wrong element -- or a gradient fills the wrong shape.  Ids are checked
+    in the assembled document because the suffixes a call derives (one per
+    face, slice, or hidden part) are only known once a camera has drawn it.
+    """
+    counts: dict[str, int] = {}
+    stack = list(elements)
+    while stack:
+        element = stack.pop()
+        name = getattr(element, "id", None)
+        if name is not None:
+            counts[str(name)] = counts.get(str(name), 0) + 1
+        stack += [child for child in getattr(element, "elements", None) or [] if child is not None]
+    repeated = sorted(name for name, n in counts.items() if n > 1)
+    if repeated:
+        raise ValueError(f"ids must be unique in a document; used more than once: {repeated}")
+
+
 def _slug(color: str) -> str:
     """A colour reduced to characters that are safe in an XML id."""
     return re.sub(r"[^0-9A-Za-z]+", "", color).lower() or "c"
@@ -390,6 +411,7 @@ class _Canvas:
         if background:
             elements.append(svg.Rect(x=lo[0], y=lo[1], width=w, height=h, fill=background))
         elements += [el for _, _, el in sorted(self.items, key=self._order)]
+        _check_unique_ids(elements)
         return svg.SVG(
             width=round(w, 1),
             height=round(h, 1),

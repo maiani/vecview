@@ -206,6 +206,12 @@ scene.faces(10, cam.visible(slab), fill="#cfd6e0", id="slab")
 # -> slab-pz, slab-px, slab-py
 ```
 
+Ids must be unique across the whole document, and rendering checks it: an id
+used twice raises `ValueError` naming it. That includes the ids a call derives —
+`slab-pz` from `faces`, `{id}-body` inside a cylinder, `{id}-profile` for a
+Gaussian's gradient — so a hand-written `slab-pz` next to
+`faces(..., id="slab")` is caught rather than silently selected in its place.
+
 `text` and `text2d` take either a string or a list of `svg.TSpan` runs, for a
 subscript or a mixed style:
 
