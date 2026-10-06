@@ -14,8 +14,8 @@ renders to byte-identical SVG, and the output opens in Inkscape.
 VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
 VecView supplies what it has no notion of: a camera, world-space glyph geometry,
-and an explicit layer stack. Runtime dependencies are `numpy`, `shapely`, and
-`svg.py`.
+and an explicit layer stack. Runtime dependencies are `numpy` and `svg.py`, plus
+`shapely` and `contourpy` for polygon clipping and exact visibility.
 
 VecView is alpha: the API may change before 1.0.
 
@@ -25,7 +25,6 @@ Install VecView with pip (Python 3.12 or newer; tested on 3.12–3.14):
 
 ```bash
 python -m pip install vecview
-python -m pip install "vecview[occlusion]"  # exact visibility
 ```
 
 ## Quick start

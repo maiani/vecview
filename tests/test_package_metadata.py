@@ -52,11 +52,12 @@ def test_package_ships_type_information() -> None:
 def test_runtime_dependencies_stay_minimal(pyproject: dict) -> None:
     """Rasterizing and TeX belong to the composition layer, not here.
 
-    shapely is the one geometry dependency: robust polygon clipping, for exact
-    visibility and for booleans on outlines, is not worth reimplementing.
+    shapely and contourpy are the geometry dependencies: robust polygon
+    clipping and sub-pixel contours, for exact visibility and booleans on
+    outlines, are not worth reimplementing.
     """
     names = {d.split(">")[0].split("=")[0].strip() for d in pyproject["project"]["dependencies"]}
-    assert names == {"numpy", "shapely", "svg.py"}
+    assert names == {"contourpy", "numpy", "shapely", "svg.py"}
 
 
 MAX_MODULE_LINES = 1000  # pylint's default max-module-lines (C0302)

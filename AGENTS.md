@@ -86,13 +86,11 @@ Do not add these without the user changing the design first:
   algorithm, whose failures are fixed by cutting geometry back (`edges(trim=)`,
   `trim_corners`) or into pieces (`cylinder(slices=)`, `tube` chunks), or, with
   `exact=True`, as exact visibility by clipping.
-- **Rasterizing or PDF export.** Runtime dependencies stay `numpy`, `shapely`,
-  and `svg.py`; a test in `tests/test_package_metadata.py` enforces it.
-  `shapely` is required because robust polygon clipping -- exact visibility,
-  booleans on outlines -- is not worth reimplementing. `contourpy` is the
-  optional `occlusion` extra: only `_occlusion.py` imports it, inside
-  `resolve`, so nothing but an exact layer needs it, and those tests use
-  `pytest.importorskip`.
+- **Rasterizing or PDF export.** Runtime dependencies stay `numpy`, `svg.py`,
+  `shapely`, and `contourpy`; a test in `tests/test_package_metadata.py`
+  enforces it. The last two are required because robust polygon clipping and
+  sub-pixel contours -- exact visibility, booleans on outlines -- are not worth
+  reimplementing. There are no runtime extras.
 - **Shading, materials, or lighting models.** This draws schematics, not renders.
   `highlight=` gradients are a fill style fixed on screen, with no light
   direction; keep them that way.

@@ -10,11 +10,10 @@ camera, world-space glyph geometry, and an explicit layer stack.
 
 ```bash
 python -m pip install vecview
-python -m pip install 'vecview[occlusion]'  # exact visibility
 ```
 
 Python 3.12 or newer is required; 3.12–3.14 are tested. VecView is alpha and its
-API may change before 1.0. The `occlusion` extra is needed only for exact layers.
+API may change before 1.0.
 
 ## The shape of the package
 
@@ -116,8 +115,8 @@ three layers, and no automatic rule orders them correctly against a partially
 transparent face.
 
 A lattice of hundreds of atoms is the opposite case, and a layer can opt in to
-[sorting by depth](scenes.md#sorting-by-depth) for it — or, with the `occlusion`
-extra, to [exact visibility](scenes.md#exact-visibility), which clips every
+[sorting by depth](scenes.md#sorting-by-depth) for it — or to
+[exact visibility](scenes.md#exact-visibility), which clips every
 element to what shows of it and dashes lines where they pass behind. The curved solids —
 spheres, cylinders, cones, solid arrows, tubes — have exact outlines under every
 parallel projection, so a sorted layer of them stays a small, editable file. See

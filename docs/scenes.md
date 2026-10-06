@@ -89,7 +89,7 @@ visibility removes the need for either.
 ### Exact visibility
 
 ```python
-scene.sort_by_depth(10, exact=True)  # pip install 'vecview[occlusion]'
+scene.sort_by_depth(10, exact=True)
 ```
 
 With `exact=True` visibility is decided point by point rather than element by
@@ -125,8 +125,8 @@ It costs a little: every partly hidden element gains a `<clipPath>`, named
 `{id}-visible` after the element (or `visible-{n}` for one without an id), and
 the hidden part of a line with an id becomes a second path, `{id}-hidden`. A
 layer of a few hundred solids takes a second or so to render, against
-milliseconds for plain sorting. It needs `contourpy`, from the `occlusion`
-extra, which only exact layers import.
+milliseconds for plain sorting. Only exact layers load `shapely` and
+`contourpy`, so plain scenes do not pay for them.
 
 What no visibility rule can do is order a beam inside a translucent slab: a
 translucent face hides nothing, so the beam above, the attenuated segment
@@ -703,6 +703,6 @@ returns the document, or nothing while the scene has no active camera or nothing
 drawn.
 
 Only SVG is written. PNG and PDF export are left to the consumer, which is what
-holds the runtime dependencies to `numpy`, `shapely`, and `svg.py`. Run `cairosvg` over the
+keeps rasterizers out of the runtime dependencies. Run `cairosvg` over the
 file, or hand the document to whatever assembles the final page — see
 [Embedding a scene](embedding.md).

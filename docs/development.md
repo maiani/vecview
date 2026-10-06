@@ -50,10 +50,10 @@ dimetric, and trimetric cases.
 
 ## Design constraints
 
-- **Runtime dependencies stay `numpy`, `shapely`, and `svg.py`.** Rasterizing,
-  PDF, and TeX belong to a consumer, not here. A test enforces this. `shapely`
-  does the polygon clipping; exact visibility also needs `contourpy`, from the
-  optional `occlusion` extra, imported only when an exact layer renders.
+- **Runtime dependencies stay `numpy`, `svg.py`, `shapely`, and `contourpy`.**
+  Rasterizing, PDF, and TeX belong to a consumer, not here. A test enforces
+  this. `shapely` clips polygons and `contourpy` traces depth contours; both
+  load only when they are first needed.
 - **Keep the three-way split**: `shapes` knows only numbers, `camera` and
   `projections` know projection, and `scene`, with its private rendering
   modules (`_elements`, `_canvas`, `_solids`), is the only code that touches

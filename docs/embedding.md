@@ -150,7 +150,7 @@ as yours: `slab-pz` per face, `{id}-profile` for a Gaussian's gradient,
 ## Export
 
 VecView writes SVG only. Rasterizing and PDF are left to the consumer, which is
-what holds the runtime dependencies to `numpy`, `shapely`, and `svg.py`. For a standalone
+what keeps rasterizers out of the runtime dependencies. For a standalone
 scene, run a converter over the file yourself:
 
 ```python

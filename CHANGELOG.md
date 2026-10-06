@@ -31,9 +31,10 @@ All notable changes to this project are documented here, following
 
 ### Changed
 
-- `shapely` is a required dependency, alongside `numpy` and `svg.py`: robust
-  polygon clipping is needed beyond exact visibility, for booleans on outlines.
-  The `occlusion` extra now holds only `contourpy`.
+- `shapely` and `contourpy` are required dependencies, alongside `numpy` and
+  `svg.py`, and the `occlusion` extra is gone: exact visibility always works,
+  and robust polygon clipping is needed beyond it, for booleans on outlines.
+  Both still load only when first needed.
 - An unsliced cylinder or cone names its end disks `{id}-end0` and `{id}-end1`
   and its highlight gradient `{id}-shade`, as a sliced one already did, instead
   of `{id}-body-end0` and `{id}-body-shade`.  Slicing no longer renames what a

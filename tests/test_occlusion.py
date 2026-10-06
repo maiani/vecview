@@ -6,7 +6,6 @@ its element is in front, and exclude the points where something else is.
 
 from __future__ import annotations
 
-import builtins
 import re
 
 import numpy as np
@@ -200,33 +199,6 @@ class TestContract:
             return s.to_svg_document()
 
         assert build() == build()
-
-    def test_without_the_extra_the_error_says_what_to_install(self, monkeypatch) -> None:
-        real = builtins.__import__
-
-        def refuse(name: str, *args: object, **kwargs: object) -> object:
-            if name == "contourpy":
-                raise ImportError(name)
-            return real(name, *args, **kwargs)  # type: ignore[arg-type]
-
-        s = scene()
-        s.sphere(0, (0, 0, 0), 1.0)
-        monkeypatch.setattr(builtins, "__import__", refuse)
-        with pytest.raises(ImportError, match=r"vecview\[occlusion\]"):
-            s.render()
-
-    def test_only_exact_layers_need_the_extra(self, monkeypatch) -> None:
-        real = builtins.__import__
-
-        def refuse(name: str, *args: object, **kwargs: object) -> object:
-            if name == "contourpy":
-                raise ImportError(name)
-            return real(name, *args, **kwargs)  # type: ignore[arg-type]
-
-        s = scene(exact=False)
-        s.sphere(0, (0, 0, 0), 1.0)
-        monkeypatch.setattr(builtins, "__import__", refuse)
-        s.render()
 
     def test_exactness_is_replayed_for_another_camera(self) -> None:
         s = scene()

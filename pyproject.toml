@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Visualization",
   "Typing :: Typed",
 ]
-dependencies = ["numpy>=1.24", "shapely>=2.0", "svg.py>=1.4"]
+dependencies = ["contourpy>=1.2", "numpy>=1.24", "shapely>=2.0", "svg.py>=1.4"]
 
 [project.urls]
 Source = "https://github.com/maiani/vecview"
@@ -32,8 +32,6 @@ Issues = "https://github.com/maiani/vecview/issues"
 
 [project.optional-dependencies]
 examples = ["cairosvg>=2.7"]
-# Exact visibility for `sort_by_depth(layer, exact=True)`: sub-pixel depth contours.
-occlusion = ["contourpy>=1.2"]
 
 [dependency-groups]
 dev = [
