@@ -335,7 +335,10 @@ def _check_unique_ids(elements: Iterable[svg.Element]) -> None:
         stack += [child for child in getattr(element, "elements", None) or [] if child is not None]
     repeated = sorted(name for name, n in counts.items() if n > 1)
     if repeated:
-        raise ValueError(f"ids must be unique in a document; used more than once: {repeated}")
+        raise ValueError(
+            f"ids must be unique in a document; used more than once: {repeated}. "
+            "A part placed more than once needs its own id for each placement."
+        )
 
 
 def _slug(color: str) -> str:
@@ -363,6 +366,104 @@ def _check_axis(p0: Point3, p1: Point3, r0: float, r1: float) -> None:
         raise ValueError(f"need r0 > 0 and r1 >= 0, got r0={r0}, r1={r1}")
     if np.array_equal(np.asarray(p0, dtype=np.float64), np.asarray(p1, dtype=np.float64)):
         raise ValueError("the two ends coincide, so the solid has no axis")
+
+
+@dataclasses.dataclass(frozen=True)
+class _Frame:
+    """Where a part is placed: ``p -> scale * rotation @ p + offset``.
+
+    ``rotation`` is orthogonal -- a rotation, possibly with a mirror -- so
+    lengths scale uniformly and a sphere stays a sphere.
+    """
+
+    rotation: Array
+    scale: float
+    offset: Array
+
+    @property
+    def linear(self) -> Array:
+        out: Array = self.scale * self.rotation
+        return out
+
+    def then(self, outer: _Frame) -> _Frame:
+        """This frame followed by ``outer``: a part placed in a part."""
+        return _Frame(
+            outer.rotation @ self.rotation,
+            outer.scale * self.scale,
+            outer.linear @ self.offset + outer.offset,
+        )
+
+    def point(self, p: Point3) -> Array:
+        out: Array = self.linear @ np.asarray(p, dtype=np.float64) + self.offset
+        return out
+
+    def points(self, pts: Points3) -> Array:
+        out: Array = as_points(pts) @ self.linear.T + self.offset
+        return out
+
+    def vector(self, v: Point3) -> Array:
+        out: Array = self.rotation @ np.asarray(v, dtype=np.float64)
+        return out
+
+    def face(self, face: Face, *, keep_order: bool = False) -> Face:
+        """A face moved with the part, its winding kept true to its normal under a mirror."""
+        pts = self.points(face.points)
+        if not keep_order and np.linalg.det(self.rotation) < 0:
+            pts = pts[::-1].copy()
+        return Face(face.name, pts, unit(self.vector(face.normal)))
+
+
+def _moved_solid(frame: _Frame, solid: list[Any]) -> list[Any]:
+    """:meth:`Scene.silhouette`'s argument, faces or vertices, moved with a part."""
+    if solid and isinstance(solid[0], Face):
+        return [frame.face(face) for face in solid]
+    return list(frame.points(solid))
+
+
+def _moved_normal(frame: _Frame, normal: Point3 | str) -> Point3 | str:
+    return normal if isinstance(normal, str) else frame.vector(normal)
+
+
+# How each recorded call moves with a part: one entry per positional argument
+# after ``layer``, and one per keyword that holds geometry.  ``None`` leaves an
+# argument alone -- screen units, text, flags.
+type _Move = Callable[[_Frame, Any], Any] | None
+
+
+def _length(frame: _Frame, x: float | None) -> float | None:
+    return None if x is None else frame.scale * float(x)
+
+
+_POINT: _Move = _Frame.point
+_POINTS: _Move = _Frame.points
+_VECTOR: _Move = _Frame.vector
+_EDGE: _Move = lambda frame, v: frame.linear @ np.asarray(v, dtype=np.float64)  # noqa: E731
+_FACES: _Move = lambda frame, faces: [frame.face(face) for face in faces]  # noqa: E731
+_MOVES: dict[str, tuple[tuple[_Move, ...], dict[str, _Move]]] = {
+    "polygon": ((_POINTS,), {}),
+    "polyline": ((_POINTS,), {}),
+    "faces": ((_FACES,), {}),
+    "plane": ((_POINT, _EDGE, _EDGE), {}),
+    "slot": ((_POINT, None, None), {}),
+    "silhouette": ((_moved_solid,), {}),
+    "prism_walls": ((None, None, None), {}),
+    "arrow": (
+        (_POINT, _VECTOR, _length),
+        {"normal": _moved_normal, "shaft_w": _length, "head_w": _length, "head_len": _length},
+    ),
+    "gaussian": ((_POINT, _VECTOR, _VECTOR, _length, _length), {}),
+    "sphere": ((_POINT, _length), {}),
+    "cylinder": ((_POINT, _POINT, _length), {"r1": _length}),
+    "cone": ((_POINT, _POINT, _length), {}),
+    "arrow3d": (
+        (_POINT, _VECTOR, _length),
+        {"shaft_r": _length, "head_r": _length, "head_len": _length},
+    ),
+    "tube": ((_POINTS, _length), {}),
+    "edges": ((_FACES,), {"trim": _length}),
+    "sphere_curve": ((_POINT, _POINTS), {}),
+    "text": ((_POINT, None, None, None, None), {}),
+}
 
 
 class _Canvas:
@@ -768,10 +869,20 @@ class _Canvas:
             self._shape(surface)
 
     def prism_walls(
-        self, layer: int, footprint: Points2, z0: float, z1: float, **style: Style
+        self,
+        layer: int,
+        footprint: Points2,
+        z0: float,
+        z1: float,
+        *,
+        _frame: _Frame | None = None,
+        **style: Style,
     ) -> None:
         """Draw the camera-facing walls of an extruded footprint as one seamless shape."""
         walls = prism_faces(footprint, z0, z1)[2:]
+        if _frame is not None:
+            # A placed part: the walls move with it, kept in order so runs stay runs.
+            walls = [_frame.face(wall, keep_order=True) for wall in walls]
         facing = {id(face) for face in self.cam.visible(walls)}
         runs = _runs([id(face) in facing for face in walls])
         if not runs:
@@ -1536,22 +1647,141 @@ type CameraRef = Camera | str
 """A camera, or the name of one in :attr:`Scene.cameras`."""
 
 
+type _Call = tuple[str, tuple[object, ...], dict[str, Style], tuple[str, ...]]
+"""A recorded drawing call: method, positional arguments, keywords, classes."""
+
+
+def _placement(
+    at: Point3, rotate: tuple[Point3, float] | None, mirror: Point3 | None, scale: float
+) -> _Frame:
+    """The frame :meth:`Part.place` describes, checked."""
+    if not (math.isfinite(scale) and scale > 0):
+        raise ValueError(f"scale must be positive, got {scale}")
+    matrix: Array = np.eye(3)
+    if mirror is not None:
+        n = unit(mirror)
+        if not n.any():
+            raise ValueError("mirror needs a non-zero plane normal")
+        matrix = np.eye(3) - 2.0 * np.outer(n, n)
+    if rotate is not None:
+        axis, angle_deg = rotate
+        k = unit(axis)
+        if not k.any():
+            raise ValueError("rotate needs a non-zero axis")
+        theta = math.radians(angle_deg)
+        cross = np.array([[0.0, -k[2], k[1]], [k[2], 0.0, -k[0]], [-k[1], k[0], 0.0]])
+        turn = np.eye(3) + math.sin(theta) * cross + (1.0 - math.cos(theta)) * cross @ cross
+        matrix = turn @ matrix
+    return _Frame(matrix, float(scale), np.asarray(at, dtype=np.float64))
+
+
+def _moved(
+    call: _Call, frame: _Frame, layer: int, prefix: str | None, extra: tuple[str, ...]
+) -> _Call:
+    """One recorded call of a part, as it is drawn by a placement."""
+    method, (own_layer, *rest), kwargs, classes = call
+    positional, keywords = _MOVES[method]
+    args = [
+        arg if move is None else move(frame, arg)
+        for move, arg in zip(positional, rest, strict=True)
+    ]
+    moved = dict(kwargs)
+    for key, move in keywords.items():
+        if key in moved and move is not None:
+            moved[key] = move(frame, moved[key])
+    if moved.get("back_layer") is not None:
+        moved["back_layer"] = int(moved["back_layer"]) + layer
+    if prefix is not None and moved.get("id") is not None:
+        moved["id"] = f"{prefix}-{moved['id']}"
+    if method == "prism_walls":
+        inner = moved.get("_frame")
+        moved["_frame"] = frame if inner is None else inner.then(frame)
+    return (
+        method,
+        (int(cast(int, own_layer)) + layer, *args),
+        moved,
+        tuple(dict.fromkeys(classes + extra)),
+    )
+
+
 class _Drawing:
     """The world-space drawing calls, recorded for a camera to replay.
 
-    Shared by :class:`Scene` and nothing else yet.  Calls that only make sense
-    for a whole document -- screen-space shapes, raw elements, ``<defs>``, and
-    depth sorting, which is a property of the layer stack -- live on
-    :class:`Scene` itself.
+    Shared by :class:`Scene` and :class:`Part`.  Calls that only make sense for
+    a whole document -- screen-space shapes, raw elements, ``<defs>``, and depth
+    sorting, which is a property of the layer stack -- live on :class:`Scene`
+    alone, so a part cannot hold anything that would not move with it.
     """
 
     def __init__(self) -> None:
-        self._log: list[tuple[str, tuple[object, ...], dict[str, Style], tuple[str, ...]]] = []
+        self._log: list[_Call] = []
 
     def _add(self, method: str, *args: object, **kwargs: Style) -> None:
         """Record one drawing call, to be replayed against a camera when rendering."""
         classes = _class_names(kwargs.pop("class_", ()))
         self._log.append((method, args, kwargs, classes))
+
+    def place(
+        self,
+        layer: int,
+        part: Part,
+        *,
+        at: Point3 = (0.0, 0.0, 0.0),
+        rotate: tuple[Point3, float] | None = None,
+        mirror: Point3 | None = None,
+        scale: float = 1.0,
+        id: str | None = None,
+        class_: str | Iterable[str] | None = None,
+    ) -> None:
+        """Draw a copy of ``part``: mirrored, then rotated, scaled, and moved to ``at``.
+
+        A point ``p`` of the part lands at ``at + scale * R @ M @ p``, where
+        ``M`` reflects through the plane with normal ``mirror`` and ``R`` turns
+        by ``rotate = (axis, angle_deg)`` about ``axis``, counter-clockwise
+        looking down it.  Both act about the part's own origin.  Only rigid
+        motions and one uniform ``scale`` are offered, so a sphere stays a
+        sphere and every solid keeps its exact outline.
+
+        The copy is taken now: drawing into ``part`` afterwards changes later
+        placements, not this one.  Placing into a part nests, so a unit cell can
+        be placed in a supercell that is placed in a scene.
+
+        Args:
+            layer: Added to every layer the part draws on, so a part drawn on
+                layers ``0`` and ``1`` and placed at ``10`` lands on ``10`` and
+                ``11``.  Depth sorting stays the host scene's choice:
+                ``scene.sort_by_depth(10)`` sorts the placed atoms with
+                everything else on that layer.
+            part: The part to draw.
+            at: Where the part's origin goes.
+            rotate: ``(axis, angle_deg)``, or ``None``.
+            mirror: Normal of the plane through the part's origin to reflect
+                through, or ``None``.  A mirrored helix turns the other way.
+            scale: Uniform factor on every world length -- positions, radii,
+                arrow widths.  Screen units (stroke widths, text size, offsets)
+                are not scaled.
+            id: Prefixed to every id in the part, as ``{id}-{part id}``.  Ids
+                must be unique in a document, so a part with ids placed more
+                than once needs a different ``id`` for each placement.
+            class_: Added to the classes of everything the part draws, so one
+                placement can be selected as a whole.
+
+        Raises:
+            TypeError: If ``part`` is not a :class:`Part`.
+            ValueError: For a non-positive ``scale``, a zero ``rotate`` axis or
+                ``mirror`` normal, or an empty ``id``.
+        """
+        if not isinstance(part, Part):
+            raise TypeError(
+                f"place takes a Part, got {type(part).__name__}; a scene's cameras and "
+                "depth sorting have no meaning inside another scene"
+            )
+        if id is not None and not id:
+            raise ValueError("a placement id must not be empty")
+        frame = _placement(at, rotate, mirror, scale)
+        extra = _class_names(class_)
+        for call in list(part._log):
+            self._log.append(_moved(call, frame, int(layer), id, extra))
 
     def polygon(self, layer: int, pts3: Points3, **style: Style) -> None:
         """Filled polygon through projected world points."""
@@ -2212,6 +2442,28 @@ class _Drawing:
         self._add("text", layer, pt3, s, dx, dy, size, **style)
 
 
+class Part(_Drawing):
+    """Objects drawn once and placed many times: a unit cell, a gate, a lens.
+
+    A part records the same world-space calls as a :class:`Scene`, in its own
+    coordinates, and :meth:`~Scene.place` draws a moved copy of them into a
+    scene or into another part::
+
+        cell = Part()
+        cell.sphere(0, (0, 0, 0), 0.2, fill="#3b6fb6", id="atom", class_="atom")
+        cell.edges(1, box_faces((0.5, 0.5, 0.5), (1, 1, 1)), stroke="#222", id="edge")
+        for i in range(3):
+            scene.place(10, cell, at=(i, 0, 0), id=f"cell-{i}")
+
+    A part has no camera, no ``<defs>``, no screen-space calls, and no depth
+    sorting: each of those belongs to the document a part ends up in.  To look
+    at a part on its own, place it in a scene.
+    """
+
+    def __repr__(self) -> str:
+        return f"Part({len(self._log)} calls)"
+
+
 class Scene(_Drawing):
     """A 3D scene: objects in world space, and the cameras that view them.
 
@@ -2485,4 +2737,12 @@ class Scene(_Drawing):
         self._add("text2d", layer, x, y, s, size, grow, **style)
 
 
-__all__ = ["DEFAULT_FONT", "DEFAULT_TEXT_FILL", "Align", "CameraRef", "Scene", "TextContent"]
+__all__ = [
+    "DEFAULT_FONT",
+    "DEFAULT_TEXT_FILL",
+    "Align",
+    "CameraRef",
+    "Part",
+    "Scene",
+    "TextContent",
+]

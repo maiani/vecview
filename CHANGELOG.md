@@ -15,6 +15,14 @@ All notable changes to this project are documented here, following
   slice of a sliced solid, both parts of a line an exact layer splits) and the
   elements inside a solid's group do not, so a selector matches each object
   once.  Names that are not strings raise `TypeError` at the call.
+- `Part` and `place` -- objects drawn once, in their own coordinates, and
+  placed any number of times: `place(layer, part, at=, rotate=(axis, deg),
+  mirror=, scale=, id=, class_=)`.  Only rigid motions and a uniform scale, so
+  every solid keeps its exact outline; faces stay wound to their normals under a
+  mirror.  The placement's layer is added to the part's layers, `id` prefixes
+  every id in the part, `class_` is added to its classes, and parts nest.  A
+  part holds only world-space calls: no camera, `<defs>`, screen-space calls, or
+  depth sorting, which stay the scene's.
 
 ### Changed
 

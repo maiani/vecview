@@ -423,6 +423,65 @@ however many parts a solid is drawn with. Elements handed to `add` keep whatever
 classes you built them with, and classes survive
 [rendering under another camera](#rendering-one-scene-several-ways).
 
+## Parts
+
+A `Part` is drawn once, in its own coordinates, and placed any number of times:
+a unit cell tiled into a lattice, one gate turned into four quadrants, a lens
+repeated along a bench.
+
+```python
+cell = vecview.Part()
+cell.sphere(0, (0, 0, 0), 0.15, fill="#3b6fb6", highlight="#cfe0f7", id="atom", class_="atom")
+cell.edges(1, vecview.box_faces((0.5, 0.5, 0.5), (1, 1, 1)), stroke="#222", id="edge")
+
+scene = vecview.Scene(cam)
+scene.sort_by_depth(10)
+for i, j in itertools.product(range(3), repeat=2):
+    scene.place(10, cell, at=(i, j, 0), id=f"cell-{i}{j}", class_="cell")
+```
+
+```python
+scene.place(layer, part, *, at=(0, 0, 0), rotate=None, mirror=None, scale=1.0, id=None, class_=None)
+```
+
+A point `p` of the part lands at `at + scale * R @ M @ p`. `M` reflects through
+the plane with normal `mirror`, and `R` turns by `rotate=(axis, angle_deg)`,
+counter-clockwise looking down `axis`; both act about the part's origin, mirror
+first. Only rigid motions and one uniform `scale` are offered, so a sphere stays
+a sphere and every solid keeps its [exact outline](#curved-solids). `scale`
+multiplies world lengths — positions, radii, arrow widths — and leaves screen
+units alone: stroke widths, text size, and `dx`/`dy` offsets.
+
+Under a mirror, faces keep their winding true to their outward normals, so
+`cull=True` still picks the walls the camera sees. A mirrored helix turns the
+other way, as a mirror image should.
+
+**Layers.** The placement's `layer` is added to every layer the part draws on:
+a part drawn on layers `0` and `1` and placed at `10` lands on `10` and `11`,
+and an `edges` `back_layer` moves with it. Depth sorting stays the scene's
+choice — a part has no `sort_by_depth` — so a lattice cell needs
+`scene.sort_by_depth(10)` in the scene that places it. Sorting is a property of
+the whole layer, and a part that switched it on would re-sort everything else
+drawn there.
+
+**Ids and classes.** `id=` is prefixed to every id in the part, derived ones
+included, and placements nest: a cell placed as `a` in a row placed as `row`
+gives `row-a-atom`. [Ids must be unique](#world-space-calls), so a part with ids
+placed twice needs a different `id` for each placement; without one, rendering
+raises `ValueError`. Objects without ids need no prefix. `class_=` is added to
+the classes of everything the part draws, so `.cell` selects whole placements
+while `.atom` still selects every atom.
+
+**What a part holds.** The world-space calls, and `place` itself, so parts nest.
+It has no camera, no `<defs>`, no screen-space calls, and no `sort_by_depth`:
+each belongs to the document the part ends up in. `scene.place(other_scene)`
+raises `TypeError` for the same reason. To look at a part on its own, place it
+in a scene.
+
+The copy is taken when `place` is called: drawing into the part afterwards
+changes later placements, not earlier ones. Placed calls are recorded like any
+other, so they re-render under [every camera](#rendering-one-scene-several-ways).
+
 ## Screen-space calls
 
 ```python

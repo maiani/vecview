@@ -140,6 +140,11 @@ Screen-space `rect2d` and `text2d`, `add_def` for `<defs>`, and `add` for raw
 (`stroke_width` becomes `stroke-width`), and `class_="gate"` tags every element
 an object is drawn with, so all the gates can be selected or restyled together.
 
+A `Part` records the same world-space calls in its own coordinates, and
+`scene.place(layer, part, at=..., rotate=(axis, deg), mirror=..., scale=..., id=...)`
+draws a moved copy: one unit cell tiled into a lattice, one gate turned into four
+quadrants. Ids are prefixed per placement, and parts nest.
+
 Geometry functions return plain world-space arrays and know nothing about
 cameras, styles, or SVG, which keeps them testable as numbers:
 

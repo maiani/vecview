@@ -49,10 +49,15 @@ on its own side.
   replays the record onto a fresh canvas. Camera-dependent work and errors
   belong in `_Canvas`, and a canvas never records, so its methods may call each
   other freely.
-- The world-space drawing calls live on the private `_Drawing` base. `Scene`
-  adds what only makes sense for a whole document: cameras, rendering,
-  `sort_by_depth` (a property of the layer stack), `<defs>`, raw elements, and
-  screen-space calls. Keep a call off `_Drawing` unless it has a world position.
+- The world-space drawing calls live on the private `_Drawing` base, shared by
+  `Scene` and `Part`. `Scene` adds what only makes sense for a whole document:
+  cameras, rendering, `sort_by_depth` (a property of the layer stack), `<defs>`,
+  raw elements, and screen-space calls. Keep a call off `_Drawing` unless it has
+  a world position, because a part must be able to move everything it holds.
+- `place` copies a part's recorded calls with their geometry moved by a `_Frame`.
+  `_MOVES` says, per call, which arguments are points, directions, edges, or
+  lengths. A new world-space call needs an entry there, or placing it fails with
+  a `KeyError`; `tests/test_parts.py` places one of every call.
 
 ## Deliberate non-features
 

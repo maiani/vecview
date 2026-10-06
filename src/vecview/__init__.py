@@ -34,7 +34,7 @@ from vecview.projections import (
     ObliqueCamera,
     OrthographicCamera,
 )
-from vecview.scene import Scene
+from vecview.scene import Part, Scene
 from vecview.shapes import (
     Face,
     annulus_sector,
@@ -64,6 +64,7 @@ __all__ = [
     "ObliqueCamera",
     "OrthographicCamera",
     "ParallelCamera",
+    "Part",
     "Scene",
     "__version__",
     "annulus_sector",
