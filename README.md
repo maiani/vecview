@@ -6,25 +6,25 @@ stays editable afterwards: elements keep the ids you give them, the same scene
 renders to byte-identical SVG, and the output opens in Inkscape.
 
 <p align="center">
-  <img src="docs/images/readme.svg" alt="A gate-defined quantum dot on a layered slab, with leads, gates, spin densities and a bias circuit" width="640">
+  <img src="https://raw.githubusercontent.com/maiani/vecview/v0.2.0/docs/images/readme.svg" alt="A gate-defined quantum dot on a layered slab, with leads, gates, spin densities and a bias circuit" width="640">
 </p>
 
-<p align="center"><sub>A device sketch: layered solids, Gaussian densities, solid arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="docs/gallery.md">gallery</a>.</sub></p>
+<p align="center"><sub>A device sketch: layered solids, Gaussian densities, solid arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md">gallery</a>.</sub></p>
 
 VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
 VecView supplies what it has no notion of: a camera, world-space glyph geometry,
 and an explicit layer stack. Runtime dependencies are `numpy` and `svg.py`.
 
-VecView is alpha: not yet on PyPI, and the API may change before 1.0.
+VecView is alpha: the API may change before 1.0.
 
 ## Install
 
-VecView is not yet on PyPI. Install it from GitHub (Python 3.12 or newer):
+Install VecView with pip (Python 3.12 or newer; tested on 3.12–3.14):
 
 ```bash
-python -m pip install "vecview @ git+https://github.com/maiani/vecview"
-python -m pip install "vecview[occlusion] @ git+https://github.com/maiani/vecview"  # exact visibility
+python -m pip install vecview
+python -m pip install "vecview[occlusion]"  # exact visibility
 ```
 
 ## Quick start
@@ -196,14 +196,14 @@ viewBox, and each camera projects the anchor afresh.
 a string. In Jupyter a scene displays itself inline. That method is the whole embedding contract: any tool that accepts an
 object exposing it can place a scene, without VecView knowing about the tool.
 The fitted viewBox usually does *not* start at `0, 0`, so a consumer must honour
-its origin. See [Embedding a scene](docs/embedding.md).
+its origin. See [Embedding a scene](https://github.com/maiani/vecview/blob/v0.2.0/docs/embedding.md).
 
 Rasterizing and PDF export are out of scope; they belong to whatever assembles
 the final page.
 
 ## Examples
 
-The [gallery](docs/gallery.md) has the figures everyone draws — a perovskite
+The [gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md) has the figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
 solenoid, crossing mirror planes — each from one script:
 
@@ -246,13 +246,13 @@ VecView depends on none of them and contains no code specific to any of them.
 
 ## Documentation
 
-- [Overview](docs/index.md)
-- [Cameras](docs/cameras.md)
-- [Scenes and layers](docs/scenes.md)
-- [Shapes](docs/shapes.md)
-- [Gallery](docs/gallery.md)
-- [Embedding a scene](docs/embedding.md)
-- [Development](docs/development.md)
+- [Overview](https://github.com/maiani/vecview/blob/v0.2.0/docs/index.md)
+- [Cameras](https://github.com/maiani/vecview/blob/v0.2.0/docs/cameras.md)
+- [Scenes and layers](https://github.com/maiani/vecview/blob/v0.2.0/docs/scenes.md)
+- [Shapes](https://github.com/maiani/vecview/blob/v0.2.0/docs/shapes.md)
+- [Gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md)
+- [Embedding a scene](https://github.com/maiani/vecview/blob/v0.2.0/docs/embedding.md)
+- [Development](https://github.com/maiani/vecview/blob/v0.2.0/docs/development.md)
 
 ## License
 

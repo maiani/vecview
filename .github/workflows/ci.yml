@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to test for a release.
+        required: false
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -22,10 +31,12 @@ jobs:
             experimental: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: uv sync --all-extras --python ${{ matrix.python-version }}
+      - run: uv sync --all-extras --locked --python ${{ matrix.python-version }}
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run ty check

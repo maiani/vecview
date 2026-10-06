@@ -5,7 +5,12 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
+
+- PyPI release workflow: validate the tag, run CI, build and check distributions,
+  then publish with Trusted Publishing.
 
 - `Scene.sort_by_depth(layer)` -- opt one layer in to the painter's algorithm.
   Its world-space elements are drawn back to front, keyed by the mean depth of
@@ -46,7 +51,6 @@ All notable changes to this project are documented here, following
 ### Changed
 
 - Use ty for type checking in development and CI instead of mypy.
-
 - **A scene holds objects and cameras; a camera renders them.** Drawing calls
   only record, and nothing is projected until `render`, `save`, `bbox`, or
   `to_svg_document`. As in a 3D application, `scene.cameras` holds named

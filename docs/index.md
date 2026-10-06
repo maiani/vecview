@@ -6,6 +6,16 @@ A small projection layer on top of [`svg.py`](https://pypi.org/project/svg.py/).
 `svg.py` builds the elements; `vecview` supplies what it has no notion of — a
 camera, world-space glyph geometry, and an explicit layer stack.
 
+## Install
+
+```bash
+python -m pip install vecview
+python -m pip install 'vecview[occlusion]'  # exact visibility
+```
+
+Python 3.12 or newer is required; 3.12–3.14 are tested. VecView is alpha and its
+API may change before 1.0. The `occlusion` extra is needed only for exact layers.
+
 ## The shape of the package
 
 Three pieces, with a hard line between them:

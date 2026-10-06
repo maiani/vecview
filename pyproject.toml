@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vecview"
-version = "0.1.2"
+version = "0.2.0"
 description = "Layered 3D scenes that render to SVG, for scientific schematics"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -48,9 +48,12 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
+# Keep release metadata compatible with publishing tools that do not yet accept 2.5.
+core-metadata-version = "2.4"
 packages = ["src/vecview"]
 
 [tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
 include = [
   "/src",
   "/tests",

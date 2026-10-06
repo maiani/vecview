@@ -26,8 +26,8 @@ uv run python examples/altermagnetic_dot.py --projection all
 
 ## The name
 
-The distribution and import name is **`vecview`**. It was confirmed available on
-PyPI on 31 August 2026. Check availability again immediately before publishing.
+The distribution and import name is **`vecview`**. Check PyPI name availability
+immediately before the first publication.
 
 If it needs to change in the future, the rename is mechanical — the import name
 appears nowhere outside `src/vecview/`, its own tests, and the docs:
@@ -84,3 +84,41 @@ before reporting documentation work complete:
 ```bash
 uv run zensical build
 ```
+
+## Releases
+
+`.github/workflows/publish.yml` publishes tags named `v<version>`. It checks
+that the tag matches `pyproject.toml`, runs the CI matrix against that tag,
+builds both distributions (the wheel from the sdist), and runs
+`twine check --strict` before publishing the same artifacts. Python 3.15 is
+experimental; its job may fail while the supported 3.12–3.14 jobs must pass.
+
+Before the first upload, configure a
+[pending Trusted Publisher on PyPI](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+with these exact values:
+
+| Field | Value |
+| --- | --- |
+| Project name | `vecview` |
+| GitHub owner | `maiani` |
+| Repository | `vecview` |
+| Workflow filename | `publish.yml` |
+| Environment | `pypi` |
+
+Create the matching `pypi` environment in the GitHub repository. Publishing
+uses GitHub OIDC, with `id-token: write` granted only to the publish job;
+no PyPI API token is needed. See
+[PyPI's publishing guide](https://docs.pypi.org/trusted-publishers/using-a-publisher/).
+
+For a release:
+
+1. Update the version in `pyproject.toml` and `src/vecview/__init__.py` together.
+2. Move the relevant `Unreleased` changelog entries into a dated release section.
+   Update versioned README image and documentation URLs to the new tag.
+3. Run validation and build the wheel and sdist. Commit the release changes.
+4. Create and push the matching tag, such as `v0.2.0`. Its push triggers publishing.
+
+The workflow can also be dispatched manually with an existing tag to retry
+an upload. It always checks out `refs/tags/<tag>`, including for CI and builds.
+Versions already uploaded to PyPI cannot be overwritten; fix release content
+under a new version.
