@@ -53,3 +53,22 @@ def test_runtime_dependencies_stay_minimal(pyproject: dict) -> None:
     """Rasterizing and TeX belong to the composition layer, not here."""
     names = {d.split(">")[0].split("=")[0].strip() for d in pyproject["project"]["dependencies"]}
     assert names == {"numpy", "svg.py"}
+
+
+MAX_MODULE_LINES = 1000  # pylint's default max-module-lines (C0302)
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted(
+        p
+        for folder in ("src", "tests", "examples", "docs")
+        for p in (ROOT / folder).rglob("*.py")
+        if "__pycache__" not in p.parts
+    ),
+    ids=lambda p: str(p.relative_to(ROOT)),
+)
+def test_no_module_exceeds_the_length_limit(path: Path) -> None:
+    """A module past the limit is split along a seam, as AGENTS.md says."""
+    n = len(path.read_text(encoding="utf-8").splitlines())
+    assert n <= MAX_MODULE_LINES, f"{path.relative_to(ROOT)} has {n} lines"

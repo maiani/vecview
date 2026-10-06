@@ -25,7 +25,7 @@ Three concerns in four modules, with a hard line between them:
 | [`shapes`](shapes.md) | Numbers only. Returns world-space `(n, 3)` arrays and `Face` records. No camera, no style, no SVG. |
 | [`camera`](cameras.md) | What a camera *is*: the projection contract, and the affine machinery every parallel projection shares. |
 | [`projections`](cameras.md#orthographiccamera) | The projections shipped: orthographic (isometric, dimetric, trimetric) and oblique (cavalier, cabinet). |
-| [`scene`](scenes.md) | Objects, named cameras, the layer stack, and document assembly. The only part that touches `svg.py`. |
+| [`scene`](scenes.md) | Objects, parts, named cameras, the layer stack, and document assembly. With its private rendering modules, the only part that touches `svg.py`. |
 
 That split is what keeps geometry testable as plain numbers, and lets one polygon
 be drawn twice with different fills or reused as a clip path.

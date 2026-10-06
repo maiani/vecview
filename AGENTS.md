@@ -27,7 +27,9 @@ on its own side.
     because it is a camera question, not a scene one.
   - `projections.py` holds the concrete projections: `OrthographicCamera` and
     `ObliqueCamera`.
-  - `scene.py` is the **only** module that imports `svg`.
+  - Only the rendering modules import `svg`: `scene.py` and the private
+    `_elements.py`, `_canvas.py`, and `_solids.py`. `shapes.py`, `camera.py`,
+    `projections.py`, `_occlusion.py`, `_place.py`, and `_drawing.py` never do.
 - `_occlusion.py` is private: exact visibility for `sort_by_depth(exact=True)`.
   The canvas describes each element of an exact layer as a `Surface` (outline
   plus a depth that goes on smoothly past its edge) or a `Line`, lazily, and
@@ -45,19 +47,33 @@ on its own side.
   normalize, or embed foreign SVG; a consumer fills the group by id.
 - `Scene` records objects and nothing else; it never projects. Every public
   drawing method validates what it can without a camera and appends one record.
-  `_Canvas` holds a camera and implements each method of the same name; rendering
-  replays the record onto a fresh canvas. Camera-dependent work and errors
-  belong in `_Canvas`, and a canvas never records, so its methods may call each
-  other freely.
-- The world-space drawing calls live on the private `_Drawing` base, shared by
+  The canvas holds a camera and implements each method of the same name;
+  rendering replays the record onto a fresh canvas. Camera-dependent work and
+  errors belong in the canvas, and a canvas never records, so its methods may
+  call each other freely. `_Canvas` (`_canvas.py`) has the layer stack, exact
+  visibility, and the flat calls; `_SolidCanvas` (`_solids.py`) adds the curved
+  solids and is the canvas a render uses. `_elements.py` holds the SVG emission
+  helpers both share.
+- The world-space drawing calls live on the private `_Drawing` base
+  (`_drawing.py`, with `Part`), shared by
   `Scene` and `Part`. `Scene` adds what only makes sense for a whole document:
   cameras, rendering, `sort_by_depth` (a property of the layer stack), `<defs>`,
   raw elements, and screen-space calls. Keep a call off `_Drawing` unless it has
   a world position, because a part must be able to move everything it holds.
-- `place` copies a part's recorded calls with their geometry moved by a `_Frame`.
+- `place` copies a part's recorded calls with their geometry moved by a `_Frame`
+  (`_place.py`).
   `_MOVES` says, per call, which arguments are points, directions, edges, or
   lengths. A new world-space call needs an entry there, or placing it fails with
   a `KeyError`; `tests/test_parts.py` places one of every call.
+
+## Module size
+
+- No Python file in the repository exceeds **1000 lines**, pylint's default
+  `max-module-lines` (C0302). `tests/test_package_metadata.py` enforces it.
+- Aim for a few hundred lines. When a module nears the limit, split it before
+  adding to it, along a real seam of responsibility -- emission, visibility,
+  solids -- not into arbitrary halves, and keep the output byte-identical: a
+  split moves code, it does not change it.
 
 ## Deliberate non-features
 

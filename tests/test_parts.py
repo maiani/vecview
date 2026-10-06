@@ -241,7 +241,8 @@ class TestChecks:
             Scene().place(0, Part(), **kwargs)
 
     def test_every_world_space_call_knows_how_to_move(self) -> None:
-        from vecview.scene import _MOVES, _Drawing
+        from vecview._drawing import _Drawing
+        from vecview._place import _MOVES
 
         calls = {name for name in vars(_Drawing) if not name.startswith("_")} - {"place"}
         assert calls == set(_MOVES)

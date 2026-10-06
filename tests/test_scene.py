@@ -10,7 +10,7 @@ import svg
 
 import vecview
 from vecview import Camera, OrthographicCamera, Scene
-from vecview.scene import _Canvas
+from vecview._canvas import _Canvas
 
 SQUARE = np.array([[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]], dtype=float)
 
@@ -668,7 +668,7 @@ class TestGaussian:
 
 
 class TestPrismWalls:
-    from vecview.scene import _runs as runs
+    from vecview._canvas import _runs as runs
 
     @pytest.mark.parametrize(
         ("visible", "expected"),
