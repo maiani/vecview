@@ -163,6 +163,11 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | `trim_corners(faces, r)` | faces cut back from atoms sitting on their corners |
 | `in_plane_dir(angle_deg, u, v)` | a unit direction at an angle within a plane |
 
+Cross-sections and footprints are built in 2D by `vecview.outlines`: `regular`
+and `rect` to start, `offset` and `film` to grow them — a film is a deposited
+layer on chosen facets — and `union`, `difference`, and `intersection` to
+combine them; `to_plane` lifts the result into 3D for `extrude`.
+
 At an azimuth of 35°, neither `+x` nor `+y` moves a point horizontally across
 the picture. `screen_basis()` returns the two in-plane world directions that do:
 

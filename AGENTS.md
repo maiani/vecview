@@ -22,6 +22,10 @@ on its own side.
 - Keep the three-way split, and do not let it blur:
   - `shapes.py` knows numbers only — world-space arrays and `Face` records. No
     camera, no style, no SVG import.
+  - `outlines.py` is the same in 2D: `(n, 2)` footprints and cross-sections,
+    combined through `shapely`, which is the only module besides `_occlusion.py`
+    that imports it. A result an outline cannot hold -- a hole -- raises
+    rather than being dropped.
   - `camera.py` defines what a camera *is*: `Camera` (the abstract contract) and
     `ParallelCamera` (the affine machinery). Back-face culling lives here
     because it is a camera question, not a scene one.

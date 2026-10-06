@@ -127,7 +127,9 @@ like a box. `along` need not be perpendicular to the section, which gives a
 slanted prism, but it must leave the section's plane. The section must be a
 simple polygon, convex or not, lying in one plane; anything else raises
 `ValueError`. A regular cross-section is `circle_shape` with a small `n`, as
-above.
+above. To build a section in 2D first — a wire with a film on some facets, a
+gate with a notch — see [Outlines](outlines.md), whose `to_plane` lifts it into
+the plane to sweep.
 
 ```python
 vecview.annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg, n=32)

@@ -26,6 +26,7 @@ document.
 
 from __future__ import annotations
 
+from vecview import outlines as outlines
 from vecview._vec import unit
 from vecview.camera import Camera, ParallelCamera
 from vecview.projections import (

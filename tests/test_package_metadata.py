@@ -40,7 +40,7 @@ def test_all_has_no_duplicates() -> None:
 def test_public_api_is_exactly_all() -> None:
     """A name reachable without an underscore but absent from __all__ is an accident."""
     # Submodules and the `from __future__` import are reachable but not API.
-    not_api = {"annotations", "camera", "projections", "scene", "shapes"}
+    not_api = {"annotations", "camera", "outlines", "projections", "scene", "shapes"}
     public = {n for n in vars(vecview) if not n.startswith("_") and n not in not_api}
     assert public == set(vecview.__all__) - {"__version__"}
 

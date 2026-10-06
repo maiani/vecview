@@ -8,6 +8,7 @@ nav = [
   { "Cameras" = "cameras.md" },
   { "Scenes and layers" = "scenes.md" },
   { "Shapes" = "shapes.md" },
+  { "Outlines" = "outlines.md" },
   { "Gallery" = "gallery.md" },
   { "Embedding a scene" = "embedding.md" },
   { "Development" = "development.md" },

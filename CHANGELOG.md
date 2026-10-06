@@ -28,6 +28,12 @@ All notable changes to this project are documented here, following
   `"side-{i}"`.  Wall `i` is built on section edge `i` as given, in either
   winding, so walls can be picked out by edge.  `prism_faces` is now the
   special case along `z`, with unchanged output.
+- `vecview.outlines` -- footprints and cross-sections built in 2D: `rect`,
+  `regular`, `offset`, `film` (a layer of given thickness deposited on a run of
+  edges, numbered as `extrude` numbers walls), `union`, `difference`,
+  `intersection`, and `to_plane` to lift an outline into 3D.  Results are
+  counter-clockwise and ordered deterministically; a result with a hole
+  raises `ValueError` rather than dropping it.
 
 ### Changed
 

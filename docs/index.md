@@ -17,11 +17,12 @@ API may change before 1.0.
 
 ## The shape of the package
 
-Three concerns in four modules, with a hard line between them:
+Three concerns in five modules, with a hard line between them:
 
 | Module | Knows about |
 | --- | --- |
 | [`shapes`](shapes.md) | Numbers only. Returns world-space `(n, 3)` arrays and `Face` records. No camera, no style, no SVG. |
+| [`outlines`](outlines.md) | Numbers only, in 2D: footprints and cross-sections, offset, filmed, and combined, then lifted into 3D. |
 | [`camera`](cameras.md) | What a camera *is*: the projection contract, and the affine machinery every parallel projection shares. |
 | [`projections`](cameras.md#orthographiccamera) | The projections shipped: orthographic (isometric, dimetric, trimetric) and oblique (cavalier, cabinet). |
 | [`scene`](scenes.md) | Objects, parts, named cameras, the layer stack, and document assembly. With its private rendering modules, the only part that touches `svg.py`. |
