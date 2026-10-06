@@ -152,20 +152,16 @@ class _Canvas:
         if self._exact:
             self._occlude()
         lo, hi = self._lo - pad, self._hi + pad
-        w, h = hi - lo
+        # One rounding for the viewBox and the background, so the one covers the other.
+        x, y, w, h = (round(float(v), 1) for v in (*lo, *(hi - lo)))
         elements: list[svg.Element] = []
         if self.defs:
             elements.append(svg.Defs(elements=list(self.defs)))
         if background:
-            elements.append(svg.Rect(x=lo[0], y=lo[1], width=w, height=h, fill=background))
+            elements.append(svg.Rect(x=x, y=y, width=w, height=h, fill=background))
         elements += [el for _, _, el in sorted(self.items, key=self._order)]
         _check_unique_ids(elements)
-        return svg.SVG(
-            width=round(w, 1),
-            height=round(h, 1),
-            viewBox=svg.ViewBoxSpec(round(lo[0], 1), round(lo[1], 1), round(w, 1), round(h, 1)),
-            elements=elements,
-        )
+        return svg.SVG(width=w, height=h, viewBox=svg.ViewBoxSpec(x, y, w, h), elements=elements)
 
     def _grow(self, pts2: np.ndarray) -> None:
         p = np.atleast_2d(pts2)

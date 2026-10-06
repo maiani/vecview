@@ -146,6 +146,21 @@ class TestRender:
         scene.polygon(0, SQUARE)
         assert tags(scene.render()) == ["Rect", "Polygon"]
 
+    def test_background_covers_the_viewbox_exactly(self, cam: Camera) -> None:
+        scene = Scene(cam, background="#ffffff")
+        scene.polygon(0, SQUARE * 1.2345)
+        document = scene.render()
+        rect = (document.elements or [])[0]
+        assert isinstance(rect, svg.Rect)
+        box = document.viewBox
+        assert box is not None
+        assert (rect.x, rect.y, rect.width, rect.height) == (
+            box.min_x,
+            box.min_y,
+            box.width,
+            box.height,
+        )
+
     def test_no_background_element_when_transparent(self, scene: Scene) -> None:
         scene.polygon(0, SQUARE)
         assert tags(scene.render()) == ["Polygon"]

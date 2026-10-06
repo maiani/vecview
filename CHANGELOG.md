@@ -44,6 +44,8 @@ All notable changes to this project are documented here, following
 - `Scene.is_empty` is true exactly when rendering would find nothing to fit a
   viewBox to.  A scene holding only `add`, or `rect2d` and `text2d` with
   `grow=False`, was reported non-empty and then failed to render.
+- The background `<rect>` takes the viewBox's rounded numbers, so it covers
+  the viewBox exactly and no longer carries full-precision floats.
 
 ## [0.2.0] - 2026-10-06
 
