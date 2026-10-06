@@ -25,19 +25,24 @@ AXIS_LEN = 1.38
 MATH = dict(font_family="DejaVu Serif", font_style="italic", fill=INK)
 
 
+def bloch_vector(theta_deg: float, phi_deg: float) -> np.ndarray:
+    """The unit vector at polar angle theta and azimuth phi."""
+    th, ph = np.radians(theta_deg), np.radians(phi_deg)
+    return np.array([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)])
+
+
 def build() -> Scene:
     cam = OrthographicCamera(azim_deg=28.0, elev_deg=16.0, scale=170.0)
     scene = Scene(cam, pad=16.0, background="#ffffff")
     origin = np.zeros(3)
-    th, ph = np.radians(THETA), np.radians(PHI)
-    psi = np.array([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)])
-    foot = np.array([psi[0], psi[1], 0.0])
+    psi = bloch_vector(THETA, PHI)
+    foot = np.array([psi[0], psi[1], 0.0])  # psi dropped onto the equatorial plane
 
     # Inside the sphere, under its translucent skin: the axes and the
     # construction lines that drop the state onto the equatorial plane.
     thin = dict(stroke=INK, stroke_width=1.1)
-    for k, e in enumerate(np.eye(3)):
-        scene.polyline(8, [-e, e], id=f"axis-{'xyz'[k]}-inner", **thin)
+    for label, e in zip("xyz", np.eye(3), strict=True):
+        scene.polyline(8, [-e, e], id=f"axis-{label}-inner", class_="axis", **thin)
     dashed = dict(stroke="#6b7280", stroke_width=1.0, stroke_dasharray="4 3")
     scene.polyline(9, [origin, foot], id="foot", **dashed)
     scene.polyline(9, [psi, foot], id="drop", **dashed)
@@ -82,6 +87,7 @@ def build() -> Scene:
             head_len=0.15,
             fill=INK,
             id=f"axis-{label}",
+            class_="axis",
         )
         scene.text(30, AXIS_LEN * e, label, dx=dx, dy=dy, size=24, id=f"label-{label}", **MATH)
 
@@ -107,12 +113,10 @@ def build() -> Scene:
     scene.polyline(
         21, vecview.arc_shape(origin, (1, 0, 0), (0, 1, 0), 0.3, 0.0, PHI), id="phi", **marks
     )
-    mid_th, mid_ph = np.radians(THETA / 2), np.radians(PHI / 2)
-    theta_at = 0.45 * np.array(
-        [np.sin(mid_th) * np.cos(ph), np.sin(mid_th) * np.sin(ph), np.cos(mid_th)]
-    )
+    # Each angle's label sits just outside the middle of its arc.
+    theta_at = 0.45 * bloch_vector(THETA / 2, PHI)
     scene.text(30, theta_at, "θ", dx=-4, dy=6, size=21, id="label-theta", **MATH)
-    phi_at = 0.42 * np.array([np.cos(mid_ph), np.sin(mid_ph), 0.0])
+    phi_at = 0.42 * bloch_vector(90.0, PHI / 2)
     scene.text(30, phi_at, "φ", dx=-6, dy=10, size=21, id="label-phi", **MATH)
 
     for name, z, text, dy in (("north", 1.0, "|0⟩", -12), ("south", -1.0, "|1⟩", 28)):

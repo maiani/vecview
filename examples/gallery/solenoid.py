@@ -35,8 +35,8 @@ def build() -> Scene:
     # Return field lines, closing outside the coil in the plane of its axis.
     t = np.linspace(0.04, np.pi - 0.04, 120)
     reach = LENGTH / 2 + 1.25
-    for k, (side, height) in enumerate(((1, 2.1), (1, 2.9), (-1, 2.1), (-1, 2.9))):
-        loop = np.column_stack([reach * np.cos(t), np.zeros_like(t), side * height * np.sin(t)])
+    for k, height in enumerate((2.1, 2.9, -2.1, -2.9)):  # two above the coil, two below
+        loop = np.column_stack([reach * np.cos(t), np.zeros_like(t), height * np.sin(t)])
         scene.polyline(
             2,
             loop,
@@ -45,6 +45,7 @@ def build() -> Scene:
             stroke_opacity=0.55,
             stroke_dasharray="6 4",
             id=f"field-line-{k}",
+            class_="field-line",
         )
 
     scene.sort_by_depth(10)
@@ -94,21 +95,22 @@ def build() -> Scene:
     math = dict(font_family="DejaVu Serif", font_style="italic", size=26)
     scene.text(30, -start + 1.9 * X, "B", dx=8, dy=8, fill=FIELD, id="label-B", **math)
 
-    # Current in at one lead and out at the other, drawn beside the wires.
-    for k, (end, up) in enumerate(((coil[0], 1.0), (coil[-1], -1.0))):
-        beside = end - 1.25 * Z + (-0.38 if k == 0 else 0.38) * X
+    # Current up the first lead and down the other, drawn just outside each.
+    beside = [coil[0] - 1.25 * Z - 0.38 * X, coil[-1] - 1.25 * Z + 0.38 * X]
+    for k, (at, flow) in enumerate(zip(beside, (Z, -Z), strict=True)):
         scene.arrow3d(
             20,
-            beside - up * 0.35 * Z,
-            up * Z,
+            at - 0.35 * flow,
+            flow,
             0.7,
             shaft_r=0.025,
             head_r=0.085,
             head_len=0.22,
             fill=INK,
             id=f"current-{k}",
+            class_="current",
         )
-    scene.text(30, coil[0] - 1.25 * Z - 0.38 * X, "I", dx=-22, dy=8, fill=INK, id="label-I", **math)
+    scene.text(30, beside[0], "I", dx=-22, dy=8, fill=INK, id="label-I", **math)
     return scene
 
 

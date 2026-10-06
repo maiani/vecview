@@ -8,7 +8,7 @@ correctly, while one that stops at the surface sorts exactly.  The thirty
 double bonds, shared by two hexagons, are drawn darker.
 
 Uses: ``sphere(highlight=...)``, ``cylinder(ends=False, highlight=...)``,
-``sort_by_depth``.
+``sort_by_depth``, and ``convex_polyhedron`` to find the pentagons.
 """
 
 from __future__ import annotations
@@ -18,16 +18,18 @@ import itertools
 import numpy as np
 from _common import export
 
+import vecview
 from vecview import OrthographicCamera, Scene
 
 NAME = "fullerene"
 
 GOLDEN = (1.0 + 5.0**0.5) / 2.0
+BOND_LENGTH = 2.0  # the nearest-neighbour distance at these coordinates
 ATOM_R = 0.42
 BOND_R = 0.13
 
 
-def atoms() -> np.ndarray:
+def atom_positions() -> np.ndarray:
     """Even permutations of (0, +-1, +-3g), (+-1, +-(2+g), +-2g), (+-g, +-2, +-g^3)."""
     seeds = [(0.0, 1.0, 3 * GOLDEN), (1.0, 2 + GOLDEN, 2 * GOLDEN), (GOLDEN, 2.0, GOLDEN**3)]
     points: set[tuple[float, ...]] = set()
@@ -39,30 +41,39 @@ def atoms() -> np.ndarray:
     return np.array(sorted(points))
 
 
+def pentagon_bonds(atoms: np.ndarray) -> set[frozenset[int]]:
+    """The bonds round the twelve pentagons, read off the faces of the cage."""
+    found: set[frozenset[int]] = set()
+    for face in vecview.convex_polyhedron(atoms):
+        if len(face.points) == 5:
+            ring = [int(np.argmin(np.linalg.norm(atoms - p, axis=1))) for p in face.points]
+            found |= {frozenset(pair) for pair in zip(ring, ring[1:] + ring[:1], strict=True)}
+    return found
+
+
 def build() -> Scene:
     cam = OrthographicCamera(azim_deg=20.0, elev_deg=24.0, scale=48.0)
     scene = Scene(cam, pad=12.0, background="#ffffff")
     scene.sort_by_depth(10)
-    pts = atoms()
-    assert len(pts) == 60
+    atoms = atom_positions()
+    assert len(atoms) == 60
 
-    # Bonds join nearest neighbours, at the edge length 2.  Every atom is in
-    # exactly one pentagon, so a bond is double -- shared by two hexagons --
-    # exactly when its two atoms are in different pentagons.
-    dist = np.linalg.norm(pts[:, None] - pts[None, :], axis=2)
-    bonds = [(i, j) for i, j in zip(*np.nonzero(np.isclose(dist, 2.0)), strict=True) if i < j]
+    dist = np.linalg.norm(atoms[:, None] - atoms[None, :], axis=2)
+    bonds = [
+        (i, j) for i, j in zip(*np.nonzero(np.isclose(dist, BOND_LENGTH)), strict=True) if i < j
+    ]
     assert len(bonds) == 90
-    neighbours = {
-        i: {j for a, b in bonds for i2, j in ((a, b), (b, a)) if i2 == i} for i in range(60)
-    }
-    pentagons = {frozenset(cycle) for a in range(60) for cycle in _five_cycles(a, neighbours)}
+    # Every bond borders two faces of the cage.  The double bonds are the
+    # thirty shared by two hexagons: the ones on no pentagon.
+    single = pentagon_bonds(atoms)
+    assert len(single) == 60
 
+    # Each bond stops just inside the two atom surfaces, so its ends are covered.
+    inset = np.sqrt(ATOM_R**2 - BOND_R**2) - 0.02
     for k, (i, j) in enumerate(bonds):
-        double = not any({i, j} <= p for p in pentagons)
-        a, b = pts[i], pts[j]
+        double = frozenset((i, j)) not in single
+        a, b = atoms[i], atoms[j]
         d = (b - a) / np.linalg.norm(b - a)
-        # Cut back to just inside each atom's surface, so the end is covered.
-        inset = np.sqrt(ATOM_R**2 - BOND_R**2) - 0.02
         scene.cylinder(
             10,
             a + inset * d,
@@ -74,8 +85,9 @@ def build() -> Scene:
             stroke="#3c4048",
             stroke_width=0.6,
             id=f"bond-{k}",
+            class_=["bond", "double" if double else "single"],
         )
-    for k, p in enumerate(pts):
+    for k, p in enumerate(atoms):
         scene.sphere(
             10,
             p,
@@ -85,24 +97,9 @@ def build() -> Scene:
             stroke="#16181c",
             stroke_width=0.7,
             id=f"C-{k}",
+            class_="atom",
         )
     return scene
-
-
-def _five_cycles(start: int, neighbours: dict[int, set[int]]) -> list[tuple[int, ...]]:
-    """Simple 5-cycles through ``start``: the pentagons that atom belongs to."""
-    found = []
-    for path in _walks(start, neighbours, 5):
-        if start in neighbours[path[-1]]:
-            found.append(path)
-    return found
-
-
-def _walks(start: int, neighbours: dict[int, set[int]], length: int) -> list[tuple[int, ...]]:
-    paths = [(start,)]
-    for _ in range(length - 1):
-        paths = [(*p, n) for p in paths for n in sorted(neighbours[p[-1]]) if n not in p]
-    return paths
 
 
 if __name__ == "__main__":

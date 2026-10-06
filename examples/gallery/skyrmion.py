@@ -10,6 +10,8 @@ Uses: ``arrow3d(highlight=...)``, ``sort_by_depth``, ``faces(cull=True)``.
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 from _common import export, mix
 
@@ -24,12 +26,19 @@ WALL = 1.3  # domain-wall width
 UP, DOWN, MID = "#c0392b", "#1f5fa8", "#ece9e4"
 
 
-def polar_angle(r: np.ndarray) -> np.ndarray:
-    """Theta(r) for the standard 360-degree domain-wall profile: pi at the core, 0 outside."""
-    return 2.0 * np.arctan2(np.sinh(RADIUS / WALL), np.sinh(r / WALL))
+def spin(x: float, y: float) -> np.ndarray:
+    """The unit magnetization at (x, y): down at the core, up outside, radial in the wall.
+
+    The polar angle follows the standard 360-degree domain-wall profile.
+    """
+    r = float(np.hypot(x, y))
+    theta = 2.0 * np.arctan2(np.sinh(RADIUS / WALL), np.sinh(r / WALL))
+    radial = np.array([x, y]) / r if r > 0 else np.zeros(2)
+    return np.array([np.sin(theta) * radial[0], np.sin(theta) * radial[1], np.cos(theta)])
 
 
 def color(mz: float) -> str:
+    """Red for up, blue for down, through a pale grey in the plane."""
     return mix(MID, UP, mz) if mz >= 0 else mix(MID, DOWN, -mz)
 
 
@@ -41,29 +50,26 @@ def build() -> Scene:
     film = vecview.box_faces((0, 0, -0.75), (N + 0.4, N + 0.4, 0.3))
     scene.faces(5, film, cull=True, fill="#e6e8ec", stroke="#9aa1ab", stroke_width=0.8, id="film")
     scene.sort_by_depth(10)
-    for i in range(N):
-        for j in range(N):
-            x, y = i - half, j - half
-            r = float(np.hypot(x, y))
-            theta = float(polar_angle(np.array(r)))
-            radial = np.array([x, y]) / r if r > 0 else np.zeros(2)
-            m = np.array([np.sin(theta) * radial[0], np.sin(theta) * radial[1], np.cos(theta)])
-            fill = color(float(m[2]))
-            scene.arrow3d(
-                10,
-                (x, y, 0.0),
-                m,
-                0.9,
-                pivot="mid",
-                shaft_r=0.07,
-                head_r=0.18,
-                head_len=0.36,
-                fill=fill,
-                highlight=mix(fill, "#ffffff", 0.6),
-                stroke=mix(fill, "#000000", 0.55),
-                stroke_width=0.5,
-                id=f"spin-{i}-{j}",
-            )
+    for i, j in itertools.product(range(N), repeat=2):
+        x, y = i - half, j - half
+        m = spin(x, y)
+        fill = color(float(m[2]))
+        scene.arrow3d(
+            10,
+            (x, y, 0.0),
+            m,
+            0.9,
+            pivot="mid",
+            shaft_r=0.07,
+            head_r=0.18,
+            head_len=0.36,
+            fill=fill,
+            highlight=mix(fill, "#ffffff", 0.6),
+            stroke=mix(fill, "#000000", 0.55),
+            stroke_width=0.5,
+            id=f"spin-{i}-{j}",
+            class_="spin",
+        )
     return scene
 
 

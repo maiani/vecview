@@ -7,10 +7,8 @@ of it that shows, the lines where planes meet are hidden only by the third
 plane, the body diagonal fades to a faint dash exactly where a plane hides it,
 and the cell's hidden edges are dropped where the planes cover them.
 
-Needs the ``occlusion`` extra: ``pip install 'vecview[occlusion]'``.
-
-Uses: ``sort_by_depth(exact=True)``, ``polyline(back=...)``, ``edges``,
-``sphere``.
+Uses: ``sort_by_depth(exact=True)``, ``polyline(back=...)``, ``edges(trim=...)``,
+``rect_shape``, and ``sphere``.
 """
 
 from __future__ import annotations
@@ -27,7 +25,7 @@ NAME = "mirror_planes"
 
 INK = "#1f2430"
 CORNER_R = 0.045
-PLANES = {  # normal axis, fill, edge
+PLANES = {  # normal axis: fill, edge
     "x": ("#f2c14e", "#8a6a12"),
     "y": ("#78c091", "#2b6a40"),
     "z": ("#7aa6d8", "#2c5a8f"),
@@ -51,31 +49,31 @@ def build() -> Scene:
         stroke_linejoin="round",
     )
 
-    for axis, (fill, edge) in PLANES.items():
-        k = "xyz".index(axis)
+    # Each plane is the unit square spanned by the other two axes.
+    for k, (axis, (fill, edge)) in enumerate(PLANES.items()):
         u, v = np.eye(3)[(k + 1) % 3], np.eye(3)[(k + 2) % 3]
-        square = vecview.rect_shape((0, 0, 0), u, v, 1.0, 1.0)
         scene.polygon(
             10,
-            square,
+            vecview.rect_shape((0, 0, 0), u, v, 1.0, 1.0),
             fill=fill,
             stroke=edge,
             stroke_width=1.2,
             stroke_linejoin="round",
             id=f"m{axis}",
+            class_="mirror-plane",
         )
 
     # Where two planes meet, a line: the cue the eye reads crossing surfaces by.
     # Each lies on two planes and is hidden only by the third.
-    for k in range(3):
-        e = np.eye(3)[k]
+    for axis, e in zip("xyz", np.eye(3), strict=True):
         scene.polyline(
             10,
             [-0.5 * e, 0.5 * e],
             stroke=INK,
             stroke_width=1.0,
             stroke_opacity=0.8,
-            id=f"meet-{'xyz'[k]}",
+            id=f"meet-{axis}",
+            class_="intersection",
         )
 
     # The body diagonal pierces all three planes at the centre; where a plane
@@ -93,12 +91,13 @@ def build() -> Scene:
         scene.sphere(
             10,
             corner,
-            0.045,
+            CORNER_R,
             fill="#3a3f47",
             highlight="#aab1bc",
             stroke=INK,
             stroke_width=0.6,
             id=f"corner-{k}",
+            class_="atom",
         )
     return scene
 

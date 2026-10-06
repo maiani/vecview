@@ -14,7 +14,6 @@ uv run python examples/gallery --docs   # and refresh the SVGs on this page
 ```
 
 Each script also runs on its own, `uv run python examples/gallery/perovskite.py`.
-The mirror planes need the `occlusion` extra, and are skipped without it.
 
 ## Crystal structure
 

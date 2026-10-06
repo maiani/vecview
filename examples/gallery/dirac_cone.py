@@ -30,6 +30,7 @@ LOWER = ("#d4e4f4", "#1f5fa8")
 
 
 def band(sign: float) -> list[vecview.Face]:
+    """The upper (+1) or lower (-1) band as a polar mesh of quads."""
     k = np.linspace(0.0, K_MAX, 13)
     t = np.linspace(0.0, 2.0 * np.pi, 57)
     kk, tt = np.meshgrid(k, t, indexing="ij")
@@ -55,6 +56,7 @@ def build() -> Scene:
                 stroke_width=0.45,
                 stroke_linejoin="round",
                 id=f"{name}-{face.name}",
+                class_=["band", name],
             )
 
     # The chemical potential cuts the upper band in a circle: the Fermi surface.
@@ -62,7 +64,15 @@ def build() -> Scene:
     # It lies exactly on the mesh, so lift it a hair toward the camera: on the
     # surface itself it would tie with the quads beneath it in the depth sort.
     ring = vecview.circle_shape((0, 0, MU), k_f, (0, 0, 1), n=96) + 0.04 * cam.view
-    scene.tube(10, np.vstack([ring, ring[:1]]), 0.012, fill="#7a1fa2", chunk=2, id="fermi")
+    scene.tube(
+        10,
+        np.vstack([ring, ring[:1]]),
+        0.012,
+        fill="#7a1fa2",
+        chunk=2,
+        id="fermi",
+        class_="fermi-surface",
+    )
 
     # Axes as thin tubes, so they sort among the band quads, with cone heads.
     axes = {
@@ -70,11 +80,20 @@ def build() -> Scene:
         "ky": ((0, -1.35, 0), (0, 1.45, 0)),
         "E": ((0, 0, -1.3), (0, 0, 1.45)),
     }
-    for name, (a, b) in axes.items():
-        a, b = np.asarray(a, float), np.asarray(b, float)
-        line = np.linspace(a, b - 0.1 * vecview.unit(b - a), 60)
-        scene.tube(10, line, 0.006, fill=INK, chunk=2, id=f"axis-{name}")
-        scene.cone(10, b - 0.12 * vecview.unit(b - a), b, 0.035, fill=INK, id=f"axis-{name}-head")
+    for name, (tail, tip) in axes.items():
+        tail, tip = np.asarray(tail, float), np.asarray(tip, float)
+        along = vecview.unit(tip - tail)
+        shaft = np.linspace(tail, tip - 0.1 * along, 60)  # ends inside the head
+        scene.tube(10, shaft, 0.006, fill=INK, chunk=2, id=f"axis-{name}", class_="axis")
+        scene.cone(
+            10,
+            tip - 0.12 * along,
+            tip,
+            0.035,
+            fill=INK,
+            id=f"axis-{name}-head",
+            class_="axis",
+        )
 
     math = dict(font_family="DejaVu Serif", font_style="italic", fill=INK, size=24)
 

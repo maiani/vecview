@@ -16,7 +16,7 @@ from collections.abc import Callable
 
 from _common import HERE, export
 
-from vecview import OrthographicCamera, Scene
+from vecview import Scene
 
 FIGURES = [
     "perovskite",
@@ -27,7 +27,7 @@ FIGURES = [
     "skyrmion",
     "solenoid",
     "kitaev_chain",
-    "mirror_planes",  # needs the occlusion extra
+    "mirror_planes",
 ]
 
 
@@ -38,10 +38,7 @@ def devices() -> dict[str, Callable[[], Scene]]:
     slab_polarizer = importlib.import_module("slab_polarizer")
     return {
         "altermagnetic_dot": altermagnetic_dot.build,  # its active camera is "main"
-        "slab_polarizer": lambda: slab_polarizer.build(
-            OrthographicCamera(slab_polarizer.AZIM, slab_polarizer.ELEV, slab_polarizer.SCALE),
-            False,
-        ),
+        "slab_polarizer": slab_polarizer.build,  # its default camera
     }
 
 
@@ -52,12 +49,6 @@ def main() -> None:
     builders: dict[str, Callable[[], Scene]] = {
         name: importlib.import_module(name).build for name in FIGURES
     }
-    try:
-        import contourpy  # noqa: F401
-        import shapely  # noqa: F401
-    except ImportError:
-        print("mirror_planes: skipped, needs pip install 'vecview[occlusion]'")
-        builders.pop("mirror_planes")
     builders.update(devices())
     for name, build in builders.items():
         began = time.perf_counter()
