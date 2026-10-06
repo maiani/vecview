@@ -502,9 +502,10 @@ class _Drawing:
                 looks like one solid -- except with a translucent fill, where
                 the overlaps show.
             **style: SVG presentation attributes. An ``id`` goes on the group;
-                the body takes ``{id}-body`` and the end disks ``{id}-body-end0``
-                and ``{id}-body-end1``.  Sliced, the groups are ``{id}-0``,
-                ``{id}-1``, ... with ``{id}-{k}-body`` and ``{id}-{k}-edge``.
+                the body takes ``{id}-body`` and the end disks ``{id}-end0``
+                and ``{id}-end1``.  Sliced, the groups are ``{id}-0``,
+                ``{id}-1``, ... with ``{id}-{k}-body`` and ``{id}-{k}-edge``;
+                the end disks and the gradient are named as unsliced.
 
         Raises:
             ValueError: If ``p0 == p1``, or for a negative radius.

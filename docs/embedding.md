@@ -137,7 +137,7 @@ landed first — a silent wrong colour rather than an error.
 
 The ids a scene generates derive from the ones you give, so they are as unique
 as yours: `slab-pz` per face, `{id}-profile` for a Gaussian's gradient,
-`{id}-body-shade` for a cylinder's, `{id}-visible` for the clip path of an
+`{id}-shade` for a cylinder's, `{id}-visible` for the clip path of an
 [exact layer](scenes.md#exact-visibility). Two are not:
 
 - A sphere's highlight gradient is named after its colours,

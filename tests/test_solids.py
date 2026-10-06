@@ -118,7 +118,7 @@ class TestFrustumOutline:
         scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
         scene.cylinder(0, (0, 0, 0), (0, 0, 1), 0.5, id="post")
         (group,) = scene.render().elements or []
-        assert [el.id for el in group.elements] == ["post-body", "post-body-end1"]
+        assert [el.id for el in group.elements] == ["post-body", "post-end1"]
 
     def test_open_ends_draw_only_the_body(self) -> None:
         scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
@@ -130,7 +130,7 @@ class TestFrustumOutline:
         scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
         scene.cone(0, (0, 0, 1), (0, 0, 0), 0.5, id="funnel")
         (group,) = scene.render().elements or []
-        assert [el.id for el in group.elements] == ["funnel-body", "funnel-body-end0"]
+        assert [el.id for el in group.elements] == ["funnel-body", "funnel-end0"]
 
     def test_highlight_needs_an_id(self) -> None:
         scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
@@ -173,6 +173,15 @@ class TestSlicedCylinder:
         scene = self.build(fill="#888888", highlight="#eeeeee")
         defs = (scene.render().elements or [])[0]
         assert [d.id for d in defs.elements] == ["core-shade"]
+
+    @pytest.mark.parametrize("slices", [1, 4])
+    def test_slicing_renames_no_end_disk_or_gradient(self, slices: int) -> None:
+        scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
+        scene.cylinder(
+            0, (0, 0, 0), (0, 0, 2), 0.5, fill="#888", highlight="#eee", slices=slices, id="core"
+        )
+        document = str(scene.render())
+        assert 'id="core-shade"' in document and 'id="core-end1"' in document
 
     def test_rejects_zero_slices(self) -> None:
         with pytest.raises(ValueError, match="slices"):

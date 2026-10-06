@@ -303,7 +303,7 @@ An `id` goes on the sphere or the group, and the parts are named from it:
 
 | Call | Parts |
 | --- | --- |
-| `cylinder`, `cone` | `{id}-body`, and the end disk `{id}-body-end0` at `p0` or `base`, or `{id}-body-end1` at `p1` |
+| `cylinder`, `cone` | `{id}-body`, and the end disk `{id}-end0` at `p0` or `base`, or `{id}-end1` at `p1` |
 | `arrow3d` | `{id}-shaft` and `{id}-head`, with their disks `{id}-shaft-end0` and `{id}-head-end0` |
 | `tube` | one group per piece: `{id}-0`, `{id}-1`, … |
 
@@ -323,9 +323,9 @@ is no light direction, material, or shading per face.
 Spheres of one colour pair share one gradient, `ball-{fill}-{highlight}`, so a
 lattice of a thousand atoms in two colours adds two definitions. Every other
 solid's gradient depends on its geometry, so it needs an `id` and is named after
-the part it shades: `{id}-body-shade` for a cylinder or cone, `{id}-shaft-shade`
-and `{id}-head-shade` for a solid arrow, and `{id}-shade` for a sliced cylinder,
-whose slices share one.
+the solid it shades: `{id}-shade` for a cylinder or cone, sliced or not — the
+slices share one — and `{id}-shaft-shade` and `{id}-head-shade` for a solid
+arrow's two parts.
 
 ### Long objects
 
@@ -342,8 +342,9 @@ only, so the result still looks like one solid — except with a translucent fil
 where the overlaps show.
 
 Sliced, the groups are `{id}-0`, `{id}-1`, …, each holding `{id}-{k}-body` and,
-when there is a stroke, the outline `{id}-{k}-edge`; the end disks are
-`{id}-end0` and `{id}-end1`.
+when there is a stroke, the outline `{id}-{k}-edge`; the end disks keep their
+unsliced names, `{id}-end0` and `{id}-end1`, so slicing renames nothing a
+consumer selects.
 
 ## Hidden lines
 

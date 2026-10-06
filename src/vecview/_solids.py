@@ -182,13 +182,16 @@ class _SolidCanvas(_Canvas):
         highlight: str | None,
         name: str | None,
         style: Mapping[str, Style],
+        parts: str | None = None,
     ) -> list[svg.Element]:
         """Body outline plus whichever end disks face the camera, as elements.
 
         ``ends`` says which of the two end disks may be drawn at all; each is
         then drawn only if it faces the camera, after the body, which is exact
-        for a convex solid.
+        for a convex solid.  The body is ``name``; the end disks and the
+        gradient are named from ``parts``, which defaults to ``name``.
         """
+        parts = name if parts is None else parts
         cam = _parallel(self.cam, "outline a solid of revolution")
         if r0 <= 0 or r1 < 0:
             raise ValueError(f"need r0 > 0 and r1 >= 0, got r0={r0}, r1={r1}")
@@ -204,10 +207,12 @@ class _SolidCanvas(_Canvas):
         body: dict[str, Style] = dict(style)
         if highlight is not None:
             fill = body.get("fill")
-            if not isinstance(fill, str) or name is None:
+            if not isinstance(fill, str) or parts is None:
                 raise ValueError("highlight needs a fill colour and an id to name the gradient")
-            body["fill"] = f"url(#{name}-shade)"
-            self.defs.append(self._shade_across(f"{name}-shade", c0, c1, axes, r0, fill, highlight))
+            body["fill"] = f"url(#{parts}-shade)"
+            self.defs.append(
+                self._shade_across(f"{parts}-shade", c0, c1, axes, r0, fill, highlight)
+            )
         label: dict[str, Style] = {} if name is None else {"id": name}
         elements: list[svg.Element] = [
             svg.Path(d=_frustum_outline(c0, c1, axes, r0, r1), **label, **body)
@@ -216,7 +221,7 @@ class _SolidCanvas(_Canvas):
         toward = float(np.dot(unit(axis), cam.view))
         for k, (c, r, faces) in enumerate(((c0, r0, toward < 0), (c1, r1, toward > 0))):
             if ends[k] and faces and r > 0:
-                end: dict[str, Style] = {} if name is None else {"id": f"{name}-end{k}"}
+                end: dict[str, Style] = {} if parts is None else {"id": f"{parts}-end{k}"}
                 elements.append(_ellipse_element(c, r * axes, **end, **disk))
         return elements
 
@@ -369,6 +374,7 @@ class _SolidCanvas(_Canvas):
             highlight=highlight,
             name=None if base is None else f"{base}-body",
             style=style,
+            parts=base,
         )
         group = svg.G(elements=elements, **({} if base is None else {"id": base}))
         self._emit(layer, group, self._depth([p0, p1]))

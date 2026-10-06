@@ -31,6 +31,10 @@ All notable changes to this project are documented here, following
 
 ### Changed
 
+- An unsliced cylinder or cone names its end disks `{id}-end0` and `{id}-end1`
+  and its highlight gradient `{id}-shade`, as a sliced one already did, instead
+  of `{id}-body-end0` and `{id}-body-shade`.  Slicing no longer renames what a
+  consumer selects.
 - Rendering raises `ValueError` when two elements share an id, naming every
   id used more than once.  Duplicate ids are invalid SVG, and a consumer
   selecting by id -- or a `url(#...)` fill -- would silently reach the wrong
