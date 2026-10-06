@@ -111,6 +111,26 @@ Do not add these without the user changing the design first:
 - Keep output deterministic: layer ties resolve by insertion order, coordinates
   are rounded on emission. Byte-identical output is what keeps a figure diffable.
 
+## Examples
+
+The examples -- `examples/*.py`, `examples/gallery/`, and `docs/readme_figure.py`
+-- are the showcase. People read them to learn the library, so they must read as
+the obvious way to draw the figure, not as a record of how it was first got to
+work.
+
+- After adding a public function or parameter, go through every example and use
+  it wherever it makes the code shorter or clearer, in the same piece of work.
+  A helper an example wrote for itself that the library now provides is
+  deleted, not kept beside the new call.
+- Prefer the library's vocabulary to hand-rolled geometry: `extrude` over axis
+  permutations, `place` over copy-pasted blocks, `cull=True` over
+  `cam.visible`, `class_` for kinds of objects.
+- Name things for what they are in the figure (`gate`, `contact`, `beam`), keep
+  each function to one part of the picture, and comment the physics or the
+  design decision, not the Python.
+- A simplification must not change the picture: check the rendered PNGs, and
+  say so if an id or a pixel changed on purpose.
+
 ## Testing
 
 - Test geometry as numbers, not as rendered strings: winding against declared
