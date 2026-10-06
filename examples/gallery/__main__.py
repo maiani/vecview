@@ -26,6 +26,7 @@ FIGURES = [
     "dirac_cone",
     "skyrmion",
     "solenoid",
+    "kitaev_chain",
     "mirror_planes",  # needs the occlusion extra
 ]
 

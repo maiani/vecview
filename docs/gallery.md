@@ -98,6 +98,25 @@ core and comes round in front of it again.
 
 `examples/gallery/solenoid.py`
 
+## Nanowire device
+
+![A minimal Kitaev chain in a nanowire](gallery/kitaev_chain.svg)
+
+A minimal Kitaev chain, after Dvir et al., Nature 614, 445 (2023): an InSb
+nanowire on seven bottom finger gates, two quantum dots coupled through a
+grounded Al shell, Cr/Au contacts draped across the wire, and a pair of
+Majorana modes, one on each dot. The wire and every film are cross-sections
+[extruded](shapes.md#extrusions) along `x`: the Al is a shell on the three facets that face its evaporation
+source plus a slab on the dielectric, and each contact a shell over the wire
+plus a pad on either side. They share a
+[depth-sorted layer](scenes.md#sorting-by-depth) as convex pieces, the wire cut
+wherever a film begins or ends, since which contact hides which part of the
+wire depends on the side the camera is on. Every kind of
+object carries a [class](scenes.md#classes) — `.gate`, `.plunger`,
+`.superconductor`, `.lead` — so all the gates select together in an editor.
+
+`examples/gallery/kitaev_chain.py`
+
 ## Mirror planes
 
 ![The three mirror planes of a cubic cell](gallery/mirror_planes.svg)
