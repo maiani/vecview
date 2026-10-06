@@ -585,6 +585,101 @@ def trim_corners(faces: Iterable[Face], radius: float, n: int = 8) -> list[Face]
     return trimmed
 
 
+def cut(faces: Iterable[Face], origin: Point3, normal: Point3) -> list[Face]:
+    """A closed solid cut open by a plane: the part behind it, with the cut capped.
+
+    The plane passes through ``origin``, and everything on the side ``normal``
+    points to is cut away -- the cutaway that shows a wire's core inside its
+    shell, or a layer stack from within.  Every face is clipped to the half
+    that stays and keeps its name, so ids stay stable; faces wholly cut away
+    are dropped.  The cut itself is capped by new faces lying in the plane and
+    facing along ``normal``, named ``"cut"`` -- or ``"cut-0"``, ``"cut-1"``, ...
+    when the plane meets the solid in several places -- so a cap can be drawn
+    in a style of its own.
+
+    The faces must close a solid, each wound counter-clockwise about its
+    outward normal, as every function here returns them; non-convex solids
+    are fine.  A plane that misses the solid returns it unchanged, or nothing.
+
+    Raises:
+        ValueError: If the cut would leave a cap with a hole in it -- a plane
+            across a hollow tube -- which a face cannot hold, or if the faces do
+            not close up along the cut.
+    """
+    given = list(faces)
+    n, o = unit(normal), np.asarray(origin, dtype=np.float64)
+    if not n.any():
+        raise ValueError("a cut needs a non-zero plane normal")
+    everything = np.vstack([face.points for face in given])
+    eps = 1e-9 * max(float(np.ptp(everything, axis=0).max()), 1.0)
+    kept: list[Face] = []
+    rims: list[tuple[Array, Array]] = []
+    for face in given:
+        pts = np.asarray(face.points, dtype=np.float64)
+        d = (pts - o) @ n
+        d[np.abs(d) <= eps] = 0.0
+        if np.all(d > 0):
+            continue
+        if np.all(d == 0):
+            kept.append(face)  # lying in the plane: the solid already ends there
+            continue
+        out: list[Array] = []
+        for i in range(len(pts)):
+            j = (i + 1) % len(pts)
+            if d[i] <= 0:
+                out.append(pts[i])
+            if d[i] * d[j] < 0:
+                out.append(pts[i] + (pts[j] - pts[i]) * (d[i] / (d[i] - d[j])))
+        clipped = np.array([p for k, p in enumerate(out) if np.any(np.abs(p - out[k - 1]) > eps)])
+        if (
+            len(clipped) < 3
+            or np.linalg.norm(np.cross(clipped - clipped[0], clipped[1] - clipped[0])) <= eps * eps
+        ):
+            continue
+        kept.append(face._replace(points=clipped))
+        # An edge of the clipped face lying in the plane bounds the cap, which
+        # runs along it the other way, as neighbouring faces of a closed solid do.
+        on = np.abs((clipped - o) @ n) <= eps
+        for i in range(len(clipped)):
+            j = (i + 1) % len(clipped)
+            if on[i] and on[j]:
+                rims.append((clipped[j], clipped[i]))
+    return kept + _caps(rims, n, eps)
+
+
+def _caps(rims: list[tuple[Array, Array]], normal: Array, eps: float) -> list[Face]:
+    """Chain the directed edges a cut leaves in its plane into cap faces."""
+
+    def key(p: Array) -> tuple[float, ...]:
+        return tuple(np.round(p / (100 * eps)).astype(int).tolist())
+
+    # Two faces running along the same stretch of the plane both ways cancel.
+    edges = {(key(a), key(b)): (a, b) for a, b in rims}
+    edges = {k: e for k, e in edges.items() if (k[1], k[0]) not in edges}
+    following = {k[0]: k for k in edges}
+    if len(following) != len(edges):
+        raise ValueError("the faces do not close up along the cut")
+    loops: list[Array] = []
+    while following:
+        start = next(iter(following))
+        loop, at = [], start
+        while at in following:
+            edge = following.pop(at)
+            loop.append(edges[edge][0])
+            at = edge[1]
+        if at != start:
+            raise ValueError("the faces do not close up along the cut")
+        loops.append(np.array(loop))
+    caps: list[Face] = []
+    for k, loop in enumerate(loops):
+        winding = np.cross(loop, np.roll(loop, -1, axis=0)).sum(axis=0) @ normal
+        if winding < 0:
+            raise ValueError("the cut leaves a cap with a hole in it, which a face cannot hold")
+        name = "cut" if len(loops) == 1 else f"cut-{k}"
+        caps.append(Face(name, loop, normal.copy()))
+    return caps
+
+
 def sine_ribbon(
     start: Point3,
     axis: Point3,
@@ -616,6 +711,7 @@ __all__ = [
     "box_faces",
     "circle_shape",
     "convex_polyhedron",
+    "cut",
     "double_arrow_shape",
     "ellipse_shape",
     "helix",

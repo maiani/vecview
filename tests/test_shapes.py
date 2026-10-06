@@ -563,3 +563,74 @@ class TestTrimCorners:
     def test_rejects_cuts_that_would_overlap(self) -> None:
         with pytest.raises(ValueError, match="half the shortest edge"):
             vecview.trim_corners(vecview.box_faces((0, 0, 0), (1, 1, 1)), 0.5)
+
+
+class TestCut:
+    BOX = vecview.box_faces((0, 0, 0), (2, 2, 2))
+    L_PRISM = vecview.prism_faces([(0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3)], 0.0, 1.0)
+
+    @staticmethod
+    def newell(points: np.ndarray) -> np.ndarray:
+        return np.cross(points, np.roll(points, -1, axis=0)).sum(axis=0)
+
+    @staticmethod
+    def volume(faces: list[Face]) -> float:
+        """Divergence theorem: a closed, outward-wound surface encloses this volume."""
+        return sum(float(np.dot(f.points[0], TestCut.newell(f.points))) for f in faces) / 6.0
+
+    @pytest.mark.parametrize(
+        ("solid", "origin", "normal"),
+        [
+            ("BOX", (0.3, 0, 0), (1, 0, 0)),
+            ("BOX", (0, 0, 0), (1, 1, 1)),
+            ("L_PRISM", (0, 0, 0.5), (0, 0, 1)),
+            ("L_PRISM", (2, 0, 0), (1, 0.2, 0.3)),
+        ],
+        ids=["box-axis", "box-diagonal", "L-flat", "L-oblique"],
+    )
+    def test_the_result_is_closed_and_wound_outward(self, solid: str, origin, normal) -> None:  # type: ignore[no-untyped-def]
+        faces = vecview.cut(getattr(self, solid), origin, normal)
+        for face in faces:
+            assert np.dot(self.newell(face.points), face.normal) > 0, face.name
+            assert_in_plane(face.points, face.normal)
+        # Closed: every edge is run once each way.
+        edges = [
+            (tuple(np.round(a, 9)), tuple(np.round(b, 9)))
+            for f in faces
+            for a, b in zip(f.points, np.roll(f.points, -1, axis=0), strict=True)
+        ]
+        assert sorted(edges) == sorted((b, a) for a, b in edges)
+
+    def test_keeps_the_volume_behind_the_plane(self) -> None:
+        assert self.volume(vecview.cut(self.BOX, (0.5, 0, 0), (1, 0, 0))) == pytest.approx(6.0)
+        assert self.volume(vecview.cut(self.L_PRISM, (0, 0, 0.25), (0, 0, -1))) == pytest.approx(
+            3.75
+        )
+
+    def test_the_cap_lies_in_the_plane_facing_along_the_normal(self) -> None:
+        *_, cap = vecview.cut(self.BOX, (0.3, 0, 0), (1, 0, 0))
+        assert cap.name == "cut" and np.allclose(cap.normal, (1, 0, 0))
+        assert np.allclose(cap.points[:, 0], 0.3)
+        assert np.linalg.norm(self.newell(cap.points)) / 2 == pytest.approx(4.0)
+
+    def test_faces_keep_their_names_and_the_cut_side_goes(self) -> None:
+        names = [f.name for f in vecview.cut(self.BOX, (0.3, 0, 0), (1, 0, 0))]
+        assert names == ["-x", "+y", "-y", "+z", "-z", "cut"]
+
+    def test_a_plane_through_two_solids_caps_each(self) -> None:
+        two = vecview.box_faces((0, 0, 0), (1, 1, 1)) + vecview.box_faces((3, 0, 0), (1, 1, 1))
+        caps = [f.name for f in vecview.cut(two, (0, 0, 0), (0, 0, 1)) if f.name.startswith("cut")]
+        assert caps == ["cut-0", "cut-1"]
+
+    def test_a_plane_that_misses_keeps_all_or_nothing(self) -> None:
+        assert len(vecview.cut(self.BOX, (5, 0, 0), (1, 0, 0))) == 6
+        assert vecview.cut(self.BOX, (-5, 0, 0), (1, 0, 0)) == []
+
+    def test_a_cap_with_a_hole_is_refused(self) -> None:
+        outer = vecview.box_faces((0, 0, 0), (4, 4, 2))
+        cavity = [
+            f._replace(points=f.points[::-1].copy(), normal=-f.normal)
+            for f in vecview.box_faces((0, 0, 0), (2, 2, 1))
+        ]
+        with pytest.raises(ValueError, match="hole"):
+            vecview.cut(outer + cavity, (0, 0, 0), (0, 0, 1))

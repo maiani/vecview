@@ -34,6 +34,10 @@ All notable changes to this project are documented here, following
   `intersection`, and `to_plane` to lift an outline into 3D.  Results are
   counter-clockwise and ordered deterministically; a result with a hole
   raises `ValueError` rather than dropping it.
+- `cut(faces, origin, normal)` -- a closed solid cut open by a plane, for a
+  cutaway: faces are clipped and keep their names, and the cut is capped by
+  faces named `"cut"` (or `"cut-0"`, ...) lying in the plane, so a section can
+  be styled apart.  Non-convex solids work; a cap with a hole raises.
 
 ### Changed
 

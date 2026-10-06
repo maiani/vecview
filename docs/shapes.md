@@ -269,6 +269,35 @@ scene.faces(10, vecview.trim_corners(octahedron, r_o), fill="#6f9fd8", fill_opac
 scene.edges(10, octahedron, separate=True, trim=r_o, stroke="#2d5c94")
 ```
 
+## Cutaways
+
+```python
+vecview.cut(faces, origin, normal)  ->  list[Face]
+```
+
+A closed solid cut open by a plane, to show what is inside: a nanowire's
+hexagonal core within its shell, a heterostructure's layers from within. The
+plane passes through `origin`, and everything on the side `normal` points to is
+cut away. Each remaining face is clipped and keeps its name, so ids stay stable;
+the cut is capped by faces lying in the plane and facing along `normal`, named
+`"cut"` — or `"cut-0"`, `"cut-1"`, … where the plane crosses the solid in
+several places — so a cap can take a style of its own:
+
+```python
+wire = vecview.extrude(vecview.circle_shape((-2, 0, 0.4), 0.4, (1, 0, 0), n=6), (4, 0, 0))
+opened = vecview.cut(wire, origin=(1, 0, 0), normal=(1, 0, -0.3))
+body = [f for f in opened if not f.name.startswith("cut")]
+section = [f for f in opened if f.name.startswith("cut")]
+scene.faces(10, body, cull=True, fill="#7fae8c", id="wire")
+scene.faces(10, section, cull=True, fill="#cfe6d5", id="wire-section")
+```
+
+The faces must close a solid, each wound counter-clockwise about its outward
+normal — as `box_faces`, `prism_faces`, `extrude`, and `convex_polyhedron` return
+them — and the solid may be non-convex. Curved solids drawn by the scene (spheres,
+cylinders) are not faces and cannot be cut. A cut whose cap would have a hole in
+it, such as a plane across a hollow tube, raises `ValueError`.
+
 ## Waves
 
 ```python

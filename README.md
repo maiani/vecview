@@ -161,6 +161,7 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | `surface_faces(x, y, z)` | the quads of a sampled surface, such as a band structure |
 | `convex_polyhedron(vertices)` | a Brillouin zone or coordination polyhedron from its corners |
 | `trim_corners(faces, r)` | faces cut back from atoms sitting on their corners |
+| `cut(faces, origin, normal)` | a solid cut open by a plane, the cut capped: a cutaway |
 | `in_plane_dir(angle_deg, u, v)` | a unit direction at an angle within a plane |
 
 Cross-sections and footprints are built in 2D by `vecview.outlines`: `regular`
