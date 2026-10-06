@@ -238,7 +238,8 @@ class Scene(_Drawing):
         ``exact=True`` lifts that limit by deciding visibility point by point
         instead.  Each surface keeps its native element, clipped to the part of
         it that no opaque surface hides -- found exactly between two planar
-        surfaces, and to a quarter of a screen unit elsewhere -- so a bond can
+        surfaces, and elsewhere traced on a grid of half a screen unit, at
+        most 160 steps across an overlap -- so a bond can
         run into an atom's centre, two planes can cross, and a coil can wrap an
         unsliced core.  Each line is cut where an opaque surface hides it; the
         hidden part is dropped, or drawn in the ``back`` style of

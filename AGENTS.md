@@ -149,9 +149,9 @@ and must not be committed, until the documentation agrees with it.
 
 ## Naming and packaging
 
-- **`vecview` is the intended distribution and import name.** Confirm PyPI
-  availability immediately before a first publication. See `docs/development.md`
-  for the rename procedure.
+- **`vecview` is the distribution and import name**, published on PyPI since
+  0.2.0. See `docs/development.md` for the rename procedure, should it ever be
+  needed.
 - `pyproject.toml` is canonical for Python metadata.
 - Do not commit, tag, upload, or publish unless the user explicitly asks.
 - Before 1.0, make API changes directly: update consumers, tests, and docs in the

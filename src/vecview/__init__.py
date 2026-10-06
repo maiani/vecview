@@ -16,7 +16,7 @@ cavalier and cabinet ones::
     scene = vecview.Scene(cam, pad=28, background="#ffffff")
 
     slab = vecview.box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
-    scene.faces(10, cam.visible(slab), fill="#cfd6e0", stroke="#8b96a6")
+    scene.faces(10, slab, cull=True, fill="#cfd6e0", stroke="#8b96a6")
     scene.save("slab.svg")
 
 The rendered document is also available as a string from

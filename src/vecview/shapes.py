@@ -64,11 +64,11 @@ def rect_shape(center: Point3, u: Point3, v: Point3, du: float, dv: float) -> Ar
 def box_faces(center: Point3, size: Point3) -> list[Face]:
     """The six faces of an axis-aligned box, each wound CCW about its outward normal.
 
-    Pair with :meth:`~vecview.camera.Camera.visible` to draw only the walls a
-    given camera can see::
+    Draw it with ``cull=True`` to show only the walls the rendering camera
+    can see::
 
         slab = box_faces(center=(0, 0, -0.45), size=(11, 9, 0.9))
-        scene.faces(10, camera.visible(slab), fill="#cfd6e0")
+        scene.faces(10, slab, cull=True, fill="#cfd6e0")
 
     Args:
         center: Centre of the box.
