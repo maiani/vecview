@@ -309,6 +309,14 @@ def _named(base: str | None, suffix: str) -> dict[str, Style]:
     return {} if base is None else {"id": f"{base}-{suffix}"}
 
 
+def _class_names(value: object) -> tuple[str, ...]:
+    """The distinct names in a ``class_`` argument, in the order given; ``None`` gives none."""
+    parts = [value] if isinstance(value, str) else () if value is None else value
+    if not isinstance(parts, Iterable) or not all(isinstance(p, str) for p in parts):
+        raise TypeError(f"class_ must be a string or a sequence of strings, got {value!r}")
+    return tuple(dict.fromkeys(name for part in parts for name in part.split()))
+
+
 def _slug(color: str) -> str:
     """A colour reduced to characters that are safe in an XML id."""
     return re.sub(r"[^0-9A-Za-z]+", "", color).lower() or "c"
@@ -358,6 +366,8 @@ class _Canvas:
         self._opaque: set[int] = set()
         self._rank: dict[int, int] = {}
         self._shared: set[str] = set()
+        # The classes of the call being replayed, which every element it emits carries.
+        self.classes: tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -401,6 +411,8 @@ class _Canvas:
         """
         if depth is not None:
             self._depths[self._seq] = _num(depth, 6)
+        if self.classes:
+            element.class_ = list(self.classes)  # ty: ignore[unresolved-attribute]
         self.items.append((int(layer), self._seq, element))
         self._seq += 1
 
@@ -597,6 +609,8 @@ class _Canvas:
                     items.append((layer, seq, element))
             elif seen.hidden:
                 rebuilt = shape.rebuild(seen.visible, seen.hidden)
+                for part in rebuilt:
+                    part.class_ = getattr(element, "class_", None)  # ty: ignore[unresolved-attribute]
                 items += [(layer, seq, part) for part in rebuilt]
             else:
                 items.append((layer, seq, element))
@@ -1533,6 +1547,16 @@ class Scene:
     practical answer.  :meth:`Camera.visible` handles the one case where the
     answer is unambiguous -- the back faces of a convex solid.
 
+    Every drawing call that takes style keywords also takes ``class_``: one
+    string, space-separated as in SVG, or a sequence of names.  An ``id`` names
+    one object; a class names a kind of object -- ``class_="gate"`` on all four
+    gates -- so a stylesheet, a selector, or Inkscape can reach them together.
+    Each top-level element a call emits carries the classes: every face of
+    :meth:`faces`, both strokes of :meth:`edges`, every piece of a sliced or
+    chunked solid, and both parts of a line an exact layer splits.  The
+    elements inside a solid's ``<g>`` do not repeat them, so a selector
+    matches each object once.
+
     Args:
         camera: The active camera, or the name of one in ``cameras``, or ``None``
             to choose one later.
@@ -1554,7 +1578,7 @@ class Scene:
         self.camera = camera
         self.pad = float(pad)
         self.background = background
-        self._log: list[tuple[str, tuple[object, ...], dict[str, Style]]] = []
+        self._log: list[tuple[str, tuple[object, ...], dict[str, Style], tuple[str, ...]]] = []
 
     def __repr__(self) -> str:
         names = ", ".join(self.cameras)
@@ -1562,7 +1586,8 @@ class Scene:
 
     def _add(self, method: str, *args: object, **kwargs: Style) -> None:
         """Record one drawing call, to be replayed against a camera when rendering."""
-        self._log.append((method, args, kwargs))
+        classes = _class_names(kwargs.pop("class_", ()))
+        self._log.append((method, args, kwargs, classes))
 
     # --- cameras ----------------------------------------------------------
     @property
@@ -1595,14 +1620,15 @@ class Scene:
     def _project(self, camera: CameraRef | None) -> _Canvas:
         """Replay every recorded call against a camera, on a fresh canvas."""
         canvas = _Canvas(self._view(camera))
-        for method, args, kwargs in self._log:
+        for method, args, kwargs, classes in self._log:
+            canvas.classes = classes
             getattr(canvas, method)(*args, **kwargs)
         return canvas
 
     @property
     def is_empty(self) -> bool:
         """Whether nothing has been drawn yet: settings and definitions do not count."""
-        return all(method in ("sort_by_depth", "add_def") for method, _, _ in self._log)
+        return all(method in ("sort_by_depth", "add_def") for method, *_ in self._log)
 
     def bbox(self, camera: CameraRef | None = None) -> tuple[Array, Array]:
         """Screen-space bounds of the content under ``camera`` (default: the active one).

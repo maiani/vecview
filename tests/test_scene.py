@@ -243,6 +243,64 @@ class TestDocumentProtocol:
         assert repr(scene) == f"Scene({scene.camera!r}, cameras=[], 2 calls)"
 
 
+class TestClasses:
+    """``class_`` names a kind of object, on each top-level element it emits."""
+
+    @staticmethod
+    def classes(scene: Scene) -> list[list[str] | None]:
+        return [getattr(el, "class_", None) for el in drawn(scene)]
+
+    def test_a_string_or_a_sequence(self, scene: Scene) -> None:
+        scene.polygon(0, SQUARE, class_="gate  metal")
+        scene.polygon(0, SQUARE, class_=["gate", "metal gate"])
+        assert self.classes(scene) == [["gate", "metal"], ["gate", "metal"]]
+
+    def test_rendered_as_one_attribute(self, scene: Scene) -> None:
+        scene.sphere(0, (0, 0, 0), 1.0, fill="#c33", class_=["atom", "oxygen"])
+        assert 'class="atom oxygen"' in scene.to_svg_document()
+
+    def test_without_classes_nothing_is_added(self, scene: Scene) -> None:
+        scene.polygon(0, SQUARE)
+        scene.polygon(0, SQUARE, class_=None)
+        scene.add(0, svg.Rect(width=1, height=1, class_=["own"]))
+        assert self.classes(scene) == [None, None, ["own"]]
+
+    def test_every_face_carries_them(self, scene: Scene) -> None:
+        scene.faces(0, vecview.box_faces((0, 0, 0), (1, 1, 1)), class_="cell")
+        assert self.classes(scene) == [["cell"]] * 6
+
+    def test_a_solid_carries_them_once(self, scene: Scene) -> None:
+        scene.cylinder(0, (0, 0, 0), (0, 0, 2), 0.3, fill="#888", class_="post", id="p")
+        (group,) = drawn(scene)
+        assert isinstance(group, svg.G) and group.class_ == ["post"]
+        assert all(child.class_ is None for child in group.elements or [])
+
+    def test_every_piece_of_a_sliced_solid(self, scene: Scene) -> None:
+        scene.cylinder(0, (0, 0, 0), (0, 0, 2), 0.3, fill="#888", slices=3, class_="post")
+        assert self.classes(scene) == [["post"]] * 3
+
+    def test_front_and_back_edges(self, scene: Scene) -> None:
+        cell = vecview.box_faces((0, 0, 0), (1, 1, 1))
+        scene.edges(0, cell, back={"stroke_dasharray": "2"}, class_="cell-edge", id="e")
+        assert self.classes(scene) == [["cell-edge"]] * 2
+
+    def test_reach_text_and_reserved_groups(self, scene: Scene) -> None:
+        scene.text(0, (0, 0, 0), "x", class_="label")
+        scene.slot(0, (0, 0, 0), 10, 10, id="s", class_="label")
+        scene.plane(0, (0, 0, 0), (1, 0, 0), (0, 1, 0), id="p", class_="plot")
+        assert self.classes(scene) == [["label"], ["label"], ["plot"]]
+
+    def test_survive_reprojection(self, scene: Scene) -> None:
+        scene.sphere(0, (0, 0, 0), 1.0, class_="atom")
+        other = scene.with_camera(vecview.ObliqueCamera.cabinet(10.0))
+        assert self.classes(other) == [["atom"]]
+
+    @pytest.mark.parametrize("bad", [3, ["gate", 3], [None]])
+    def test_anything_else_is_refused_at_the_call(self, bad: object) -> None:
+        with pytest.raises(TypeError, match="class_"):
+            Scene().polygon(0, SQUARE, class_=bad)
+
+
 class TestFaceIds:
     def test_ids_are_suffixed_per_face_not_repeated(self, scene: Scene, cam: Camera) -> None:
         """Duplicate ids are invalid SVG and break selection downstream."""
@@ -295,11 +353,15 @@ class TestReprojection:
         scene.sphere(40, (1, 1, 1), 0.5, fill="#c33", highlight="#fcc")
         scene.cylinder(40, (0, 0, 0), (1, 1, 1), 0.1, fill="#888", highlight="#eee", id="bond")
         scene.cone(40, (2, 0, 0), (2, 0, 1), 0.3, fill="#a5c")
-        scene.cylinder(40, (-2, 0, 0), (-2, 3, 0), 0.4, slices=5, stroke="#000", id="core")
+        scene.cylinder(
+            40, (-2, 0, 0), (-2, 3, 0), 0.4, slices=5, stroke="#000", id="core", class_="solid"
+        )
         scene.arrow3d(40, (-1, 0, 0), (1, -1, 2), 1.2, shaft_r=0.05, head_r=0.15, head_len=0.3)
         scene.tube(40, vecview.helix((3, 0, 0), (0, 0, 1), 0.5, 0.4, 2), 0.05, stroke="#000")
         cell = vecview.box_faces((0, 0, 3), (1, 1, 1))
-        scene.edges(41, cell, back={"stroke_dasharray": "3 2"}, back_layer=39, stroke="#000")
+        scene.edges(
+            41, cell, back={"stroke_dasharray": "3 2"}, back_layer=39, stroke="#000", class_="cell"
+        )
         ring = vecview.circle_shape((1, 1, 1), 0.5, (0, 0, 1))
         scene.sphere_curve(42, (1, 1, 1), ring, closed=True, back={}, stroke="#000")
         return scene

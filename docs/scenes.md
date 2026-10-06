@@ -316,6 +316,42 @@ curve is cut where that changes sign.
 
 Both re-split for [each camera](#rendering-one-scene-several-ways).
 
+## Classes
+
+An `id` names one object. A class names a *kind* of object, so a stylesheet, a
+selector in the tool that composes the page, or Inkscape's *Select Same* can
+reach all of them at once:
+
+```python
+for k, x in enumerate((-3, -1, 1, 3)):
+    gate = vecview.box_faces((x, 0, 0), (1.2, 4, 0.2))
+    scene.faces(10, gate, cull=True, fill="#9aa3ad", id=f"gate-{k}", class_="gate")
+scene.sphere(20, (0, 0, 0.6), 0.3, fill="#c33", class_=["atom", "oxygen"])
+```
+
+Every drawing call that takes style keywords also takes `class_`: one string,
+space-separated as in SVG (`"atom oxygen"`), or a sequence of names. `None` means
+none. Repeated names are dropped, and anything other than strings raises
+`TypeError` at the call, not at render.
+
+The rule for where the classes land is the same for every call: **each
+top-level element the call emits carries them, and nothing inside it does.**
+
+| Call | Elements that carry the classes |
+| --- | --- |
+| `polygon`, `polyline`, `arrow`, `gaussian`, `sphere`, `silhouette`, `prism_walls`, `text`, `text2d`, `rect2d` | the one element |
+| `faces` | every face polygon |
+| `edges`, `sphere_curve` | the front path and the back path |
+| `cylinder`, `cone`, `arrow3d` | the solid's `<g>`, not the body and end disks inside it |
+| `cylinder(slices=n)`, `tube` | every slice or chunk `<g>` |
+| `plane`, `slot` | the reserved group, around whatever a consumer fills it with |
+| a line split by an [exact layer](#exact-visibility) | both the visible and the hidden part |
+
+So `.gate` selects four gates' faces, and `.atom` selects each sphere once,
+however many parts a solid is drawn with. Elements handed to `add` keep whatever
+classes you built them with, and classes survive
+[rendering under another camera](#rendering-one-scene-several-ways).
+
 ## Screen-space calls
 
 ```python

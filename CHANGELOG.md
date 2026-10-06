@@ -5,6 +5,17 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- `class_=` on every drawing call that takes style keywords: one string,
+  space-separated, or a sequence of names.  An id names one object, a class a
+  kind of object -- every gate, every oxygen -- for a stylesheet, a selector in
+  the composing tool, or Inkscape to reach together.  Each top-level element a
+  call emits carries the classes (every face, both strokes of an edge set, every
+  slice of a sliced solid, both parts of a line an exact layer splits) and the
+  elements inside a solid's group do not, so a selector matches each object
+  once.  Names that are not strings raise `TypeError` at the call.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

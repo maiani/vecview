@@ -137,7 +137,8 @@ Labels can be `svg.TSpan` runs, for subscripts.
 
 Screen-space `rect2d` and `text2d`, `add_def` for `<defs>`, and `add` for raw
 `svg.py` elements complete the set. Style keywords pass straight to `svg.py`
-(`stroke_width` becomes `stroke-width`).
+(`stroke_width` becomes `stroke-width`), and `class_="gate"` tags every element
+an object is drawn with, so all the gates can be selected or restyled together.
 
 Geometry functions return plain world-space arrays and know nothing about
 cameras, styles, or SVG, which keeps them testable as numbers:

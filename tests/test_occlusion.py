@@ -141,6 +141,16 @@ class TestLines:
         centre = np.array(CAM.at((0, 0, 0)))
         assert np.allclose(np.linalg.norm(ends - centre, axis=1), CAM.scale, atol=0.05)
 
+    def test_both_parts_of_a_split_line_keep_its_classes(self) -> None:
+        s = scene()
+        s.sphere(0, (0, 0, 0), 1.0, fill="#c33", id="ball")
+        behind = -2.0 * CAM.view
+        right, _ = CAM.screen_basis(CAM.view)
+        ray = [behind - 3 * right, behind + 3 * right]
+        s.polyline(0, ray, back={"stroke_dasharray": "3 2"}, stroke="#000", id="ray", class_="ray")
+        elements = by_id(s.render())
+        assert elements["ray"].class_ == elements["ray-hidden"].class_ == ["ray"]
+
     def test_hidden_parts_are_dropped_without_a_back_style(self) -> None:
         s = scene()
         s.sphere(0, (0, 0, 0), 1.0, fill="#c33", id="ball")
