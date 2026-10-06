@@ -49,6 +49,10 @@ on its own side.
   replays the record onto a fresh canvas. Camera-dependent work and errors
   belong in `_Canvas`, and a canvas never records, so its methods may call each
   other freely.
+- The world-space drawing calls live on the private `_Drawing` base. `Scene`
+  adds what only makes sense for a whole document: cameras, rendering,
+  `sort_by_depth` (a property of the layer stack), `<defs>`, raw elements, and
+  screen-space calls. Keep a call off `_Drawing` unless it has a world position.
 
 ## Deliberate non-features
 

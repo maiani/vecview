@@ -1536,250 +1536,22 @@ type CameraRef = Camera | str
 """A camera, or the name of one in :attr:`Scene.cameras`."""
 
 
-class Scene:
-    """A 3D scene: objects in world space, and the cameras that view them.
+class _Drawing:
+    """The world-space drawing calls, recorded for a camera to replay.
 
-    Drawing calls record objects and nothing more; nothing is projected until
-    the scene is rendered.  As in a 3D application, a scene can hold any number
-    of named cameras, one of them active, and a render uses the active camera
-    unless told which other to use::
-
-        scene = Scene(pad=28, background="#ffffff")
-        scene.sphere(10, (0, 0, 0), 1.0, fill="#c33")
-        scene.cameras["main"] = OrthographicCamera(35, 24, 62)
-        scene.cameras["cabinet"] = ObliqueCamera.cabinet(62)
-        scene.camera = "main"  # the active camera
-        scene.save("main.svg")
-        scene.save("cabinet.svg", "cabinet")
-        scene.render(OrthographicCamera.isometric(62))  # any camera, named or not
-
-    :attr:`camera` is the active camera, which :meth:`render`, :meth:`save`,
-    and :meth:`bbox` use unless given another, and which
-    :meth:`to_svg_document` -- the zero-argument embedding contract -- always
-    uses.  Set it to the name of a camera in :attr:`cameras`, which keeps
-    following that entry if it is replaced, or to a camera directly.  It may be
-    ``None`` while the scene is built.
-
-    Draw order is an explicit integer ``layer`` per call, resolved stably by
-    insertion order within a layer.  There is no z-buffer, and no layer is
-    depth-sorted unless it asks to be with :meth:`sort_by_depth`: for a schematic
-    with a beam passing through a translucent slab, deciding what occludes what
-    by hand is worth more than getting it automatically and almost right, while
-    for a lattice of hundreds of atoms the painter's algorithm is the only
-    practical answer.  :meth:`Camera.visible` handles the one case where the
-    answer is unambiguous -- the back faces of a convex solid.
-
-    Every drawing call that takes style keywords also takes ``class_``: one
-    string, space-separated as in SVG, or a sequence of names.  An ``id`` names
-    one object; a class names a kind of object -- ``class_="gate"`` on all four
-    gates -- so a stylesheet, a selector, or Inkscape can reach them together.
-    Each top-level element a call emits carries the classes: every face of
-    :meth:`faces`, both strokes of :meth:`edges`, every piece of a sliced or
-    chunked solid, and both parts of a line an exact layer splits.  The
-    elements inside a solid's ``<g>`` do not repeat them, so a selector
-    matches each object once.
-
-    Args:
-        camera: The active camera, or the name of one in ``cameras``, or ``None``
-            to choose one later.
-        cameras: Named cameras the scene holds.
-        pad: Default margin added around the fitted content.
-        background: Default background fill, or ``None`` for a transparent document.
+    Shared by :class:`Scene` and nothing else yet.  Calls that only make sense
+    for a whole document -- screen-space shapes, raw elements, ``<defs>``, and
+    depth sorting, which is a property of the layer stack -- live on
+    :class:`Scene` itself.
     """
 
-    def __init__(
-        self,
-        camera: CameraRef | None = None,
-        *,
-        cameras: Mapping[str, Camera] | None = None,
-        pad: float = 26.0,
-        background: str | None = None,
-    ) -> None:
-        self.cameras: dict[str, Camera] = dict(cameras or {})
-        self._active: CameraRef | None = None
-        self.camera = camera
-        self.pad = float(pad)
-        self.background = background
+    def __init__(self) -> None:
         self._log: list[tuple[str, tuple[object, ...], dict[str, Style], tuple[str, ...]]] = []
-
-    def __repr__(self) -> str:
-        names = ", ".join(self.cameras)
-        return f"Scene({self._active!r}, cameras=[{names}], {len(self._log)} calls)"
 
     def _add(self, method: str, *args: object, **kwargs: Style) -> None:
         """Record one drawing call, to be replayed against a camera when rendering."""
         classes = _class_names(kwargs.pop("class_", ()))
         self._log.append((method, args, kwargs, classes))
-
-    # --- cameras ----------------------------------------------------------
-    @property
-    def camera(self) -> Camera | None:
-        """The active camera, looked up by name if it was set by name."""
-        return None if self._active is None else self._lookup(self._active)
-
-    @camera.setter
-    def camera(self, value: CameraRef | None) -> None:
-        if isinstance(value, str):
-            self._lookup(value)
-        self._active = value
-
-    def _lookup(self, ref: CameraRef) -> Camera:
-        if not isinstance(ref, str):
-            return ref
-        if ref not in self.cameras:
-            raise KeyError(f"no camera named {ref!r}; the scene has {sorted(self.cameras)}")
-        return self.cameras[ref]
-
-    def _view(self, camera: CameraRef | None) -> Camera:
-        if camera is not None:
-            return self._lookup(camera)
-        active = self.camera
-        if active is None:
-            raise ValueError("no camera to render with: pass one, or set scene.camera")
-        return active
-
-    # --- rendering --------------------------------------------------------
-    def _project(self, camera: CameraRef | None) -> _Canvas:
-        """Replay every recorded call against a camera, on a fresh canvas."""
-        canvas = _Canvas(self._view(camera))
-        for method, args, kwargs, classes in self._log:
-            canvas.classes = classes
-            getattr(canvas, method)(*args, **kwargs)
-        return canvas
-
-    @property
-    def is_empty(self) -> bool:
-        """Whether nothing has been drawn yet: settings and definitions do not count."""
-        return all(method in ("sort_by_depth", "add_def") for method, *_ in self._log)
-
-    def bbox(self, camera: CameraRef | None = None) -> tuple[Array, Array]:
-        """Screen-space bounds of the content under ``camera`` (default: the active one).
-
-        Text extents are estimated from a nominal glyph width, which is enough
-        to keep the fitted viewBox from clipping a label but is not exact.
-        """
-        return self._project(camera).bbox()
-
-    def render(
-        self,
-        camera: CameraRef | None = None,
-        *,
-        pad: float | None = None,
-        background: str | None = None,
-    ) -> svg.SVG:
-        """Project the scene and assemble the document, fitting the viewBox to the content.
-
-        Nothing has to be centred by hand: the viewBox follows the geometry.
-        Rendering is a pure function of the recorded calls and the camera, so
-        it can be called any number of times, with any cameras.
-
-        Args:
-            camera: A camera, or the name of one in :attr:`cameras`; defaults
-                to the active :attr:`camera`.
-            pad: Margin around the content; defaults to the scene's ``pad``.
-            background: Background fill; defaults to the scene's ``background``.
-
-        Raises:
-            ValueError: If there is no camera, or nothing to fit a viewBox to.
-            KeyError: For a camera name the scene does not hold.
-        """
-        canvas = self._project(camera)
-        return canvas.document(
-            self.pad if pad is None else float(pad),
-            self.background if background is None else background,
-        )
-
-    def with_camera(self, camera: CameraRef) -> Scene:
-        """A copy of this scene whose active camera is ``camera``.
-
-        The recorded calls and the named cameras are copied, so later changes to
-        either scene do not affect the other.  Useful for handing the same
-        scene, seen two ways, to a tool that only calls :meth:`to_svg_document`.
-
-        Two things behave as their names promise rather than as a new camera
-        might suggest.  Screen-space calls -- :meth:`rect2d`, :meth:`text2d`,
-        and anything handed to :meth:`add` -- stay at the same screen
-        coordinates, because that is what "screen space" means.  And geometry
-        computed by the *caller* from a camera (a point placed via
-        :meth:`Camera.at`, say) is baked in already.
-
-        The world-space arrays handed to :meth:`polygon` and friends are held by
-        reference, not copied, so do not mutate them after adding.
-        """
-        clone = Scene(camera, cameras=self.cameras, pad=self.pad, background=self.background)
-        clone._log = list(self._log)
-        return clone
-
-    def _repr_svg_(self) -> str | None:
-        """Show the scene inline in Jupyter; ``None`` (plain repr) without a camera or content."""
-        if self.camera is None or self.is_empty:
-            return None
-        return self.to_svg_document()
-
-    def to_svg_document(self) -> str:
-        """Return the scene, seen by its active :attr:`camera`, as a complete SVG document.
-
-        This is the whole surface a consumer needs.  A tool that assembles a
-        larger document can accept any object exposing this method and place a
-        scene without importing this package, or being imported by it.
-        """
-        return str(self.render())
-
-    def save(self, path: str | Path, camera: CameraRef | None = None) -> Path:
-        """Write the document rendered by ``camera`` (default: the active one); return the path.
-
-        Only SVG is written.  Rasterizing and PDF are left to the consumer,
-        which is what keeps them out of this package's dependencies -- run
-        ``cairosvg`` over the file, or hand :meth:`to_svg_document` to whatever
-        assembles the final page.
-        """
-        out = Path(path)
-        out.write_text(str(self.render(camera)), encoding="utf-8")
-        return out
-
-    # --- drawing ----------------------------------------------------------
-    def sort_by_depth(self, layer: int, *, exact: bool = False) -> None:
-        """Order ``layer`` back to front by depth instead of by insertion.
-
-        The painter's algorithm, opted into one layer at a time.  Every
-        world-space element drawn at ``layer`` is keyed by the mean depth of
-        the points that produced it -- a sphere by its centre, a cylinder by its
-        axis midpoint, a polygon by its vertices -- and drawn farthest first.
-        Equal depths keep insertion order, and screen-space elements, which have
-        no depth, go on top in insertion order.  Other layers are untouched.
-
-        This is for many separate objects that do not interpenetrate: the atoms
-        and bonds of a lattice, the arrows of a spin texture, the quads of a
-        surface.  It is a heuristic, exact for non-overlapping spheres of one
-        radius and good for small, similar pieces, and it cannot order two long
-        objects that each cover part of the other.
-
-        ``exact=True`` lifts that limit by deciding visibility point by point
-        instead.  Each surface keeps its native element, clipped to the part of
-        it that no opaque surface hides -- found exactly between two planar
-        surfaces, and to a quarter of a screen unit elsewhere -- so a bond can
-        run into an atom's centre, two planes can cross, and a coil can wrap an
-        unsliced core.  Each line is cut where an opaque surface hides it; the
-        hidden part is dropped, or drawn in the ``back`` style of
-        :meth:`polyline`, :meth:`edges`, or :meth:`sphere_curve`.  Translucent
-        surfaces hide nothing but are clipped by what is in front of them.  It
-        needs the ``occlusion`` extra (``shapely`` and ``contourpy``), is
-        slower, and adds one ``<clipPath>`` per partly hidden element.
-
-        A beam inside a translucent slab still belongs on separate layers: a
-        translucent face hides nothing, so no rule of visibility orders it.
-
-        The setting is recorded, so rendering with another camera re-sorts.
-        """
-        self._add("sort_by_depth", layer, exact=exact)
-
-    def add(self, layer: int, element: svg.Element) -> None:
-        """Add a ready-made ``svg.py`` element at ``layer``, bypassing projection."""
-        self._add("add", layer, element)
-
-    def add_def(self, element: svg.Element) -> None:
-        """Add an element to ``<defs>`` -- a gradient, marker, or clip path."""
-        self._add("add_def", element)
 
     def polygon(self, layer: int, pts3: Points3, **style: Style) -> None:
         """Filled polygon through projected world points."""
@@ -2438,6 +2210,247 @@ class Scene:
             scene.text(30, tip, [svg.TSpan(text="k"), svg.TSpan(text="x", baseline_shift="sub")])
         """
         self._add("text", layer, pt3, s, dx, dy, size, **style)
+
+
+class Scene(_Drawing):
+    """A 3D scene: objects in world space, and the cameras that view them.
+
+    Drawing calls record objects and nothing more; nothing is projected until
+    the scene is rendered.  As in a 3D application, a scene can hold any number
+    of named cameras, one of them active, and a render uses the active camera
+    unless told which other to use::
+
+        scene = Scene(pad=28, background="#ffffff")
+        scene.sphere(10, (0, 0, 0), 1.0, fill="#c33")
+        scene.cameras["main"] = OrthographicCamera(35, 24, 62)
+        scene.cameras["cabinet"] = ObliqueCamera.cabinet(62)
+        scene.camera = "main"  # the active camera
+        scene.save("main.svg")
+        scene.save("cabinet.svg", "cabinet")
+        scene.render(OrthographicCamera.isometric(62))  # any camera, named or not
+
+    :attr:`camera` is the active camera, which :meth:`render`, :meth:`save`,
+    and :meth:`bbox` use unless given another, and which
+    :meth:`to_svg_document` -- the zero-argument embedding contract -- always
+    uses.  Set it to the name of a camera in :attr:`cameras`, which keeps
+    following that entry if it is replaced, or to a camera directly.  It may be
+    ``None`` while the scene is built.
+
+    Draw order is an explicit integer ``layer`` per call, resolved stably by
+    insertion order within a layer.  There is no z-buffer, and no layer is
+    depth-sorted unless it asks to be with :meth:`sort_by_depth`: for a schematic
+    with a beam passing through a translucent slab, deciding what occludes what
+    by hand is worth more than getting it automatically and almost right, while
+    for a lattice of hundreds of atoms the painter's algorithm is the only
+    practical answer.  :meth:`Camera.visible` handles the one case where the
+    answer is unambiguous -- the back faces of a convex solid.
+
+    Every drawing call that takes style keywords also takes ``class_``: one
+    string, space-separated as in SVG, or a sequence of names.  An ``id`` names
+    one object; a class names a kind of object -- ``class_="gate"`` on all four
+    gates -- so a stylesheet, a selector, or Inkscape can reach them together.
+    Each top-level element a call emits carries the classes: every face of
+    :meth:`faces`, both strokes of :meth:`edges`, every piece of a sliced or
+    chunked solid, and both parts of a line an exact layer splits.  The
+    elements inside a solid's ``<g>`` do not repeat them, so a selector
+    matches each object once.
+
+    Args:
+        camera: The active camera, or the name of one in ``cameras``, or ``None``
+            to choose one later.
+        cameras: Named cameras the scene holds.
+        pad: Default margin added around the fitted content.
+        background: Default background fill, or ``None`` for a transparent document.
+    """
+
+    def __init__(
+        self,
+        camera: CameraRef | None = None,
+        *,
+        cameras: Mapping[str, Camera] | None = None,
+        pad: float = 26.0,
+        background: str | None = None,
+    ) -> None:
+        super().__init__()
+        self.cameras: dict[str, Camera] = dict(cameras or {})
+        self._active: CameraRef | None = None
+        self.camera = camera
+        self.pad = float(pad)
+        self.background = background
+
+    def __repr__(self) -> str:
+        names = ", ".join(self.cameras)
+        return f"Scene({self._active!r}, cameras=[{names}], {len(self._log)} calls)"
+
+    # --- cameras ----------------------------------------------------------
+    @property
+    def camera(self) -> Camera | None:
+        """The active camera, looked up by name if it was set by name."""
+        return None if self._active is None else self._lookup(self._active)
+
+    @camera.setter
+    def camera(self, value: CameraRef | None) -> None:
+        if isinstance(value, str):
+            self._lookup(value)
+        self._active = value
+
+    def _lookup(self, ref: CameraRef) -> Camera:
+        if not isinstance(ref, str):
+            return ref
+        if ref not in self.cameras:
+            raise KeyError(f"no camera named {ref!r}; the scene has {sorted(self.cameras)}")
+        return self.cameras[ref]
+
+    def _view(self, camera: CameraRef | None) -> Camera:
+        if camera is not None:
+            return self._lookup(camera)
+        active = self.camera
+        if active is None:
+            raise ValueError("no camera to render with: pass one, or set scene.camera")
+        return active
+
+    # --- rendering --------------------------------------------------------
+    def _project(self, camera: CameraRef | None) -> _Canvas:
+        """Replay every recorded call against a camera, on a fresh canvas."""
+        canvas = _Canvas(self._view(camera))
+        for method, args, kwargs, classes in self._log:
+            canvas.classes = classes
+            getattr(canvas, method)(*args, **kwargs)
+        return canvas
+
+    @property
+    def is_empty(self) -> bool:
+        """Whether nothing has been drawn yet: settings and definitions do not count."""
+        return all(method in ("sort_by_depth", "add_def") for method, *_ in self._log)
+
+    def bbox(self, camera: CameraRef | None = None) -> tuple[Array, Array]:
+        """Screen-space bounds of the content under ``camera`` (default: the active one).
+
+        Text extents are estimated from a nominal glyph width, which is enough
+        to keep the fitted viewBox from clipping a label but is not exact.
+        """
+        return self._project(camera).bbox()
+
+    def render(
+        self,
+        camera: CameraRef | None = None,
+        *,
+        pad: float | None = None,
+        background: str | None = None,
+    ) -> svg.SVG:
+        """Project the scene and assemble the document, fitting the viewBox to the content.
+
+        Nothing has to be centred by hand: the viewBox follows the geometry.
+        Rendering is a pure function of the recorded calls and the camera, so
+        it can be called any number of times, with any cameras.
+
+        Args:
+            camera: A camera, or the name of one in :attr:`cameras`; defaults
+                to the active :attr:`camera`.
+            pad: Margin around the content; defaults to the scene's ``pad``.
+            background: Background fill; defaults to the scene's ``background``.
+
+        Raises:
+            ValueError: If there is no camera, or nothing to fit a viewBox to.
+            KeyError: For a camera name the scene does not hold.
+        """
+        canvas = self._project(camera)
+        return canvas.document(
+            self.pad if pad is None else float(pad),
+            self.background if background is None else background,
+        )
+
+    def with_camera(self, camera: CameraRef) -> Scene:
+        """A copy of this scene whose active camera is ``camera``.
+
+        The recorded calls and the named cameras are copied, so later changes to
+        either scene do not affect the other.  Useful for handing the same
+        scene, seen two ways, to a tool that only calls :meth:`to_svg_document`.
+
+        Two things behave as their names promise rather than as a new camera
+        might suggest.  Screen-space calls -- :meth:`rect2d`, :meth:`text2d`,
+        and anything handed to :meth:`add` -- stay at the same screen
+        coordinates, because that is what "screen space" means.  And geometry
+        computed by the *caller* from a camera (a point placed via
+        :meth:`Camera.at`, say) is baked in already.
+
+        The world-space arrays handed to :meth:`polygon` and friends are held by
+        reference, not copied, so do not mutate them after adding.
+        """
+        clone = Scene(camera, cameras=self.cameras, pad=self.pad, background=self.background)
+        clone._log = list(self._log)
+        return clone
+
+    def _repr_svg_(self) -> str | None:
+        """Show the scene inline in Jupyter; ``None`` (plain repr) without a camera or content."""
+        if self.camera is None or self.is_empty:
+            return None
+        return self.to_svg_document()
+
+    def to_svg_document(self) -> str:
+        """Return the scene, seen by its active :attr:`camera`, as a complete SVG document.
+
+        This is the whole surface a consumer needs.  A tool that assembles a
+        larger document can accept any object exposing this method and place a
+        scene without importing this package, or being imported by it.
+        """
+        return str(self.render())
+
+    def save(self, path: str | Path, camera: CameraRef | None = None) -> Path:
+        """Write the document rendered by ``camera`` (default: the active one); return the path.
+
+        Only SVG is written.  Rasterizing and PDF are left to the consumer,
+        which is what keeps them out of this package's dependencies -- run
+        ``cairosvg`` over the file, or hand :meth:`to_svg_document` to whatever
+        assembles the final page.
+        """
+        out = Path(path)
+        out.write_text(str(self.render(camera)), encoding="utf-8")
+        return out
+
+    # --- drawing ----------------------------------------------------------
+    def sort_by_depth(self, layer: int, *, exact: bool = False) -> None:
+        """Order ``layer`` back to front by depth instead of by insertion.
+
+        The painter's algorithm, opted into one layer at a time.  Every
+        world-space element drawn at ``layer`` is keyed by the mean depth of
+        the points that produced it -- a sphere by its centre, a cylinder by its
+        axis midpoint, a polygon by its vertices -- and drawn farthest first.
+        Equal depths keep insertion order, and screen-space elements, which have
+        no depth, go on top in insertion order.  Other layers are untouched.
+
+        This is for many separate objects that do not interpenetrate: the atoms
+        and bonds of a lattice, the arrows of a spin texture, the quads of a
+        surface.  It is a heuristic, exact for non-overlapping spheres of one
+        radius and good for small, similar pieces, and it cannot order two long
+        objects that each cover part of the other.
+
+        ``exact=True`` lifts that limit by deciding visibility point by point
+        instead.  Each surface keeps its native element, clipped to the part of
+        it that no opaque surface hides -- found exactly between two planar
+        surfaces, and to a quarter of a screen unit elsewhere -- so a bond can
+        run into an atom's centre, two planes can cross, and a coil can wrap an
+        unsliced core.  Each line is cut where an opaque surface hides it; the
+        hidden part is dropped, or drawn in the ``back`` style of
+        :meth:`polyline`, :meth:`edges`, or :meth:`sphere_curve`.  Translucent
+        surfaces hide nothing but are clipped by what is in front of them.  It
+        needs the ``occlusion`` extra (``shapely`` and ``contourpy``), is
+        slower, and adds one ``<clipPath>`` per partly hidden element.
+
+        A beam inside a translucent slab still belongs on separate layers: a
+        translucent face hides nothing, so no rule of visibility orders it.
+
+        The setting is recorded, so rendering with another camera re-sorts.
+        """
+        self._add("sort_by_depth", layer, exact=exact)
+
+    def add(self, layer: int, element: svg.Element) -> None:
+        """Add a ready-made ``svg.py`` element at ``layer``, bypassing projection."""
+        self._add("add", layer, element)
+
+    def add_def(self, element: svg.Element) -> None:
+        """Add an element to ``<defs>`` -- a gradient, marker, or clip path."""
+        self._add("add_def", element)
 
     def rect2d(
         self,
