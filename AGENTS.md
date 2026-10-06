@@ -105,9 +105,26 @@ Do not add these without the user changing the design first:
 - `tests/test_document.py` pins what a consumer relies on: a parseable
   standalone document, a viewBox agreeing with `width`/`height`, geometry inside
   it, and deterministic bytes. It must not import a consumer.
-- Keep `docs/` in sync with user-visible changes in the same change, and run
-  `uv run zensical build` before reporting documentation work complete.
-- Keep `CHANGELOG.md` current in Keep a Changelog 1.1.0 format.
+
+## Documentation
+
+Documentation is part of every change, not a follow-up. A change is not complete,
+and must not be committed, until the documentation agrees with it.
+
+- Every user-visible change -- a new call or parameter, a changed default or
+  behaviour, a new error, a renamed id -- updates, in the same commit: the
+  docstrings, the relevant page in `docs/`, `README.md` wherever it summarizes
+  the feature, and `CHANGELOG.md` (Keep a Changelog 1.1.0).
+- Documentation states what the code does, checked against the code: every
+  signature, default, generated id, and error matches the source, and every
+  runnable snippet runs. Do not document intentions or planned features.
+- When a change makes a passage elsewhere wrong, fix that passage in the same
+  commit, even on a page the change did not otherwise touch.
+- When a figure's output changes, refresh `docs/gallery/` with
+  `uv run python examples/gallery --docs`, and `docs/images/` with
+  `uv run python docs/readme_figure.py`.
+- Run `uv run zensical build` and confirm it reports no issues before reporting
+  the change complete.
 
 ## Naming and packaging
 
