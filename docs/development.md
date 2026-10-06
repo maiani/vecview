@@ -55,7 +55,8 @@ dimetric, and trimetric cases.
   does the polygon clipping; exact visibility also needs `contourpy`, from the
   optional `occlusion` extra, imported only when an exact layer renders.
 - **Keep the three-way split**: `shapes` knows only numbers, `camera` and
-  `projections` know projection, `scene` is the only module that touches
+  `projections` know projection, and `scene`, with its private rendering
+  modules (`_elements`, `_canvas`, `_solids`), is the only code that touches
   `svg.py`. Geometry that needs a camera to be computed does not belong in
   `shapes`.
 - **A scene records; a canvas projects.** Each public drawing method on `Scene`
