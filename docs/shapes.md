@@ -212,9 +212,9 @@ scene.polygon(
 `double_arrow_shape` is the axis or polarization marker: two heads, symmetric
 about `center`, no direction implied.
 
-In `arrow_shape`, a `head_len` longer than the whole arrow is clamped rather than
-producing a self-crossing polygon. `double_arrow_shape` does not clamp: keep each
-head shorter than half the `length`.
+A `head_len` too long for the arrow is clamped rather than producing a
+self-crossing polygon: to the whole arrow in `arrow_shape`, and to half of it in
+`double_arrow_shape`, where the two heads then meet at the centre.
 
 ## Surfaces
 

@@ -334,7 +334,9 @@ def double_arrow_shape(
     d, n = unit(direction), unit(normal)
     s = unit(np.cross(n, d))
     c = np.asarray(center, dtype=np.float64)
-    h, neck = length / 2.0, length / 2.0 - head_len
+    # A head longer than half the arrow is clamped, as in arrow_shape, rather
+    # than letting the two necks cross and the polygon self-intersect.
+    h, neck = length / 2.0, max(length / 2.0 - head_len, 0.0)
     return np.array(
         [
             c + d * h,

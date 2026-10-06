@@ -140,6 +140,14 @@ class TestDoubleArrowShape:
         pts = vecview.double_arrow_shape((3, -1, 2), (0, 1, 0), 4.0, (0, 0, 1), 0.2, 1.0, 0.5)
         assert np.allclose(pts.mean(axis=0), [3, -1, 2], atol=1e-12)
 
+    def test_heads_longer_than_half_meet_at_the_centre(self) -> None:
+        """Otherwise each neck runs past the centre and the polygon self-crosses."""
+        pts = vecview.double_arrow_shape((0, 0, 0), (1, 0, 0), 2.0, (0, 0, 1), 0.2, 1.0, 5.0)
+        half = len(pts) // 2
+        # Along the arrow, the outline runs monotonically from one tip to the other.
+        assert np.all(np.diff(pts[: half + 1, 0]) <= 1e-12)
+        assert np.ptp(pts[:, 0]) == pytest.approx(2.0)
+
 
 class TestCircleShape:
     def test_all_points_lie_at_the_radius(self) -> None:

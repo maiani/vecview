@@ -37,6 +37,11 @@ All notable changes to this project are documented here, following
   element.  Ids a call derives (`slab-pz`, `{id}-body`, `{id}-profile`) are
   checked too, so a hand-written id that collides with one is caught.
 
+### Fixed
+
+- `double_arrow_shape` clamps a `head_len` longer than half the arrow, as
+  `arrow_shape` already did, instead of returning a self-crossing polygon.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added
