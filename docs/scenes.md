@@ -521,8 +521,8 @@ involved.
 
 Rendering raises `ValueError` when nothing grows the box: there is no content to
 fit a viewBox to, and a zero-size document is never what was wanted. `is_empty`
-counts drawing calls, not the box, so a scene holding only a `rect2d` or an `add`
-is not empty and still cannot render.
+says so in advance: it is true while the scene holds nothing that grows the box
+— only settings, definitions, `add`, or `rect2d` and `text2d` with `grow=False`.
 
 ## Definitions
 

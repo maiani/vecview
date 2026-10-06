@@ -41,6 +41,9 @@ All notable changes to this project are documented here, following
 
 - `double_arrow_shape` clamps a `head_len` longer than half the arrow, as
   `arrow_shape` already did, instead of returning a self-crossing polygon.
+- `Scene.is_empty` is true exactly when rendering would find nothing to fit a
+  viewBox to.  A scene holding only `add`, or `rect2d` and `text2d` with
+  `grow=False`, was reported non-empty and then failed to render.
 
 ## [0.2.0] - 2026-10-06
 

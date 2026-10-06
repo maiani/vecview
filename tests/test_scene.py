@@ -74,6 +74,17 @@ class TestBoundingBox:
         scene.polygon(0, SQUARE)
         assert not scene.is_empty
 
+    def test_empty_exactly_when_rendering_has_nothing_to_fit(self, scene: Scene) -> None:
+        scene.add(0, svg.Rect(width=1, height=1))
+        scene.rect2d(0, 0, 0, 10, 10)
+        scene.text2d(0, 0, 0, "note", grow=False)
+        assert scene.is_empty
+        with pytest.raises(ValueError, match="empty"):
+            scene.render()
+        scene.text2d(0, 0, 0, "title")
+        assert not scene.is_empty
+        scene.render()
+
     def test_bounds_cover_the_projected_geometry(self, scene: Scene, cam: Camera) -> None:
         scene.polygon(0, SQUARE)
         lo, hi = scene.bbox()

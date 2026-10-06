@@ -18,6 +18,14 @@ from vecview._solids import _SolidCanvas
 from vecview._types import Array, Style
 from vecview.camera import Camera
 
+
+def _grows(method: str, args: tuple[object, ...]) -> bool:
+    """Whether a recorded call can grow the fitted box when it is rendered."""
+    if method in ("rect2d", "text2d"):
+        return bool(args[-1])  # their ``grow`` argument
+    return method not in ("sort_by_depth", "add_def", "add")
+
+
 type CameraRef = Camera | str
 """A camera, or the name of one in :attr:`Scene.cameras`."""
 
@@ -130,8 +138,14 @@ class Scene(_Drawing):
 
     @property
     def is_empty(self) -> bool:
-        """Whether nothing has been drawn yet: settings and definitions do not count."""
-        return all(method in ("sort_by_depth", "add_def") for method, *_ in self._log)
+        """Whether nothing has been drawn that a viewBox could be fitted to.
+
+        Settings and definitions do not count, and neither do the calls that
+        never grow the box: :meth:`add`, and :meth:`rect2d` or :meth:`text2d`
+        with ``grow=False``.  So a scene is empty exactly when rendering it
+        would raise for want of content.
+        """
+        return not any(_grows(method, args) for method, args, *_ in self._log)
 
     def bbox(self, camera: CameraRef | None = None) -> tuple[Array, Array]:
         """Screen-space bounds of the content under ``camera`` (default: the active one).
