@@ -50,10 +50,10 @@ dimetric, and trimetric cases.
 
 ## Design constraints
 
-- **Runtime dependencies stay `numpy` and `svg.py`.** Rasterizing, PDF, and TeX
-  belong to a consumer, not here. A test enforces this. Exact visibility uses
-  `shapely` and `contourpy` from the optional `occlusion` extra, imported only
-  when an exact layer renders.
+- **Runtime dependencies stay `numpy`, `shapely`, and `svg.py`.** Rasterizing,
+  PDF, and TeX belong to a consumer, not here. A test enforces this. `shapely`
+  does the polygon clipping; exact visibility also needs `contourpy`, from the
+  optional `occlusion` extra, imported only when an exact layer renders.
 - **Keep the three-way split**: `shapes` knows only numbers, `camera` and
   `projections` know projection, `scene` is the only module that touches
   `svg.py`. Geometry that needs a camera to be computed does not belong in

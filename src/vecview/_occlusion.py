@@ -14,7 +14,7 @@ each screen point, and visibility is decided point by point:
 
 Translucent surfaces hide nothing, but are themselves clipped by opaque ones in
 front of them.  ``shapely`` and ``contourpy`` are imported only when such a
-layer is rendered; they come with the ``occlusion`` extra.
+layer is rendered; ``contourpy`` comes with the ``occlusion`` extra.
 """
 
 from __future__ import annotations
@@ -138,13 +138,13 @@ def planar_depth(plane: Plane) -> DepthFn:
 
 
 def _import() -> tuple[Any, Any]:
+    import shapely
+
     try:
         import contourpy
-        import shapely
     except ImportError as exc:
         raise ImportError(
-            "sort_by_depth(..., exact=True) needs shapely and contourpy: "
-            "pip install 'vecview[occlusion]'"
+            "sort_by_depth(..., exact=True) needs contourpy: pip install 'vecview[occlusion]'"
         ) from exc
     return shapely, contourpy
 

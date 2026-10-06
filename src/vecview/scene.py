@@ -259,7 +259,7 @@ class Scene(_Drawing):
         hidden part is dropped, or drawn in the ``back`` style of
         :meth:`polyline`, :meth:`edges`, or :meth:`sphere_curve`.  Translucent
         surfaces hide nothing but are clipped by what is in front of them.  It
-        needs the ``occlusion`` extra (``shapely`` and ``contourpy``), is
+        needs the ``occlusion`` extra (``contourpy``), is
         slower, and adds one ``<clipPath>`` per partly hidden element.
 
         A beam inside a translucent slab still belongs on separate layers: a

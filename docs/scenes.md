@@ -125,8 +125,8 @@ It costs a little: every partly hidden element gains a `<clipPath>`, named
 `{id}-visible` after the element (or `visible-{n}` for one without an id), and
 the hidden part of a line with an id becomes a second path, `{id}-hidden`. A
 layer of a few hundred solids takes a second or so to render, against
-milliseconds for plain sorting. It needs `shapely` and `contourpy`, which only
-exact layers import.
+milliseconds for plain sorting. It needs `contourpy`, from the `occlusion`
+extra, which only exact layers import.
 
 What no visibility rule can do is order a beam inside a translucent slab: a
 translucent face hides nothing, so the beam above, the attenuated segment
@@ -703,6 +703,6 @@ returns the document, or nothing while the scene has no active camera or nothing
 drawn.
 
 Only SVG is written. PNG and PDF export are left to the consumer, which is what
-holds the runtime dependencies to `numpy` and `svg.py`. Run `cairosvg` over the
+holds the runtime dependencies to `numpy`, `shapely`, and `svg.py`. Run `cairosvg` over the
 file, or hand the document to whatever assembles the final page — see
 [Embedding a scene](embedding.md).

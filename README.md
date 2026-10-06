@@ -14,7 +14,8 @@ renders to byte-identical SVG, and the output opens in Inkscape.
 VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
 VecView supplies what it has no notion of: a camera, world-space glyph geometry,
-and an explicit layer stack. Runtime dependencies are `numpy` and `svg.py`.
+and an explicit layer stack. Runtime dependencies are `numpy`, `shapely`, and
+`svg.py`.
 
 VecView is alpha: the API may change before 1.0.
 

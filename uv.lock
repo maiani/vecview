@@ -905,6 +905,7 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
+    { name = "shapely" },
     { name = "svg-py" },
 ]
 
@@ -914,7 +915,6 @@ examples = [
 ]
 occlusion = [
     { name = "contourpy" },
-    { name = "shapely" },
 ]
 
 [package.dev-dependencies]
@@ -933,7 +933,7 @@ requires-dist = [
     { name = "cairosvg", marker = "extra == 'examples'", specifier = ">=2.7" },
     { name = "contourpy", marker = "extra == 'occlusion'", specifier = ">=1.2" },
     { name = "numpy", specifier = ">=1.24" },
-    { name = "shapely", marker = "extra == 'occlusion'", specifier = ">=2.0" },
+    { name = "shapely", specifier = ">=2.0" },
     { name = "svg-py", specifier = ">=1.4" },
 ]
 provides-extras = ["examples", "occlusion"]

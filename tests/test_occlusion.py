@@ -11,14 +11,13 @@ import re
 
 import numpy as np
 import pytest
+import shapely
 import svg
 
 import vecview
 from vecview import OrthographicCamera, Scene
 
-pytest.importorskip("shapely")
 pytest.importorskip("contourpy")
-import shapely
 
 CAM = OrthographicCamera(35.0, 24.0, 40.0)
 
@@ -206,7 +205,7 @@ class TestContract:
         real = builtins.__import__
 
         def refuse(name: str, *args: object, **kwargs: object) -> object:
-            if name in ("shapely", "contourpy"):
+            if name == "contourpy":
                 raise ImportError(name)
             return real(name, *args, **kwargs)  # type: ignore[arg-type]
 
@@ -220,7 +219,7 @@ class TestContract:
         real = builtins.__import__
 
         def refuse(name: str, *args: object, **kwargs: object) -> object:
-            if name in ("shapely", "contourpy"):
+            if name == "contourpy":
                 raise ImportError(name)
             return real(name, *args, **kwargs)  # type: ignore[arg-type]
 
