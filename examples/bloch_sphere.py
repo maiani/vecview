@@ -23,6 +23,8 @@ from vecview import OrthographicCamera, Scene
 THETA, PHI = 52.0, 58.0  # the state, in degrees
 INK = "#1f2430"
 STATE = "#c0392b"
+OUTLINE = "#2f4a63"  # the sphere's edge, heavier than the circles drawn on it
+GRID = "#7d9ab6"
 AXIS_LEN = 1.38
 TEX = {  # name: TeX source, size in points, colour
     "x": ("$x$", 18, INK),
@@ -93,8 +95,8 @@ def build() -> Scene:
         fill="#9fc3e8",
         highlight="#ffffff",
         fill_opacity=0.32,
-        stroke="#4a6b8a",
-        stroke_width=1.4,
+        stroke=OUTLINE,
+        stroke_width=1.8,
         id="sphere",
     )
     hidden = {"stroke_dasharray": "5 4", "stroke_opacity": 0.55}
@@ -109,8 +111,8 @@ def build() -> Scene:
             closed=True,
             back=hidden,
             back_layer=9,
-            stroke="#4a6b8a",
-            stroke_width=1.1,
+            stroke=GRID,
+            stroke_width=0.9,
             id=name,
         )
 
