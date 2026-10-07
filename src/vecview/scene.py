@@ -12,9 +12,11 @@ from pathlib import Path
 
 import svg
 
-from vecview._drawing import Part, _Drawing
+from vecview._drawing import Part, _Drawing, _trackable
 from vecview._elements import DEFAULT_FONT, DEFAULT_TEXT_FILL, Align, TextContent
+from vecview._place import _Call
 from vecview._solids import _SolidCanvas
+from vecview._tracks import Track
 from vecview._types import Array, Style
 from vecview.camera import Camera
 
@@ -52,7 +54,9 @@ class Scene(_Drawing):
     :meth:`to_svg_document` -- the zero-argument embedding contract -- always
     uses.  Set it to the name of a camera in :attr:`cameras`, which keeps
     following that entry if it is replaced, or to a camera directly.  It may be
-    ``None`` while the scene is built.
+    ``None`` while the scene is built.  It may also be a :class:`Track` of
+    cameras, for a view that moves: :meth:`at` reads it at each time, and
+    :attr:`camera` is the camera at ``t = 0``.
 
     Draw order is an explicit integer ``layer`` per call, resolved stably by
     insertion order within a layer.  There is no z-buffer, and no layer is
@@ -74,8 +78,8 @@ class Scene(_Drawing):
     matches each object once.
 
     Args:
-        camera: The active camera, or the name of one in ``cameras``, or ``None``
-            to choose one later.
+        camera: The active camera, or the name of one in ``cameras``, a track of
+            either, or ``None`` to choose one later.
         cameras: Named cameras the scene holds.
         pad: Default margin added around the fitted content.
         background: Default background fill, or ``None`` for a transparent document.
@@ -83,7 +87,7 @@ class Scene(_Drawing):
 
     def __init__(
         self,
-        camera: CameraRef | None = None,
+        camera: CameraRef | Track[CameraRef] | None = None,
         *,
         cameras: Mapping[str, Camera] | None = None,
         pad: float = 26.0,
@@ -91,7 +95,7 @@ class Scene(_Drawing):
     ) -> None:
         super().__init__()
         self.cameras: dict[str, Camera] = dict(cameras or {})
-        self._active: CameraRef | None = None
+        self._active: CameraRef | Track[CameraRef] | None = None
         self.camera = camera
         self.pad = float(pad)
         self.background = background
@@ -103,13 +107,17 @@ class Scene(_Drawing):
     # --- cameras ----------------------------------------------------------
     @property
     def camera(self) -> Camera | None:
-        """The active camera, looked up by name if it was set by name."""
-        return None if self._active is None else self._lookup(self._active)
+        """The active camera, looked up by name if it was set by name, at ``t = 0`` if a track."""
+        active = self._active(0.0) if isinstance(self._active, Track) else self._active
+        return None if active is None else self._lookup(active)
 
     @camera.setter
-    def camera(self, value: CameraRef | None) -> None:
-        if isinstance(value, str):
-            self._lookup(value)
+    def camera(self, value: CameraRef | Track[CameraRef] | None) -> None:
+        first = value(0.0) if isinstance(value, Track) else value
+        if isinstance(first, str):
+            self._lookup(first)
+        elif first is not None and not isinstance(first, Camera):
+            raise TypeError(f"a camera must be a Camera or a camera's name, got {first!r}")
         self._active = value
 
     def _lookup(self, ref: CameraRef) -> Camera:
@@ -128,10 +136,22 @@ class Scene(_Drawing):
         return active
 
     # --- rendering --------------------------------------------------------
+    @property
+    def _animated(self) -> bool:
+        return isinstance(self._active, Track) or super()._animated
+
+    def _blank(self, t: float = 0.0) -> Scene:
+        active = self._active(t) if isinstance(self._active, Track) else self._active
+        return Scene(active, cameras=self.cameras, pad=self.pad, background=self.background)
+
+    def _still(self) -> list[_Call]:
+        """The calls to render: a scene with tracks is drawn as it stands at ``t = 0``."""
+        return (self.at(0.0) if self._animated else self)._calls()
+
     def _project(self, camera: CameraRef | None) -> _SolidCanvas:
         """Replay every recorded call against a camera, on a fresh canvas."""
         canvas = _SolidCanvas(self._view(camera))
-        for method, args, kwargs, classes in self._log:
+        for method, args, kwargs, classes in self._still():
             canvas.classes = classes
             getattr(canvas, method)(*args, **kwargs)
         return canvas
@@ -145,7 +165,7 @@ class Scene(_Drawing):
         with ``grow=False``.  So a scene is empty exactly when rendering it
         would raise for want of content.
         """
-        return not any(_grows(method, args) for method, args, *_ in self._log)
+        return not any(_grows(method, args) for method, args, *_ in self._still())
 
     def bbox(self, camera: CameraRef | None = None) -> tuple[Array, Array]:
         """Screen-space bounds of the content under ``camera`` (default: the active one).
@@ -259,14 +279,17 @@ class Scene(_Drawing):
         """
         self._add("sort_by_depth", layer)
 
+    @_trackable
     def add(self, layer: int, element: svg.Element) -> None:
         """Add a ready-made ``svg.py`` element at ``layer``, bypassing projection."""
         self._add("add", layer, element)
 
+    @_trackable
     def add_def(self, element: svg.Element) -> None:
         """Add an element to ``<defs>`` -- a gradient, marker, or clip path."""
         self._add("add_def", element)
 
+    @_trackable
     def rect2d(
         self,
         layer: int,
@@ -284,6 +307,7 @@ class Scene(_Drawing):
         """
         self._add("rect2d", layer, x, y, w, h, grow, **style)
 
+    @_trackable
     def text2d(
         self,
         layer: int,

@@ -83,7 +83,7 @@ touches:
 
 | Module | Responsibility |
 | --- | --- |
-| `animation.py` | `Animation`: options, the time-to-scene callback, export. |
+| `animation.py` | `Animation`: options, a scene of tracks or a time-to-scene callback, export. |
 | `_tracks.py` | `Track`, interpolation, and easing: values only, no scenes or SVG. |
 | `_transforms.py` | `rotate` and `scale` about a pivot, through `Part.place`. |
 | `_animation_svg.py` | Sampling, sharing what frames draw alike, and SVG timing. |

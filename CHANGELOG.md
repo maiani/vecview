@@ -13,10 +13,16 @@ All notable changes to this project are documented here, following
   and follows every camera.  VecView places it as given, never parsing, copying,
   or changing it.  The examples with mathematical labels now typeset them with
   VecTeX and hold them in slots, in place of `svg.TSpan` subscripts.
-- `Animation(frame, *, duration, view_box, fps=30, repeat=1, background=None)`
-  -- a function from seconds to a whole `Scene`, sampled at evenly spaced
-  times, rendered by the static renderer, and written as one standalone SVG
-  that plays itself with native SVG timing.  Finite playback holds the exact
+- `Animation(scene, *, duration, view_box, fps=30, repeat=1, background=None)`
+  -- a scene that moves, sampled at evenly spaced times, rendered by the
+  static renderer, and written as one standalone SVG that plays itself with
+  native SVG timing.  Any argument of any drawing call may be a `Track`, inside
+  lists and style keywords too; `place` takes a track of parts, for what
+  changes in number, and the active camera may be a track.  A call holding a
+  track is checked at `t = 0` and kept as made; `Scene.at(t)` and `Part.at(t)`
+  give the drawing as it stands at `t`, and a scene with tracks renders as it
+  stands at `t = 0`.  `Animation` also takes a pure function from seconds to a
+  whole `Scene`.  Finite playback holds the exact
   frame at `duration`; `repeat=None` loops.  What every frame draws alike --
   identical definitions, and the elements every frame draws in the same paint
   order, wherever they fall -- is written once, in place, with its own ids.
@@ -27,7 +33,8 @@ All notable changes to this project are documented here, following
   never changes is a static document.
 - `vecview.animation`: `Track` with `keyframes` and `map`, the interpolators
   `linear` (numbers and 3D points) and `hold`, the easing `smoothstep`, and
-  `rotate` and `scale`, which copy a part turned or scaled about a pivot.
+  `rotate` and `scale`, which copy a part turned or scaled about a pivot and
+  take tracks too.
 - `examples/pendulum.py` -- a pendulum swinging through one seamless period,
   with its equations typeset by VecTeX.  See `docs/animation.md`.
 

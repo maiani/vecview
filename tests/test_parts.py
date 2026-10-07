@@ -246,7 +246,7 @@ class TestChecks:
         from vecview._drawing import _Drawing
         from vecview._place import _MOVES
 
-        calls = {name for name in vars(_Drawing) if not name.startswith("_")} - {"place"}
+        calls = {name for name in vars(_Drawing) if not name.startswith("_")} - {"place", "at"}
         assert calls == set(_MOVES)
 
     def test_a_part_holds_no_document_level_calls(self) -> None:

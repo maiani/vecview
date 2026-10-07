@@ -231,23 +231,22 @@ scope; they belong to whatever assembles the final page.
 
 ## Animation
 
-An `Animation` is a function from seconds to a whole scene. VecView renders a
+An `Animation` is a scene that moves: draw it once, and give what moves a
+track — a function of time — wherever a still takes a value. VecView renders a
 sample per frame and writes one SVG that plays itself with native SVG timing —
-every frame still vector, no script — and writes once what every frame draws
-alike:
+every frame still vector, no script — and writes once what does not change:
 
 ```python
-def frame(t: float) -> vecview.Scene:
-    scene = vecview.Scene(camera)
-    scene.sphere(1, (2 * cos(t), 2 * sin(t), 0), 0.25, id="planet", fill="#3b6fb6")
-    return scene
+orbit = Track(lambda t: (2 * cos(t), 2 * sin(t), 0))
+scene = vecview.Scene(camera)
+scene.sphere(1, orbit, 0.25, id="planet", fill="#3b6fb6")
 
-
-vecview.Animation(frame, duration=6.283, view_box=(-150, -110, 300, 220)).save("orbit.svg")
+vecview.Animation(scene, duration=6.283, view_box=(-150, -110, 300, 220)).save("orbit.svg")
 ```
 
-Keyframed tracks, easing, and turning parts about a pivot are in
-`vecview.animation`; see the [animation guide](docs/animation.md).
+`Track` with keyframes and easing, turning parts about a pivot, and frame
+callbacks for anything else are in `vecview.animation`; see the [animation
+guide](docs/animation.md).
 
 ## Examples
 

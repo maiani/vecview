@@ -14,8 +14,9 @@ from vecview._types import Point3
 class Track[T]:
     """A reusable pure function from finite seconds to a value.
 
-    Tracks do not know an animation's duration or repeat settings. Ordinary
-    callables work just as well in a frame callback.
+    Handed to a drawing call in place of a value, a track is kept and read at
+    each frame.  Tracks do not know an animation's duration or repeat settings.
+    Ordinary callables work just as well in a frame callback.
     """
 
     def __init__(self, sample: Callable[[float], T]) -> None:

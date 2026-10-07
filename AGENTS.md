@@ -37,9 +37,12 @@ on its own side.
     `projections.py`, `_occlusion.py`, `_place.py`, `_drawing.py`,
     `_tracks.py`, and `_transforms.py` never do.
 - `animation.py` samples a pure time-to-scene callback through the static
-  renderer and writes once what every frame draws alike. A frame is drawn
-  exactly as the same scene would be as a still; do not add an animation-only
-  rendering path.
+  renderer and writes once what every frame draws alike. A scene holding tracks
+  is that callback underneath: a drawing call given a `Track` anywhere in its
+  arguments is kept as made (`_Tracked`, via `_trackable` in `_drawing.py`),
+  and `at(t)` replays it with the tracks read, sharing the calls without one.
+  A frame is drawn exactly as the same scene would be as a still; do not add an
+  animation-only rendering path. A new drawing call needs `@_trackable`.
 - `_occlusion.py` is private: exact visibility for `sort_by_depth(layer)`.
   The canvas describes each element of a sorted layer as a `Surface` (outline
   plus a depth that goes on smoothly past its edge) or a `Line`, lazily, and

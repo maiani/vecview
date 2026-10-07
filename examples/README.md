@@ -47,4 +47,4 @@ reads PDF through MuPDF's `mutool` when Ghostscript is 10.01 or newer
 ## Animation
 
 - `pendulum.py` — a pendulum swinging through one seamless period, with its
-  equations typeset by TeX
+  equations typeset by TeX; tracks for the bob's position and the readouts

@@ -2,17 +2,80 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
-from typing import Literal
+import functools
+from collections.abc import Callable, Iterable, Mapping
+from typing import Concatenate, Literal, NamedTuple, Self
 
 import numpy as np
 import svg
 
 from vecview._elements import _ALIGN, Align, TextContent
 from vecview._place import _Call, _moved, _placement
+from vecview._tracks import Track
 from vecview._types import Point3, Points2, Points3, Style
 from vecview._vec import as_points, unit
 from vecview.shapes import Face, Pivot, prism_faces
+
+
+class _Tracked(NamedTuple):
+    """A drawing call with a track among its arguments, kept as made for ``at`` to replay."""
+
+    method: str
+    args: tuple[object, ...]
+    kwargs: dict[str, object]
+
+
+def _moving(value: object) -> bool:
+    """Whether ``value`` is a track, or a list, tuple, dict, or part holding one."""
+    if isinstance(value, Track):
+        return True
+    if isinstance(value, _Drawing):
+        return value._animated
+    if isinstance(value, list | tuple) and type(value) in (list, tuple):
+        return any(_moving(v) for v in value)
+    if isinstance(value, dict) and type(value) is dict:
+        return any(_moving(v) for v in value.values())
+    return False
+
+
+def _read(value: object, t: float) -> object:
+    """``value`` with every track in it read at ``t`` seconds."""
+    if isinstance(value, Track):
+        return _read(value(t), t)  # a track may give a part that moves too
+    if isinstance(value, _Drawing) and value._animated:
+        return value.at(t)
+    if isinstance(value, list | tuple) and type(value) in (list, tuple):
+        return type(value)(_read(v, t) for v in value)
+    if isinstance(value, dict) and type(value) is dict:
+        return {k: _read(v, t) for k, v in value.items()}
+    return value
+
+
+def _read_call(
+    args: tuple[object, ...], kwargs: dict[str, object], t: float
+) -> tuple[tuple[object, ...], dict[str, object]]:
+    """A call's arguments with every track in them read at ``t`` seconds."""
+    return tuple(_read(v, t) for v in args), {k: _read(v, t) for k, v in kwargs.items()}
+
+
+def _trackable[D: _Drawing, **P](
+    method: Callable[Concatenate[D, P], None],
+) -> Callable[Concatenate[D, P], None]:
+    """Let a drawing call take tracks: such a call is checked at ``t = 0`` and kept as made."""
+
+    name = method.__name__  # ty: ignore[unresolved-attribute]
+
+    @functools.wraps(method)
+    def call(self: D, *args: P.args, **kwargs: P.kwargs) -> None:
+        if not _moving((args, kwargs)):
+            return method(self, *args, **kwargs)
+        made = _Tracked(name, tuple(args), dict(kwargs))
+        now, named = _read_call(made.args, made.kwargs, 0.0)
+        method(self._blank(), *now, **named)  # ty: ignore[invalid-argument-type]
+        self._log.append(made)
+        return None
+
+    return call
 
 
 def _class_names(value: object) -> tuple[str, ...]:
@@ -51,17 +114,47 @@ class _Drawing:
     """
 
     def __init__(self) -> None:
-        self._log: list[_Call] = []
+        self._log: list[_Call | _Tracked] = []
 
     def _add(self, method: str, *args: object, **kwargs: Style) -> None:
         """Record one drawing call, to be replayed against a camera when rendering."""
         classes = _class_names(kwargs.pop("class_", ()))
         self._log.append((method, args, kwargs, classes))
 
+    @property
+    def _animated(self) -> bool:
+        return any(isinstance(record, _Tracked) for record in self._log)
+
+    def _calls(self) -> list[_Call]:
+        """The recorded calls of a drawing with no tracks in it."""
+        if self._animated:
+            raise RuntimeError("a drawing holding tracks is read at a time first, with at(t)")
+        return [record for record in self._log if not isinstance(record, _Tracked)]
+
+    def _blank(self, t: float = 0.0) -> Self:
+        """An empty drawing of the same kind, with its settings as they stand at ``t``."""
+        return type(self)()
+
+    def at(self, t: float) -> Self:
+        """A copy as it stands ``t`` seconds in, with every track read at ``t``.
+
+        Calls without a track are shared with the copy, not made again.  A
+        drawing with no tracks gives an unchanged copy at any time.
+        """
+        still = self._blank(t)
+        for record in self._log:
+            if isinstance(record, _Tracked):
+                args, kwargs = _read_call(record.args, record.kwargs, t)
+                getattr(still, record.method)(*args, **kwargs)
+            else:
+                still._log.append(record)
+        return still
+
+    @_trackable
     def place(
         self,
         layer: int,
-        part: Part,
+        part: Part | Track[Part],
         *,
         at: Point3 = (0.0, 0.0, 0.0),
         rotate: tuple[Point3, float] | None = None,
@@ -89,7 +182,8 @@ class _Drawing:
                 ``11``.  Depth sorting stays the host scene's choice:
                 ``scene.sort_by_depth(10)`` sorts the placed atoms with
                 everything else on that layer.
-            part: The part to draw.
+            part: The part to draw, or a track of parts for what changes from
+                frame to frame -- how many arrows there are, say.
             at: Where the part's origin goes.
             rotate: ``(axis, angle_deg)``, or ``None``.
             mirror: Normal of the plane through the part's origin to reflect
@@ -117,13 +211,15 @@ class _Drawing:
             raise ValueError("a placement id must not be empty")
         frame = _placement(at, rotate, mirror, scale)
         extra = _class_names(class_)
-        for call in list(part._log):
+        for call in part._calls():
             self._log.append(_moved(call, frame, int(layer), id, extra))
 
+    @_trackable
     def polygon(self, layer: int, pts3: Points3, **style: Style) -> None:
         """Filled polygon through projected world points."""
         self._add("polygon", layer, pts3, **style)
 
+    @_trackable
     def polyline(
         self, layer: int, pts3: Points3, *, back: Mapping[str, Style] | None = None, **style: Style
     ) -> None:
@@ -137,6 +233,7 @@ class _Drawing:
         style.setdefault("fill", "none")
         self._add("polyline", layer, pts3, back=back, **style)
 
+    @_trackable
     def faces(
         self, layer: int, faces: Iterable[Face], *, cull: bool = False, **style: Style
     ) -> None:
@@ -168,6 +265,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def plane(
         self,
         layer: int,
@@ -206,6 +304,7 @@ class _Drawing:
         """
         self._add("plane", layer, origin, u_edge, v_edge, id=id, **style)
 
+    @_trackable
     def slot(
         self,
         layer: int,
@@ -264,6 +363,7 @@ class _Drawing:
             "slot", layer, pt3, w, h, id=id, align=align, dx=dx, dy=dy, content=content, **style
         )
 
+    @_trackable
     def silhouette(self, layer: int, solid: Iterable[Face] | Points3, **style: Style) -> None:
         """Fill the projected outline of a convex solid as one polygon.
 
@@ -288,6 +388,7 @@ class _Drawing:
         given = list(solid)
         self._add("silhouette", layer, given, **style)
 
+    @_trackable
     def prism_walls(
         self, layer: int, footprint: Points2, z0: float, z1: float, **style: Style
     ) -> None:
@@ -324,6 +425,7 @@ class _Drawing:
         prism_faces(footprint, z0, z1)  # rejects a footprint that is not a simple polygon
         self._add("prism_walls", layer, footprint, z0, z1, **style)
 
+    @_trackable
     def arrow(
         self,
         layer: int,
@@ -372,6 +474,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def gaussian(
         self,
         layer: int,
@@ -438,6 +541,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def sphere(
         self,
         layer: int,
@@ -469,6 +573,7 @@ class _Drawing:
         _check_highlight(style, highlight, needs_id=False)
         self._add("sphere", layer, center, radius, highlight=highlight, **style)
 
+    @_trackable
     def cylinder(
         self,
         layer: int,
@@ -541,6 +646,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def cone(
         self,
         layer: int,
@@ -573,6 +679,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def arrow3d(
         self,
         layer: int,
@@ -628,6 +735,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def tube(
         self,
         layer: int,
@@ -672,6 +780,7 @@ class _Drawing:
             raise ValueError("a tube needs at least two points")
         self._add("tube", layer, pts3, radius, chunk=chunk, **style)
 
+    @_trackable
     def edges(
         self,
         layer: int,
@@ -729,6 +838,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def sphere_curve(
         self,
         layer: int,
@@ -772,6 +882,7 @@ class _Drawing:
             **style,
         )
 
+    @_trackable
     def text(
         self,
         layer: int,

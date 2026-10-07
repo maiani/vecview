@@ -1,8 +1,9 @@
-"""Animations: a scene for every time, exported as one self-playing SVG.
+"""Animations: a scene that moves, exported as one self-playing SVG.
 
-``Animation`` is the foundation, and any motion a frame callback can draw it can
-play.  ``Track`` and the interpolation helpers turn keyframes into values, and
-``rotate`` and ``scale`` turn or grow a part about a pivot.
+``Animation`` plays a scene whose drawing calls take ``Track`` values, read at
+each frame, or any motion a frame callback can draw.  ``Track`` and the
+interpolation helpers turn keyframes into values, and ``rotate`` and ``scale``
+turn or grow a part about a pivot.
 """
 
 from __future__ import annotations
@@ -22,14 +23,18 @@ if TYPE_CHECKING:
 
 
 class Animation:
-    """A pure seconds-to-Scene function exported as sampled SVG frames.
+    """A scene that moves, exported as sampled SVG frames.
 
-    Each callback result is a complete scene, so geometry, layers, styles and
-    the active camera may change over time. The callback must return the same
-    scene for a given time, independently of call order.
+    The motion is given either by a scene whose drawing calls take tracks --
+    ``scene.sphere(1, orbit, 0.25)`` with ``orbit`` a ``Track`` -- read at each
+    time by ``scene.at(t)``, or by a pure callback from seconds to a complete
+    scene, so geometry, layers, styles and the active camera may change over
+    time. The callback must return the same scene for a given time,
+    independently of call order.
 
     Args:
-        frame: Pure callback from seconds in ``[0, duration]`` to a ``Scene``.
+        frame: A ``Scene`` holding tracks, or a pure callback from seconds in
+            ``[0, duration]`` to a ``Scene``.
         duration: Finite positive cycle length in seconds.
         view_box: Fixed ``(min_x, min_y, width, height)`` in projected SVG units.
         fps: Positive requested sample rate; defaults to 30.
@@ -43,7 +48,7 @@ class Animation:
 
     def __init__(
         self,
-        frame: Callable[[float], Scene],
+        frame: Scene | Callable[[float], Scene],
         *,
         duration: float,
         view_box: tuple[float, float, float, float],
@@ -52,6 +57,8 @@ class Animation:
         background: str | None = None,
     ) -> None:
         """Store a callback and export settings without evaluating ``frame``."""
+        if isinstance(frame, Scene):
+            frame = frame.at
         if not callable(frame):
             raise TypeError("frame must be callable")
         self.duration = _number(duration, "duration")
