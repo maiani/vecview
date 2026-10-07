@@ -6,8 +6,8 @@ Fermi circle, all drawn as thin tubes, so the axes pass behind the front walls
 of the bands and show again inside the upper band, with no layer assigned by
 hand.
 
-Uses: ``surface_faces``, ``sort_by_depth``, ``tube``, ``cone``, and subscripted
-labels from ``svg.TSpan`` runs.
+Uses: ``surface_faces``, ``sort_by_depth``, ``tube``, ``cone``, and ``slot``
+holding labels typeset by TeX through VecTeX.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import svg
+import vectex
 
 import vecview
 from vecview import OrthographicCamera, Scene
@@ -26,6 +26,25 @@ K_MAX = 1.0
 INK = "#1f2430"
 UPPER = ("#fde5cf", "#d4560f")  # low to high |E|
 LOWER = ("#d4e4f4", "#1f5fa8")
+MU_COLOR = "#7a1fa2"
+# The labels, typeset by TeX in one run.
+LABELS = dict(
+    zip(
+        ("kx", "ky", "E", "mu", "gap"),
+        vectex.render_many(
+            [
+                vectex.RenderItem("$k_x$", id_prefix="kx"),
+                vectex.RenderItem("$k_y$", id_prefix="ky"),
+                vectex.RenderItem("$E$", id_prefix="E"),
+                vectex.RenderItem(r"$\mu$", id_prefix="mu", color=MU_COLOR),
+                vectex.RenderItem(r"$2\Delta$", id_prefix="gap"),
+            ],
+            size_pt=18,
+            color=INK,
+        ),
+        strict=True,
+    )
+)
 
 
 def mix(a: str, b: str, t: float) -> str:
@@ -75,7 +94,7 @@ def build() -> Scene:
         10,
         np.vstack([ring, ring[:1]]),
         0.012,
-        fill="#7a1fa2",
+        fill=MU_COLOR,
         chunk=2,
         id="fermi",
         class_="fermi-surface",
@@ -102,16 +121,26 @@ def build() -> Scene:
             class_="axis",
         )
 
-    math = dict(font_family="DejaVu Serif", font_style="italic", fill=INK, size=24)
-
-    def k(index: str) -> list[svg.TSpan]:
-        return [svg.TSpan(text="k"), svg.TSpan(text=index, baseline_shift="sub", font_size=16)]
-
-    scene.text(30, (1.5, 0, 0), k("x"), dx=6, dy=10, id="label-kx", **math)
-    scene.text(30, (0, 1.5, 0), k("y"), dx=4, dy=12, id="label-ky", **math)
-    scene.text(30, (0, 0, 1.5), "E", dx=-8, dy=-6, id="label-E", **math)
-    scene.text(30, (k_f, 0, MU), "μ", dx=10, dy=-4, id="label-mu", **{**math, "fill": "#7a1fa2"})
-    scene.text(30, (0, 0, 0), "2Δ", dx=14, dy=-34, id="label-gap", **math)
+    # Each label sits off its point by a screen offset, kept upright by a slot.
+    for name, at, dx, dy in (
+        ("kx", (1.5, 0, 0), 6, 10),
+        ("ky", (0, 1.5, 0), 4, 12),
+        ("E", (0, 0, 1.5), -8, -6),
+        ("mu", (k_f, 0, MU), 10, -4),
+        ("gap", (0, 0, 0), 14, -34),
+    ):
+        label = LABELS[name]
+        scene.slot(
+            30,
+            at,
+            label.width_px,
+            label.height_px,
+            id=f"label-{name}",
+            align="southwest",
+            dx=dx,
+            dy=dy,
+            content=label.to_svg_py(),
+        )
     return scene
 
 

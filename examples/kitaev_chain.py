@@ -35,7 +35,7 @@ left out, and B is drawn exactly along the wire rather than a few degrees off.
 Uses: ``outlines.regular`` and ``outlines.to_plane`` for the cross-sections,
 ``extrude`` along x, a ``Part`` placed twice with ``mirror`` for the two
 contacts, ``class_`` on every kind of object, ``sort_by_depth``, ``gaussian``,
-``arrow3d``, and subscripted labels from ``svg.TSpan`` runs.
+``arrow3d``, and ``slot`` holding labels typeset by TeX through VecTeX.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import svg
+import vectex
 
 import vecview
 from vecview import OrthographicCamera, Scene, outlines
@@ -93,8 +93,32 @@ COLORS = dict(
 SUB_MID, SUB_DEPTH = (SUB_FRONT + SUB_BACK) / 2, SUB_BACK - SUB_FRONT
 X, Y, Z = np.eye(3)
 EDGE = dict(stroke_width=0.8, stroke_linejoin="round")
-LABEL_SIZE = 20.0
-MATH = dict(font_family="DejaVu Serif", font_style="italic", size=LABEL_SIZE, text_anchor="middle")
+# The labels, typeset by TeX in one run.  Each N is its own render, so the two
+# do not share glyph ids in one document.
+TEX = {  # name: TeX source, colour
+    "gamma-1": (r"$\gamma_1$", COLORS["majorana"]),
+    "gamma-2": (r"$\gamma_2$", COLORS["majorana"]),
+    "LD": (r"$V_\mathrm{LD}$", INK),
+    "PG": (r"$V_\mathrm{PG}$", INK),
+    "RD": (r"$V_\mathrm{RD}$", INK),
+    "N-L": (r"$\mathrm{N}$", INK),
+    "S": (r"$\mathrm{S}$", INK),
+    "N-R": (r"$\mathrm{N}$", INK),
+    "B": (r"$\mathbf{B}$", COLORS["field"]),
+}
+LABELS = dict(
+    zip(
+        TEX,
+        vectex.render_many(
+            [
+                vectex.RenderItem(source, color=color, id_prefix=name)
+                for name, (source, color) in TEX.items()
+            ],
+            size_pt=18,
+        ),
+        strict=True,
+    )
+)
 COS30 = np.cos(np.radians(30.0))
 
 
@@ -173,16 +197,21 @@ WIRE_PIECES = {
 }
 
 
-def sub(base: str, index: str, size: float) -> list[svg.TSpan]:
-    """``base`` with an upright subscript, as ``svg.TSpan`` runs.
-
-    The drop is a ``dy`` rather than ``baseline-shift``, which cairosvg ignores.
-    """
-    drop = round(0.3 * size, 1)
-    return [
-        svg.TSpan(text=base),
-        svg.TSpan(text=index, dy=drop, font_size=round(0.7 * size, 1), font_style="normal"),
-    ]
+def tex(scene: Scene, at, name: str, *, dx: float = 0.0, dy: float = 0.0) -> None:
+    """The TeX label ``name`` centred above the world point ``at``, offset on screen."""
+    label = LABELS[name]
+    scene.slot(
+        40,
+        at,
+        label.width_px,
+        label.height_px,
+        id=f"label-{name}",
+        align="south",
+        dx=dx,
+        dy=dy,
+        content=label.to_svg_py(),
+        class_="label",
+    )
 
 
 def platform(scene: Scene) -> None:
@@ -285,49 +314,22 @@ def majorana_modes(scene: Scene) -> None:
             color=COLORS["majorana"],
             opacity=0.9,
         )
-        scene.text(
-            40,
-            (x, 0.0, top),
-            sub("\N{GREEK SMALL LETTER GAMMA}", str(k), LABEL_SIZE),
-            dy=-21,
-            fill=COLORS["majorana"],
-            id=f"label-gamma-{k}",
-            class_="label",
-            **MATH,
-        )
+        tex(scene, (x, 0.0, top), f"gamma-{k}", dy=-21)
 
 
 def labels(scene: Scene) -> None:
     """The three gate voltages in front, and the roles of the leads, N-S-N, behind."""
     for gate in ("LD", "PG", "RD"):
         x = GATES[gate][0]
-        scene.text(
-            40,
-            (x, GATE_FRONT, Z0),
-            sub("V", gate, LABEL_SIZE),
-            dy=28,
-            fill=INK,
-            id=f"label-{gate}",
-            class_="label",
-            **MATH,
-        )
+        tex(scene, (x, GATE_FRONT, Z0), gate, dy=28)
     y = SUB_BACK - 0.6
     roles = {
-        "N-L": ("N", (-(XC + X_END) / 2, y, Z0 + T_N)),
-        "S": ("S", (0.0, y, Z0 + T_AL)),
-        "N-R": ("N", ((XC + X_END) / 2, y, Z0 + T_N)),
+        "N-L": (-(XC + X_END) / 2, y, Z0 + T_N),
+        "S": (0.0, y, Z0 + T_AL),
+        "N-R": ((XC + X_END) / 2, y, Z0 + T_N),
     }
-    for key, (role, at) in roles.items():
-        scene.text(
-            40,
-            at,
-            role,
-            dy=7,
-            fill=INK,
-            id=f"label-{key}",
-            class_="label",
-            **{**MATH, "font_style": "normal", "font_family": "DejaVu Sans"},
-        )
+    for name, at in roles.items():
+        tex(scene, at, name, dy=7)
 
 
 def field(scene: Scene) -> None:
@@ -348,17 +350,7 @@ def field(scene: Scene) -> None:
         id="field",
         class_="field",
     )
-    scene.text(
-        40,
-        tail + length * X,
-        "B",
-        dx=12,
-        dy=7,
-        fill=COLORS["field"],
-        id="label-B",
-        class_="label",
-        **MATH,
-    )
+    tex(scene, tail + length * X, "B", dx=12, dy=7)
 
 
 def build() -> Scene:

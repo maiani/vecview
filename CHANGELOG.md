@@ -7,6 +7,12 @@ All notable changes to this project are documented here, following
 
 ### Added
 
+- `slot(..., content=element)` -- a slot can hold an svg.py element instead of
+  waiting for a consumer to fill it: the element, `w` by `h` in its own
+  coordinates from its top-left, is placed with its box aligned on the anchor,
+  and follows every camera.  VecView places it as given, never parsing, copying,
+  or changing it.  The examples with mathematical labels now typeset them with
+  VecTeX and hold them in slots, in place of `svg.TSpan` subscripts.
 - `Animation(frame, *, duration, view_box, fps=30, repeat=1, background=None)`
   -- a function from seconds to a whole `Scene`, sampled at evenly spaced
   times, rendered by the static renderer, and written as one standalone SVG

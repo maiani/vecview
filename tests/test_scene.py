@@ -546,6 +546,28 @@ class TestSlot:
         with pytest.raises(ValueError, match="align"):
             scene.slot(5, (0, 0, 0), 1.0, 1.0, id="x", align="left")  # type: ignore[arg-type]
 
+    def test_holds_content_with_its_top_left_on_the_aligned_box(self, scene: Scene) -> None:
+        label = svg.Rect(width=20, height=10, fill="#369")
+        scene.slot(5, (0, 0, 0), 20.0, 10.0, id="label", align="southwest", content=label)
+        (inner,) = self.group(scene, "label").elements or []
+        assert inner.transform == [svg.Translate(0.0, -10.0)]
+        assert inner.elements == [label]
+        assert inner.elements[0] is label  # placed as given, not copied
+
+    def test_content_follows_a_placed_part(self, scene: Scene, cam: Camera) -> None:
+        label = svg.Rect(width=4, height=2)
+        part = vecview.Part()
+        part.slot(0, (1, 0, 0), 4.0, 2.0, id="tag", content=label)
+        scene.place(5, part, at=(0, 2, 0), id="a")
+        group = self.group(scene, "a-tag")
+        x, y = cam.at((1, 2, 0))
+        assert group.transform == [svg.Translate(round(x, 2), round(y, 2))]
+        assert (group.elements or [])[0].elements == [label]
+
+    def test_rejects_content_that_is_not_an_element(self, scene: Scene) -> None:
+        with pytest.raises(TypeError, match=r"svg\.py element"):
+            scene.slot(5, (0, 0, 0), 1.0, 1.0, id="x", content="<g/>")  # type: ignore[arg-type]
+
     def test_follows_the_geometry_under_reprojection(self, scene: Scene) -> None:
         scene.slot(5, (2, 0, 1), 20.0, 10.0, id="label")
         other = vecview.ObliqueCamera.cabinet(10.0)

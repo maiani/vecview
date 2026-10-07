@@ -6,7 +6,7 @@ and six squares.  Hidden edges are dashed and sit under the translucent faces,
 and the path Gamma-X-W-K-Gamma-L-U-W-L-K runs inside.
 
 Uses: ``convex_polyhedron``, ``edges(back=...)``, ``faces(cull=True)``, and
-subscripted labels.
+``slot`` holding labels typeset by TeX through VecTeX.
 """
 
 from __future__ import annotations
@@ -15,13 +15,14 @@ import itertools
 from pathlib import Path
 
 import numpy as np
-import svg
+import vectex
 
 import vecview
 from vecview import OrthographicCamera, Scene
 
 INK = "#1f2430"
 PATH_COLOR = "#c0392b"
+AXIS_COLOR = "#4b5563"
 # In units of 2 pi / a, scaled by 2 so the corners are the permutations of (0, +-1, +-2).
 POINTS = {
     "Γ": (0.0, 0.0, 0.0),
@@ -40,6 +41,45 @@ OFFSETS = {  # each label's screen offset from its point
     "L": (10, 18),
     "U": (-6, -12),
 }
+# The labels, typeset by TeX in one run: the axes, and the points in upright type.
+TEX = {  # name: TeX source, size in points, colour
+    "kx": ("$k_x$", 15, AXIS_COLOR),
+    "ky": ("$k_y$", 15, AXIS_COLOR),
+    "kz": ("$k_z$", 15, AXIS_COLOR),
+    "Γ": (r"$\Gamma$", 16.5, PATH_COLOR),
+    **{name: (rf"$\mathrm{{{name}}}$", 16.5, PATH_COLOR) for name in "XWKLU"},
+}
+LABELS = dict(
+    zip(
+        TEX,
+        vectex.render_many(
+            [
+                vectex.RenderItem(
+                    source, size_pt=size, color=color, id_prefix=name.replace("Γ", "Gamma")
+                )
+                for name, (source, size, color) in TEX.items()
+            ]
+        ),
+        strict=True,
+    )
+)
+
+
+def tex(scene: Scene, at, name: str, dx: float, dy: float) -> None:
+    """The TeX label ``name`` upright at the world point ``at``, offset on screen."""
+    label = LABELS[name]
+    scene.slot(
+        40,
+        at,
+        label.width_px,
+        label.height_px,
+        id=f"label-{name}",
+        align="southwest",
+        dx=dx,
+        dy=dy,
+        content=label.to_svg_py(),
+        class_="label",
+    )
 
 
 def build() -> Scene:
@@ -85,19 +125,7 @@ def build() -> Scene:
             id=f"axis-{label}",
             class_="axis",
         )
-        scene.text(
-            40,
-            2.95 * e,
-            [svg.TSpan(text="k"), svg.TSpan(text=label, baseline_shift="sub", font_size=14)],
-            dx=-6,
-            dy=8,
-            size=20,
-            font_family="DejaVu Serif",
-            font_style="italic",
-            fill="#4b5563",
-            id=f"label-k{label}",
-            class_="label",
-        )
+        tex(scene, 2.95 * e, f"k{label}", -6, 8)
 
     # The high-symmetry path, inside the zone and so under its front faces.
     stops = np.array([POINTS[name] for name in PATH])
@@ -115,18 +143,7 @@ def build() -> Scene:
             id=f"point-{name}",
             class_="high-symmetry-point",
         )
-        dx, dy = OFFSETS[name]
-        scene.text(
-            40,
-            at,
-            name,
-            dx=dx,
-            dy=dy,
-            size=22,
-            fill=PATH_COLOR,
-            id=f"label-{name}",
-            class_="label",
-        )
+        tex(scene, at, name, *OFFSETS[name])
     return scene
 
 

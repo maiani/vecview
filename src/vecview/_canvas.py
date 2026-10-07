@@ -475,9 +475,10 @@ class _Canvas:
         align: Align = "center",
         dx: float = 0.0,
         dy: float = 0.0,
+        content: svg.Element | None = None,
         **style: Style,
     ) -> None:
-        """Reserve an empty, screen-aligned group anchored at a projected world point."""
+        """A screen-aligned group anchored at a projected world point, holding ``content``."""
         if align not in _ALIGN:
             raise ValueError(f"unknown align {align!r}; expected one of {sorted(_ALIGN)}")
         x, y = self.cam.at(pt3)
@@ -485,12 +486,18 @@ class _Canvas:
         fx, fy = _ALIGN[align]
         x0, y0 = x - fx * w, y - fy * h
         self._grow(np.array([[x0, y0], [x0 + w, y0 + h]]))
+        # The content's top-left goes to the box's, as a consumer would place it.
+        corner: list[svg.Transform] = [svg.Translate(round(-fx * w, 2), round(-fy * h, 2))]
+        held: list[svg.Element] | None = None
+        if content is not None:
+            held = [svg.G(transform=corner, elements=[content])]
         self._emit(
             layer,
             svg.G(
                 id=id,
                 transform=[svg.Translate(round(x, 2), round(y, 2))],
                 data={"align": align},
+                elements=held,
                 **style,
             ),
             self._depth([pt3]),

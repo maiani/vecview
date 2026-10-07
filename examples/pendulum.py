@@ -26,13 +26,21 @@ OMEGA = sqrt(GRAVITY / LENGTH)
 PERIOD = 2 * pi / OMEGA  # one period, so the loop is seamless
 CAMERA = vecview.OrthographicCamera(azim_deg=90, elev_deg=0, scale=105)
 INK, MUTED, ACCENT = "#20334a", "#64748b", "#db6544"
-LAW = vectex.render(
-    r"$\theta(t) = \theta_0 \cos \omega t \qquad \omega = \sqrt{g/L}$", size_pt=13, id_prefix="law"
-)
-VALUES = vectex.render(
-    r"$L = 2.4\,\mathrm{m} \qquad g = 9.81\,\mathrm{m/s^2} \qquad \theta_0 = 15^\circ$",
-    size_pt=9,
-    id_prefix="values",
+LAW, VALUES = vectex.render_many(
+    [
+        vectex.RenderItem(
+            r"$\theta(t) = \theta_0 \cos \omega t \qquad \omega = \sqrt{g/L}$",
+            size_pt=13,
+            color=INK,
+            id_prefix="law",
+        ),
+        vectex.RenderItem(
+            r"$L = 2.4\,\mathrm{m} \qquad g = 9.81\,\mathrm{m/s^2} \qquad \theta_0 = 15^\circ$",
+            size_pt=9,
+            color=MUTED,
+            id_prefix="values",
+        ),
+    ]
 )
 
 
@@ -42,10 +50,8 @@ def position(theta: float) -> tuple[float, float, float]:
 
 def tex(scene: vecview.Scene, x: float, y: float, fragment: vectex.VectexFragment) -> None:
     """A TeX fragment with its baseline starting at screen point ``(x, y)``."""
-    px = 4 / 3  # VecTeX measures in TeX points; the scene in px
-    top = y - fragment.baseline * px
-    place = f"translate({x} {top:g}) scale({px:g})"
-    scene.add(0, svg.G(transform=place, elements=[fragment.to_svg_py()]))
+    top = y - fragment.baseline_px
+    scene.add(0, svg.G(transform=f"translate({x} {top:g})", elements=[fragment.to_svg_py()]))
 
 
 def draw_still(scene: vecview.Scene) -> None:

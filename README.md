@@ -177,9 +177,9 @@ spots = [-3.0 * horizontal + 1.7 * down, +3.0 * horizontal + 1.7 * down]
 
 ## Reserving room for other content
 
-Two calls reserve an empty group for content VecView does not draw itself, such
-as a plot or a TeX label. VecView never parses foreign SVG; a consumer fills the
-group by id.
+Two calls reserve a group for content VecView does not draw itself, such as a
+plot or a TeX label. VecView never parses foreign SVG: a consumer fills the
+group by id, or a slot holds an svg.py element it is given.
 
 `Scene.plane` reserves a rectangle of a world plane, so flat content lies *in*
 the scene, foreshortened and sheared with the geometry:
@@ -200,7 +200,23 @@ scene.slot(45, (5.5, 4.5, 0), 20, 10, id="label-x", align="west", dx=1.6)
 ```
 
 The group records `align` as `data-align`, the `w` by `h` box grows the fitted
-viewBox, and each camera projects the anchor afresh.
+viewBox, and each camera projects the anchor afresh. Give it `content` and it
+holds that element, aligned the same way — a label typeset by
+[VecTeX](https://github.com/maiani/vectex), say:
+
+```python
+label = vectex.render("$k_x$", size_pt=15, color="#4b5563")
+scene.slot(
+    45,
+    (5.5, 4.5, 0),
+    label.width_px,
+    label.height_px,
+    id="label-kx",
+    align="west",
+    dx=1.6,
+    content=label.to_svg_py(),
+)
+```
 
 ## Output
 
@@ -250,7 +266,7 @@ uv run python examples/altermagnetic_dot.py --projection all  # a device sketch,
 ```
 
 See [examples/README.md](examples/README.md) for the full list and what each
-needs; the pendulum typesets its equations with
+needs; several typeset their labels with
 [VecTeX](https://github.com/maiani/vectex), which needs TeX.
 
 `slab_polarizer` is a picture of a polarizing slab, rebuilt per

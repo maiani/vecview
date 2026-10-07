@@ -77,8 +77,9 @@ content in one.
 
 ## Filling a slot
 
-[`Scene.slot`](scenes.md#anchoring-upright-content) reserves an empty group for
-upright content pinned to a world point. What a consumer finds:
+[`Scene.slot`](scenes.md#anchoring-upright-content) reserves a group for upright
+content pinned to a world point. A slot given `content` already holds it; one
+left empty is for the consumer to fill. What a consumer finds:
 
 - `<g id="..." transform="translate(x y)" data-align="west"/>` — the translation
   is the **anchor**, not a corner of the box.

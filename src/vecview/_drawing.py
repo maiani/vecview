@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping
 from typing import Literal
 
 import numpy as np
+import svg
 
 from vecview._elements import _ALIGN, Align, TextContent
 from vecview._place import _Call, _moved, _placement
@@ -216,15 +217,17 @@ class _Drawing:
         align: Align = "center",
         dx: float = 0.0,
         dy: float = 0.0,
+        content: svg.Element | None = None,
         **style: Style,
     ) -> None:
-        """Reserve an empty, screen-aligned group anchored at a projected world point.
+        """A screen-aligned group anchored at a projected world point.
 
         The screen-space sibling of :meth:`plane`: where a plane makes content
         lie *in* the scene, a slot keeps it upright and unforeshortened -- a
         label, an equation, an inset -- while pinning it to a point of the
-        geometry.  Nothing is drawn, and this package does not embed foreign
-        SVG; a consumer fills the group by ``id``.
+        geometry.  Give it ``content`` to hold, or leave it empty for a
+        consumer to fill by ``id``.  Either way this package never parses or
+        rewrites the content: it places the element it is given.
 
         The group is translated to the anchor, ``cam.at(pt3)`` offset by
         ``(dx, dy)``, and records ``align`` as ``data-align``, so a consumer can
@@ -244,10 +247,22 @@ class _Drawing:
                 extends to the right.
             dx: Screen offset of the anchor, in scene units.
             dy: Screen offset of the anchor, in scene units, downward.
+            content: An svg.py element to hold, ``w`` by ``h`` in its own
+                coordinates from ``(0, 0)`` at its top-left, so the box aligns
+                as it would for a consumer.  The same element may be held by
+                any number of slots; it is not copied or changed.
+
+        Raises:
+            ValueError: For an unknown ``align``.
+            TypeError: If ``content`` is not an svg.py element.
         """
         if align not in _ALIGN:
             raise ValueError(f"unknown align {align!r}; expected one of {sorted(_ALIGN)}")
-        self._add("slot", layer, pt3, w, h, id=id, align=align, dx=dx, dy=dy, **style)
+        if content is not None and not isinstance(content, svg.Element):
+            raise TypeError(f"slot content must be an svg.py element, got {type(content).__name__}")
+        self._add(
+            "slot", layer, pt3, w, h, id=id, align=align, dx=dx, dy=dy, content=content, **style
+        )
 
     def silhouette(self, layer: int, solid: Iterable[Face] | Points3, **style: Style) -> None:
         """Fill the projected outline of a convex solid as one polygon.

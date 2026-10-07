@@ -394,7 +394,7 @@ top-level element the call emits carries them, and nothing inside it does.**
 | `edges`, `sphere_curve` | the front path and the back path |
 | `cylinder`, `cone`, `arrow3d` | the solid's `<g>`, not the body and end disks inside it |
 | `cylinder(slices=n)`, `tube` | every slice or chunk `<g>` |
-| `plane`, `slot` | the reserved group, around whatever a consumer fills it with |
+| `plane`, `slot` | the reserved group, around its content or whatever a consumer fills it with |
 | a line split by an [depth-sorted layer](#sorting-by-depth) | both the visible and the hidden part |
 
 So `.gate` selects four gates' faces, and `.atom` selects each sphere once,
@@ -558,14 +558,14 @@ every label. The rule is in [Orientation](embedding.md#orientation).
 ## Anchoring upright content
 
 ```python
-scene.slot(layer, point3, w, h, id="label-x", align="west", dx=1.6, dy=0.5)
+scene.slot(layer, point3, w, h, id="label-x", align="west", dx=1.6, dy=0.5, content=None)
 ```
 
 The screen-aligned sibling of `plane`. Where a plane makes content lie *in* the
 scene, a slot keeps it upright and unforeshortened — a TeX label, an inset —
 while pinning it to a point of the geometry.
 
-It reserves an **empty group** translated to the anchor, the projected point
+It reserves a **group** translated to the anchor, the projected point
 offset by `(dx, dy)` in screen units, and records `align` as `data-align`.
 `align` names the point of the content's box that sits on the anchor: `"west"`
 puts the anchor at the middle of the box's left edge, so the content extends to
@@ -574,11 +574,32 @@ points; anything else raises `ValueError` at the call. `w`, `h`, `dx`, and `dy`
 are screen units, and the offsets default to zero.
 
 A `w` by `h` box, aligned the same way, grows the fitted viewBox so content of
-that size is not clipped. Nothing is drawn; a consumer fills the group by `id`
-and lines its content up against the anchor using `data-align` — see
-[Embedding a scene](embedding.md#filling-a-slot). Because the anchor is a world
-point, [each camera](#rendering-one-scene-several-ways) moves the slot with
-the geometry, which a hand-placed `rect2d` would not.
+that size is not clipped. Because the anchor is a world point,
+[each camera](#rendering-one-scene-several-ways) moves the slot with the
+geometry, which a hand-placed `rect2d` would not.
+
+Left empty, the group is for a consumer to fill by `id`, lining its content up
+against the anchor using `data-align` — see
+[Embedding a scene](embedding.md#filling-a-slot). Given `content`, an svg.py
+element `w` by `h` in its own coordinates from `(0, 0)` at its top-left, the
+slot holds it with its box aligned on the anchor. VecView places the element as
+it is given, without parsing, copying, or changing it, so the same element can
+sit in any number of slots. A label typeset by
+[VecTeX](https://github.com/maiani/vectex) comes with its size in px:
+
+```python
+label = vectex.render(r"$\gamma_1$", size_pt=18, color="#c0392b")
+scene.slot(
+    40,
+    (x, 0, top),
+    label.width_px,
+    label.height_px,
+    id="label-gamma-1",
+    align="south",
+    dy=-21,
+    content=label.to_svg_py(),
+)
+```
 
 ## Seamless solids
 

@@ -6,7 +6,7 @@ without a layer assigned per half-turn.  The return field lines are dashed, in
 the plane of the axis.
 
 Uses: ``helix``, ``tube``, ``cylinder(highlight=...)``, ``arrow3d``,
-``sort_by_depth``.
+``sort_by_depth``, and ``slot`` holding labels typeset by TeX through VecTeX.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import vectex
 
 import vecview
 from vecview import OrthographicCamera, Scene
@@ -24,6 +25,14 @@ COPPER, COPPER_EDGE = "#c8743c", "#5e2f12"
 FIELD = "#1f5fa8"
 INK = "#2b2b2b"
 X, Z = np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0])
+# The field and the current, typeset by TeX in one run.
+FIELD_LABEL, CURRENT_LABEL = vectex.render_many(
+    [
+        vectex.RenderItem(r"$\mathbf{B}$", id_prefix="B", color=FIELD),
+        vectex.RenderItem("$I$", id_prefix="I", color=INK),
+    ],
+    size_pt=19.5,
+)
 
 
 def build() -> Scene:
@@ -90,8 +99,6 @@ def build() -> Scene:
         stroke_width=0.7,
         id="field",
     )
-    math = dict(font_family="DejaVu Serif", font_style="italic", size=26)
-    scene.text(30, -start + 1.9 * X, "B", dx=8, dy=8, fill=FIELD, id="label-B", **math)
 
     # Current up the first lead and down the other, drawn just outside each.
     beside = [coil[0] - 1.25 * Z - 0.38 * X, coil[-1] - 1.25 * Z + 0.38 * X]
@@ -108,7 +115,23 @@ def build() -> Scene:
             id=f"current-{k}",
             class_="current",
         )
-    scene.text(30, beside[0], "I", dx=-22, dy=8, fill=INK, id="label-I", **math)
+
+    # The labels sit off their points on screen, kept upright by slots.
+    for label, at, dx, name in (
+        (FIELD_LABEL, -start + 1.9 * X, 8, "B"),
+        (CURRENT_LABEL, beside[0], -22, "I"),
+    ):
+        scene.slot(
+            30,
+            at,
+            label.width_px,
+            label.height_px,
+            id=f"label-{name}",
+            align="southwest",
+            dx=dx,
+            dy=8,
+            content=label.to_svg_py(),
+        )
     return scene
 
 

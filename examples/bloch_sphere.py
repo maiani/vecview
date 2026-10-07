@@ -5,7 +5,8 @@ split exactly where they pass behind it and dashed there; the state is a solid
 arrow, with the angles marked by arcs in their own planes.
 
 Uses: ``sphere(highlight=...)``, ``sphere_curve``, ``arrow3d``, ``arc_shape``,
-and the flat ``arrow(normal="camera")`` for the axes.
+the flat ``arrow(normal="camera")`` for the axes, and ``slot`` holding labels
+typeset by TeX through VecTeX.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import vectex
 
 import vecview
 from vecview import OrthographicCamera, Scene
@@ -21,13 +23,50 @@ THETA, PHI = 52.0, 58.0  # the state, in degrees
 INK = "#1f2430"
 STATE = "#c0392b"
 AXIS_LEN = 1.38
-MATH = dict(font_family="DejaVu Serif", font_style="italic", fill=INK)
+TEX = {  # name: TeX source, size in points, colour
+    "x": ("$x$", 18, INK),
+    "y": ("$y$", 18, INK),
+    "z": ("$z$", 18, INK),
+    "theta": (r"$\theta$", 16, INK),
+    "phi": (r"$\varphi$", 16, INK),
+    "north": (r"$\lvert 0 \rangle$", 16.5, INK),
+    "south": (r"$\lvert 1 \rangle$", 16.5, INK),
+    "psi": (r"$\lvert \psi \rangle$", 16.5, STATE),
+}
+LABELS = dict(
+    zip(
+        TEX,
+        vectex.render_many(
+            [
+                vectex.RenderItem(source, size_pt=size, color=color, id_prefix=name)
+                for name, (source, size, color) in TEX.items()
+            ]
+        ),
+        strict=True,
+    )
+)
 
 
 def bloch_vector(theta_deg: float, phi_deg: float) -> np.ndarray:
     """The unit vector at polar angle theta and azimuth phi."""
     th, ph = np.radians(theta_deg), np.radians(phi_deg)
     return np.array([np.sin(th) * np.cos(ph), np.sin(th) * np.sin(ph), np.cos(th)])
+
+
+def tex(scene: Scene, at, name: str, dx: float, dy: float, *, id: str) -> None:
+    """The TeX label ``name`` upright at the world point ``at``, offset on screen."""
+    label = LABELS[name]
+    scene.slot(
+        30,
+        at,
+        label.width_px,
+        label.height_px,
+        id=id,
+        align="southwest",
+        dx=dx,
+        dy=dy,
+        content=label.to_svg_py(),
+    )
 
 
 def build() -> Scene:
@@ -88,7 +127,7 @@ def build() -> Scene:
             id=f"axis-{label}",
             class_="axis",
         )
-        scene.text(30, AXIS_LEN * e, label, dx=dx, dy=dy, size=24, id=f"label-{label}", **MATH)
+        tex(scene, AXIS_LEN * e, label, dx, dy, id=f"label-{label}")
 
     # The state, its angles, and the poles.
     scene.arrow3d(
@@ -114,14 +153,14 @@ def build() -> Scene:
     )
     # Each angle's label sits just outside the middle of its arc.
     theta_at = 0.45 * bloch_vector(THETA / 2, PHI)
-    scene.text(30, theta_at, "θ", dx=-4, dy=6, size=21, id="label-theta", **MATH)
+    tex(scene, theta_at, "theta", -4, 6, id="label-theta")
     phi_at = 0.42 * bloch_vector(90.0, PHI / 2)
-    scene.text(30, phi_at, "φ", dx=-6, dy=10, size=21, id="label-phi", **MATH)
+    tex(scene, phi_at, "phi", -6, 16, id="label-phi")
 
-    for name, z, text, dy in (("north", 1.0, "|0⟩", -12), ("south", -1.0, "|1⟩", 28)):
+    for name, z, dy in (("north", 1.0, -12), ("south", -1.0, 36)):
         scene.sphere(22, (0, 0, z), 0.03, fill=INK, id=f"pole-{name}")
-        scene.text(30, (0, 0, z), text, dx=10, dy=dy, size=22, id=f"ket-{name}", fill=INK)
-    scene.text(30, psi, "|ψ⟩", dx=10, dy=-8, size=22, id="ket-psi", fill=STATE)
+        tex(scene, (0, 0, z), name, 10, dy, id=f"ket-{name}")
+    tex(scene, psi, "psi", 10, -8, id="ket-psi")
     return scene
 
 

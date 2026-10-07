@@ -4,7 +4,9 @@ The figures a physics or chemistry paper keeps redrawing, each built from code b
 one script in `examples/` and shown here as the SVG it writes. Every one
 is a few dozen lines of geometry: no layer is assigned per object, no occlusion
 is worked out by hand, and every element keeps the id it was given, so the file
-opens in Inkscape as named objects.
+opens in Inkscape as named objects. Mathematical labels are typeset by TeX
+through [VecTeX](https://github.com/maiani/vectex) and held upright at their
+points by [slots](scenes.md#anchoring-upright-content).
 
 Build them all, with timings, from a checkout:
 
@@ -38,7 +40,9 @@ are clipped with them, and the cell edges stop at the atom surfaces with
 The truncated octahedron of the fcc lattice, from its 24 corners: coplanar
 triangles merge into eight hexagons and six squares. Hidden edges are dashed and
 sit under the translucent faces, and the high-symmetry path Γ–X–W–K–Γ–L–U–W–L–K
-runs inside. The axis labels are subscripted with `svg.TSpan` runs.
+runs inside. The labels are typeset by TeX through
+[VecTeX](https://github.com/maiani/vectex) and held upright by
+[slots](scenes.md#anchoring-upright-content).
 
 `examples/brillouin_zone.py`
 

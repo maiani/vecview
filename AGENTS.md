@@ -59,6 +59,10 @@ on its own side.
   answer for a perspective camera, which would subclass `Camera` directly.
 - `Scene.plane` reserves a group and nothing more. This package must not parse,
   normalize, or embed foreign SVG; a consumer fills the group by id.
+- `Scene.slot` may hold an svg.py element passed as `content`, placed as given
+  in the aligned box and never parsed, copied, or rewritten. That is the one
+  way content from elsewhere -- a VecTeX label -- goes into a scene without a
+  consumer; anything that would need VecView to read or change it does not.
 - `Scene` records objects and nothing else; it never projects. Every public
   drawing method validates what it can without a camera and appends one record.
   The canvas holds a camera and implements each method of the same name;

@@ -19,10 +19,14 @@ uv run python examples --docs    # and refresh the SVGs in docs/gallery/
 ```
 
 builds them all. The PNG previews and the two device sketches use CairoSVG,
-which is example-only: rasterizing is not VecView's job. The pendulum typesets
-its equations with [VecTeX](https://github.com/maiani/vectex), which needs a TeX
-engine (`pdflatex`, `xelatex`, or `lualatex`) and `dvisvgm` on `PATH`; TeX Live
-and MiKTeX ship both.
+which is example-only: rasterizing is not VecView's job. The figures with
+mathematical labels -- the Bloch sphere, the Brillouin zone, the Dirac cone, the
+solenoid, the Kitaev chain, and the pendulum -- typeset them with
+[VecTeX](https://github.com/maiani/vectex), which needs a TeX engine
+(`pdflatex`, `xelatex`, or `lualatex`) and `dvisvgm` on `PATH`; TeX Live and
+MiKTeX ship both. Each renders its labels in one TeX run, with
+`vectex.render_many`, and holds them upright at their points with
+`Scene.slot(..., content=...)`.
 
 ## Figures
 
