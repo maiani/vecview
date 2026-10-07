@@ -35,6 +35,7 @@ EXAMPLES = [
     "altermagnetic_dot",  # at its active camera, "main"
     "slab_polarizer",  # at its default camera
     "pendulum",
+    "rotating_dipole",
 ]
 
 

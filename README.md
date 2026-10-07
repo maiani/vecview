@@ -252,8 +252,9 @@ guide](docs/animation.md).
 
 The [gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md) has the static figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
-solenoid, crossing mirror planes, and two device sketches — and an animated
-pendulum. Each is one self-contained script:
+solenoid, crossing mirror planes, and two device sketches — and two
+animations, a pendulum and a rotating dipole radiating. Each is one
+self-contained script:
 
 ```bash
 uv run python examples                                        # all of them

@@ -40,6 +40,9 @@ camera when the animation renders.
 [`examples/pendulum.py`](https://github.com/maiani/vecview/blob/main/examples/pendulum.py)
 is a complete example: a pendulum swinging through one seamless period, with
 its equations typeset by TeX.
+[`examples/rotating_dipole.py`](https://github.com/maiani/vecview/blob/main/examples/rotating_dipole.py)
+is a larger one: a rotating dipole and the exact retarded field it radiates,
+a few hundred polygons a frame.
 
 ## Tracks in a scene
 

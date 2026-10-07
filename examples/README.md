@@ -21,8 +21,8 @@ uv run python examples --docs    # and refresh the SVGs in docs/gallery/
 builds them all. The PNG previews and the two device sketches use CairoSVG,
 which is example-only: rasterizing is not VecView's job. The figures with
 mathematical labels -- the Bloch sphere, the Brillouin zone, the Dirac cone, the
-solenoid, the Kitaev chain, and the pendulum -- typeset them with
-[VecTeX](https://github.com/maiani/vectex) 0.3 or newer
+solenoid, the Kitaev chain, the pendulum, and the rotating dipole -- typeset
+them with [VecTeX](https://github.com/maiani/vectex) 0.3 or newer
 (`pip install 'vectex>=0.3'`), which needs a TeX engine (`pdflatex`, `xelatex`,
 or `lualatex`) and `dvisvgm` on `PATH`; TeX Live and MiKTeX ship both. dvisvgm
 reads PDF through MuPDF's `mutool` when Ghostscript is 10.01 or newer
@@ -48,3 +48,7 @@ reads PDF through MuPDF's `mutool` when Ghostscript is 10.01 or newer
 
 - `pendulum.py` — a pendulum swinging through one seamless period, with its
   equations typeset by TeX; tracks for the bob's position and the readouts
+- `rotating_dipole.py` — a rotating electric dipole and the exact retarded
+  field it radiates over its equatorial plane, through one seamless period;
+  tracked outlines for the shading, and a track of parts for arrows whose
+  number changes

@@ -37,6 +37,9 @@ All notable changes to this project are documented here, following
   take tracks too.
 - `examples/pendulum.py` -- a pendulum swinging through one seamless period,
   with its equations typeset by VecTeX.  See `docs/animation.md`.
+- `examples/rotating_dipole.py` -- a rotating electric dipole and the exact
+  retarded field it radiates: `E` as arrows and `B_z` as spiral shading over
+  the equatorial plane, through one seamless period.
 
 - `class_=` on every drawing call that takes style keywords: one string,
   space-separated, or a sequence of names.  An id names one object, a class a
