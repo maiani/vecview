@@ -62,7 +62,9 @@ arcs per bond — so the file is small and each atom is one circle in an editor.
 
 ![The Bloch sphere](gallery/bloch_sphere.svg)
 
-A qubit state at polar angle θ and azimuth φ. The equator and a meridian are
+A qubit state at polar angle θ and azimuth φ. The equator and the two meridians,
+one great circle in each coordinate plane so that every axis meets the sphere
+where two of them cross, are
 [split exactly where they pass behind the sphere](scenes.md#hidden-lines) and
 dashed there; the state is a solid [`arrow3d`](scenes.md#curved-solids), and the
 angles are [`arc_shape`](shapes.md#arcs-and-helices) arcs in their own planes.

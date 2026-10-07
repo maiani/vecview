@@ -1,7 +1,8 @@
 """The Bloch sphere: a qubit state at polar angle theta and azimuth phi.
 
-The translucent sphere is one native ellipse; the equator and a meridian are
-split exactly where they pass behind it and dashed there; the state is a solid
+The translucent sphere is one native ellipse; the equator and the two meridians
+through the poles, one great circle in each coordinate plane, are split exactly
+where they pass behind it and dashed there; the state is a solid
 arrow, with the angles marked by arcs in their own planes.
 
 Uses: ``sphere(highlight=...)``, ``sphere_curve``, ``arrow3d``, ``arc_shape``,
@@ -97,7 +98,9 @@ def build() -> Scene:
         id="sphere",
     )
     hidden = {"stroke_dasharray": "5 4", "stroke_opacity": 0.55}
-    circles = {"equator": (0, 0, 1), "meridian": (0, 1, 0)}
+    # A great circle in each coordinate plane, by its normal: every axis point
+    # is where two of them cross.
+    circles = {"equator": (0, 0, 1), "meridian-xz": (0, 1, 0), "meridian-yz": (1, 0, 0)}
     for name, normal in circles.items():
         scene.sphere_curve(
             11,
