@@ -40,14 +40,13 @@ contacts, ``class_`` on every kind of object, ``sort_by_depth``, ``gaussian``,
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import svg
-from _common import export
 
 import vecview
 from vecview import OrthographicCamera, Scene, outlines
-
-NAME = "kitaev_chain"
 
 # Geometry, in units of a finger gate's pitch, roughly.
 R = 0.4  # the wire's hexagon circumradius
@@ -374,4 +373,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "kitaev_chain.svg"))

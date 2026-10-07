@@ -11,13 +11,12 @@ Uses: ``helix``, ``tube``, ``cylinder(highlight=...)``, ``arrow3d``,
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
-from _common import export
 
 import vecview
 from vecview import OrthographicCamera, Scene
-
-NAME = "solenoid"
 
 CORE_R, COIL_R, WIRE_R = 0.78, 0.92, 0.1
 LENGTH, TURNS = 4.4, 10
@@ -114,4 +113,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "solenoid.svg"))

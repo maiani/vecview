@@ -14,14 +14,12 @@ Uses: ``sort_by_depth``, ``polyline(back=...)``, ``edges(trim=...)``,
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 
 import numpy as np
-from _common import export
 
 import vecview
 from vecview import OrthographicCamera, Scene
-
-NAME = "mirror_planes"
 
 INK = "#1f2430"
 CORNER_R = 0.045
@@ -103,4 +101,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "mirror_planes.svg"))

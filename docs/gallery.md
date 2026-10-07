@@ -1,7 +1,7 @@
 # Gallery
 
 The figures a physics or chemistry paper keeps redrawing, each built from code by
-one script in `examples/gallery/` and shown here as the SVG it writes. Every one
+one script in `examples/` and shown here as the SVG it writes. Every one
 is a few dozen lines of geometry: no layer is assigned per object, no occlusion
 is worked out by hand, and every element keeps the id it was given, so the file
 opens in Inkscape as named objects.
@@ -9,11 +9,11 @@ opens in Inkscape as named objects.
 Build them all, with timings, from a checkout:
 
 ```bash
-uv run python examples/gallery          # SVG and PNG to examples/out/gallery
-uv run python examples/gallery --docs   # and refresh the SVGs on this page
+uv run python examples          # SVG and PNG to examples/out
+uv run python examples --docs   # and refresh the SVGs on this page
 ```
 
-Each script also runs on its own, `uv run python examples/gallery/perovskite.py`.
+Each script also runs on its own, `uv run python examples/perovskite.py`.
 
 ## Crystal structure
 
@@ -29,7 +29,7 @@ comes from its six corners alone through
 are clipped with them, and the cell edges stop at the atom surfaces with
 `edges(trim=...)`, so their dashed hidden parts never cross an atom.
 
-`examples/gallery/perovskite.py`
+`examples/perovskite.py`
 
 ## Brillouin zone
 
@@ -40,7 +40,7 @@ triangles merge into eight hexagons and six squares. Hidden edges are dashed and
 sit under the translucent faces, and the high-symmetry path Γ–X–W–K–Γ–L–U–W–L–K
 runs inside. The axis labels are subscripted with `svg.TSpan` runs.
 
-`examples/gallery/brillouin_zone.py`
+`examples/brillouin_zone.py`
 
 ## Molecule
 
@@ -52,7 +52,7 @@ surfaces, and the thirty double bonds are drawn darker. Spheres and cylinders
 are exact outlines — a `<circle>` per atom, and two lines and two elliptical
 arcs per bond — so the file is small and each atom is one circle in an editor.
 
-`examples/gallery/fullerene.py`
+`examples/fullerene.py`
 
 ## Bloch sphere
 
@@ -63,7 +63,7 @@ A qubit state at polar angle θ and azimuth φ. The equator and a meridian are
 dashed there; the state is a solid [`arrow3d`](scenes.md#curved-solids), and the
 angles are [`arc_shape`](shapes.md#arcs-and-helices) arcs in their own planes.
 
-`examples/gallery/bloch_sphere.py`
+`examples/bloch_sphere.py`
 
 ## Band structure
 
@@ -75,7 +75,7 @@ by energy, sorted together with the axes and the Fermi circle, which are thin
 [tubes](scenes.md#curved-solids). The energy axis passes behind the front wall of
 the upper band and shows again inside it, with no layer assigned by hand.
 
-`examples/gallery/dirac_cone.py`
+`examples/dirac_cone.py`
 
 ## Spin texture
 
@@ -85,7 +85,7 @@ A Néel skyrmion: 289 solid spins on a square lattice, coloured by their
 out-of-plane component, on a thin film. Every spin is one `<g>` named after its
 lattice site, and the depth sort handles every overlap at any viewing angle.
 
-`examples/gallery/skyrmion.py`
+`examples/skyrmion.py`
 
 ## Coil
 
@@ -96,7 +96,7 @@ A copper coil wound on a core. The coil is one tube along a
 [depth-sorted layer](scenes.md#sorting-by-depth) with the core, so each turn
 passes behind the core and comes round in front of it again.
 
-`examples/gallery/solenoid.py`
+`examples/solenoid.py`
 
 ## Nanowire device
 
@@ -115,7 +115,7 @@ under a film are left out, so no two faces lie flush against each other. Every k
 object carries a [class](scenes.md#classes) — `.gate`, `.plunger`,
 `.superconductor`, `.lead` — so all the gates select together in an editor.
 
-`examples/gallery/kitaev_chain.py`
+`examples/kitaev_chain.py`
 
 ## Mirror planes
 
@@ -128,7 +128,7 @@ drawing whole planes gets right. In a
 of it, the body diagonal is dashed exactly where a plane hides it, and the cell's
 dashed back edges disappear where the planes cover them.
 
-`examples/gallery/mirror_planes.py`
+`examples/mirror_planes.py`
 
 ## Devices
 

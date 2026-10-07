@@ -18,13 +18,13 @@ uv run pytest
 ```
 
 The examples are also part of the surface being maintained. Run them after
-touching geometry or projection, and look at `examples/out/gallery/*.png` after
+touching geometry or projection, and look at `examples/out/*.png` after
 touching a solid, an outline, or the depth sort:
 
 ```bash
 uv run python examples/slab_polarizer.py --projection all
 uv run python examples/altermagnetic_dot.py --projection all
-uv run python examples/gallery            # --docs also refreshes docs/gallery/
+uv run python examples            # --docs also refreshes docs/gallery/
 ```
 
 They are the realistic end-to-end check, and their correctness is visible:

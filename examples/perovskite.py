@@ -12,15 +12,13 @@ and ``edges(trim=...)``.
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
-from _common import export
 
 import vecview
 from vecview import OrthographicCamera, Scene
-
-NAME = "perovskite"
 
 
 class Atom(NamedTuple):
@@ -101,4 +99,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "perovskite.svg"))

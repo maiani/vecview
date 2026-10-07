@@ -14,14 +14,12 @@ Uses: ``sphere(highlight=...)``, ``cylinder(ends=False, highlight=...)``,
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 
 import numpy as np
-from _common import export
 
 import vecview
 from vecview import OrthographicCamera, Scene
-
-NAME = "fullerene"
 
 GOLDEN = (1.0 + 5.0**0.5) / 2.0
 BOND_LENGTH = 2.0  # the nearest-neighbour distance at these coordinates
@@ -103,4 +101,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "fullerene.svg"))

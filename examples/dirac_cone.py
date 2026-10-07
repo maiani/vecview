@@ -12,14 +12,13 @@ labels from ``svg.TSpan`` runs.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import svg
-from _common import export, mix
 
 import vecview
 from vecview import OrthographicCamera, Scene
-
-NAME = "dirac_cone"
 
 GAP = 0.25  # half-gap Delta, in units of the band's energy at k = 1
 MU = 0.62  # chemical potential, in the upper band
@@ -27,6 +26,14 @@ K_MAX = 1.0
 INK = "#1f2430"
 UPPER = ("#fde5cf", "#d4560f")  # low to high |E|
 LOWER = ("#d4e4f4", "#1f5fa8")
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """The colour a fraction ``t`` of the way from hex ``a`` to hex ``b``."""
+    t = min(max(t, 0.0), 1.0)
+    ca = [int(a[i : i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i : i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(ca, cb, strict=True))
 
 
 def band(sign: float) -> list[vecview.Face]:
@@ -109,4 +116,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "dirac_cone.svg"))

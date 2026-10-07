@@ -38,7 +38,7 @@ All notable changes to this project are documented here, following
   cutaway: faces are clipped and keep their names, and the cut is capped by
   faces named `"cut"` (or `"cut-0"`, ...) lying in the plane, so a section can
   be styled apart.  Non-convex solids work; a cap with a hole raises.
-- `examples/gallery/kitaev_chain.py` -- a minimal Kitaev chain after Dvir et
+- `examples/kitaev_chain.py` -- a minimal Kitaev chain after Dvir et
   al., Nature 614, 445 (2023): a gated InSb nanowire running past draped Cr/Au
   contacts, a grounded Al shell of finite thickness that continues onto the
   dielectric, and a Majorana mode on each dot.
@@ -46,6 +46,10 @@ All notable changes to this project are documented here, following
 
 ### Changed
 
+- The examples are self-contained scripts side by side in `examples/`, each
+  writing its own SVG to `examples/out`; `examples/gallery/` and the shared
+  `_common.py` are gone.  `python examples` builds them all, with timings and
+  PNG previews, and `--docs` still refreshes `docs/gallery/`.
 - `sort_by_depth(layer)` always decides visibility exactly, point by point:
   surfaces are clipped where an opaque surface hides them, lines are split, and
   a surface hidden entirely is dropped.  The painter's algorithm keyed on each

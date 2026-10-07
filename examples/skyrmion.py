@@ -11,19 +11,25 @@ Uses: ``arrow3d(highlight=...)``, ``sort_by_depth``, ``faces(cull=True)``.
 from __future__ import annotations
 
 import itertools
+from pathlib import Path
 
 import numpy as np
-from _common import export, mix
 
 import vecview
 from vecview import OrthographicCamera, Scene
-
-NAME = "skyrmion"
 
 N = 17  # spins per side
 RADIUS = 3.2  # where m_z changes sign, in lattice constants
 WALL = 1.3  # domain-wall width
 UP, DOWN, MID = "#c0392b", "#1f5fa8", "#ece9e4"
+
+
+def mix(a: str, b: str, t: float) -> str:
+    """The colour a fraction ``t`` of the way from hex ``a`` to hex ``b``."""
+    t = min(max(t, 0.0), 1.0)
+    ca = [int(a[i : i + 2], 16) for i in (1, 3, 5)]
+    cb = [int(b[i : i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(ca, cb, strict=True))
 
 
 def spin(x: float, y: float) -> np.ndarray:
@@ -74,4 +80,6 @@ def build() -> Scene:
 
 
 if __name__ == "__main__":
-    export(build(), NAME)
+    out = Path(__file__).parent / "out"
+    out.mkdir(exist_ok=True)
+    print(build().save(out / "skyrmion.svg"))

@@ -215,17 +215,22 @@ scope; they belong to whatever assembles the final page.
 
 ## Examples
 
-The [gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md) has the figures everyone draws — a perovskite
+The [gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md) has the static figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
-solenoid, crossing mirror planes — each from one script:
+solenoid, crossing mirror planes, and two device sketches. Each is one
+self-contained script:
 
 ```bash
-uv run python examples/gallery                                # all of them
+uv run python examples                                        # all of them
+uv run python examples/perovskite.py                          # one of them
 
 uv run python examples/slab_polarizer.py                      # one projection
 uv run python examples/slab_polarizer.py --projection all     # all five
 uv run python examples/altermagnetic_dot.py --projection all  # a device sketch, under four cameras
 ```
+
+See [examples/README.md](examples/README.md) for the full list and what each
+needs.
 
 `slab_polarizer` is a picture of a polarizing slab, rebuilt per
 projection because it mixes in screen-space glows. `altermagnetic_dot` is a

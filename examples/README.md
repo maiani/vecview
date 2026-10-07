@@ -1,0 +1,35 @@
+# Examples
+
+Every example is one self-contained script: it builds its figure in a `build()`
+function and, run on its own, writes the SVG to `examples/out/`. Read any one of
+them without the others.
+
+```bash
+uv run python examples/perovskite.py                       # one figure
+uv run python examples/slab_polarizer.py --projection all  # under all five projections
+uv run python examples/altermagnetic_dot.py --projection all
+```
+
+From the repository root, `uv sync --all-extras` installs what they need, and
+
+```bash
+uv run python examples           # all of them, with timings and PNG previews
+uv run python examples --docs    # and refresh the SVGs in docs/gallery/
+```
+
+builds them all. The PNG previews and the two device sketches use CairoSVG,
+which is example-only: rasterizing is not VecView's job.
+
+## Figures
+
+- `perovskite.py` — perovskite crystal cell
+- `brillouin_zone.py` — fcc Brillouin zone and high-symmetry path
+- `fullerene.py` — C60 ball-and-stick model
+- `bloch_sphere.py` — Bloch sphere
+- `dirac_cone.py` — gapped Dirac cone
+- `skyrmion.py` — Néel skyrmion
+- `solenoid.py` — solenoid on a core
+- `kitaev_chain.py` — Kitaev chain in a nanowire
+- `mirror_planes.py` — mirror planes in a cubic cell
+- `altermagnetic_dot.py` — layered quantum-dot device
+- `slab_polarizer.py` — spin texture and polarizing slab

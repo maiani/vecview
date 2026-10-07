@@ -106,8 +106,8 @@ Do not add these without the user changing the design first:
   and `uv run pytest` before reporting a change complete.
 - Run `uv run python examples/slab_polarizer.py --projection all`,
   `uv run python examples/altermagnetic_dot.py --projection all`, and
-  `uv run python examples/gallery` after touching geometry or projection, and
-  look at `examples/out/gallery/*.png` after touching a solid, an outline, or
+  `uv run python examples` after touching geometry or projection, and
+  look at `examples/out/*.png` after touching a solid, an outline, or
   the depth sort. Refresh `docs/gallery/` with `--docs` when a figure changes. It is the realistic end-to-end check, and it renders
   pictures whose correctness is visible. Mirrored or upside-down content, or a
   beam that misses the slab, is the usual symptom of a projection bug.
@@ -116,7 +116,7 @@ Do not add these without the user changing the design first:
 
 ## Examples
 
-The examples -- `examples/*.py`, `examples/gallery/`, and `docs/readme_figure.py`
+The examples -- `examples/*.py`, `examples/README.md`, and `docs/readme_figure.py`
 -- are the showcase. People read them to learn the library, so they must read as
 the obvious way to draw the figure, not as a record of how it was first got to
 work.
@@ -165,7 +165,7 @@ and must not be committed, until the documentation agrees with it.
 - When a change makes a passage elsewhere wrong, fix that passage in the same
   commit, even on a page the change did not otherwise touch.
 - When a figure's output changes, refresh `docs/gallery/` with
-  `uv run python examples/gallery --docs`, and `docs/images/` with
+  `uv run python examples --docs`, and `docs/images/` with
   `uv run python docs/readme_figure.py`.
 - Run `uv run zensical build` and confirm it reports no issues before reporting
   the change complete.
