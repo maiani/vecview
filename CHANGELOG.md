@@ -62,6 +62,11 @@ All notable changes to this project are documented here, following
 
 ### Changed
 
+- Depth-sorted layers render faster, with byte-identical output: exact
+  visibility makes its shapely calls in batches -- one tree query, and one
+  vectorised intersection for every overlapping pair -- and orders the painting
+  of clipped surfaces with a heap.  The Dirac cone renders in 0.61 of the time,
+  the solenoid in 0.79.
 - The examples are self-contained scripts side by side in `examples/`, each
   writing its own SVG to `examples/out`; `examples/gallery/` and the shared
   `_common.py` are gone.  `python examples` builds them all, with timings and

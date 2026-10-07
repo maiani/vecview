@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import heapq
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Literal, cast
@@ -327,23 +328,24 @@ class _Canvas:
         def key(seq: int) -> tuple[float, int]:
             return (self._depths.get(seq, 0.0), seq)
 
-        ready = sorted((seq for seq in seqs if waiting[seq] == 0), key=key)
+        # The surface to paint next is the farthest ready one; keys are unique,
+        # so a heap pops in exactly the order a sorted list would.
+        ready = [(key(seq), seq) for seq in seqs if waiting[seq] == 0]
+        heapq.heapify(ready)
         left = set(seqs)
         rank = len(self._rank)
         while left:
-            if not ready:
-                ready = [min(left, key=key)]  # a cycle: take the farthest
-            seq = ready.pop(0)
+            # A cycle leaves nothing ready: take the farthest surface caught in it.
+            seq = heapq.heappop(ready)[1] if ready else min(left, key=key)
             if seq not in left:
                 continue
             left.discard(seq)
             self._rank[seq] = rank
             rank += 1
-            for later in sorted(after[seq], key=key):
+            for later in after[seq]:
                 waiting[later] -= 1
                 if waiting[later] == 0 and later in left:
-                    ready.append(later)
-            ready.sort(key=key)
+                    heapq.heappush(ready, (key(later), later))
 
     def _occlude(self) -> None:
         """Resolve every sorted layer: clip surfaces to what shows, split lines."""

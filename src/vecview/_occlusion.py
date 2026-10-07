@@ -173,32 +173,31 @@ def resolve(
     eps_surface, eps_line = 1e-9 * span, 1e-4 * span
 
     result = [Visibility() for _ in shapes]
-    for k, surface in surfaces:
-        region = regions[k]
-        if region.is_empty:
-            continue
-        hidden = []
-        for j in tree.query(region):
-            other = occluders[int(j)]
-            if other == k or _neighbours(surface, solid[other]):
-                continue
-            overlap = region.intersection(tucked[other])
-            if overlap.is_empty or overlap.area <= 1e-9:
-                continue
-            front = _in_front(
-                shapely, contourpy, surface, solid[other], overlap, eps_surface, resolution, tuck
-            )
-            if front is not None and not front.is_empty:
-                hidden.append(front)
-                result[k].hidden_by.append(other)
-        if not hidden:
-            continue
-        visible = region.difference(shapely.union_all(hidden))
-        if visible.area <= 1e-3:
-            result[k].rings = []  # hidden entirely
-            continue
+    pairs = _overlaps(shapely, surfaces, regions, occluders, tucked, tree)
+    fronts = _fronts(
+        shapely,
+        contourpy,
+        [(solid[k], solid[other], overlap) for k, other, overlap in pairs],
+        eps_surface,
+        resolution,
+        tuck,
+    )
+    hidden: dict[int, list[Any]] = {}
+    for (k, other, _), front in zip(pairs, fronts, strict=True):
+        if front is not None and not front.is_empty:
+            hidden.setdefault(k, []).append(front)
+            result[k].hidden_by.append(other)
+    if hidden:
+        keys = list(hidden)
+        visible = shapely.difference(
+            _array([regions[k] for k in keys]),
+            _array([shapely.union_all(hidden[k]) for k in keys]),
+        )
+        shown = shapely.area(visible) > 1e-3
         # A clip path a twentieth of a screen unit off is invisible, and far smaller.
-        result[k].rings = _rings(shapely, visible.simplify(0.05)) or None
+        visible[shown] = shapely.simplify(visible[shown], 0.05)
+        for k, keep, region in zip(keys, shown, visible, strict=True):
+            result[k].rings = (_rings(shapely, region) or None) if keep else []
 
     for k, shape in enumerate(shapes):
         if isinstance(shape, Line):
@@ -241,6 +240,93 @@ def _neighbours(a: Surface, b: Surface) -> bool:
     if a.chain is None or b.chain is None or a.chain[0] != b.chain[0]:
         return False
     return abs(a.chain[1] - b.chain[1]) <= 1
+
+
+def _array(geometries: Sequence[Any]) -> Any:
+    """Geometries as an object array, for shapely's vectorised operations."""
+    out = np.empty(len(geometries), dtype=object)
+    out[:] = geometries
+    return out
+
+
+def _overlaps(
+    shapely: Any,
+    surfaces: Sequence[tuple[int, Surface]],
+    regions: dict[int, Any],
+    occluders: list[int],
+    tucked: dict[int, Any],
+    tree: Any,
+) -> list[tuple[int, int, Any]]:
+    """Every ``(surface, occluder, overlap)`` with an overlap of some area.
+
+    In the order the surfaces come and the tree returns each one's candidates,
+    which fixes the order of everything built from them.  Batched: one tree
+    query, one ``intersects`` against the prepared occluders to drop pairs whose
+    boxes meet but whose shapes do not, and one ``intersection`` for the rest.
+    """
+    solid = dict(surfaces)
+    keys = [k for k, _ in surfaces if not regions[k].is_empty]
+    if not keys or not occluders:
+        return []
+    source, target = tree.query(_array([regions[k] for k in keys]))
+    pairs = [
+        (keys[i], occluders[j])
+        for i, j in zip(source.tolist(), target.tolist(), strict=True)
+        if occluders[j] != keys[i] and not _neighbours(solid[keys[i]], solid[occluders[j]])
+    ]
+    if not pairs:
+        return []
+    covers = _array([tucked[other] for _, other in pairs])
+    shapely.prepare(covers)
+    own = _array([regions[k] for k, _ in pairs])
+    meet = np.flatnonzero(shapely.intersects(covers, own))
+    overlap = shapely.intersection(own[meet], covers[meet])
+    some = ~shapely.is_empty(overlap) & (shapely.area(overlap) > 1e-9)
+    return [(*pairs[i], o) for i, o in zip(meet[some].tolist(), overlap[some], strict=True)]
+
+
+def _fronts(
+    shapely: Any,
+    contourpy: Any,
+    cases: Sequence[tuple[Surface, Surface, Any]],
+    eps: float,
+    resolution: float,
+    tuck: float,
+) -> list[Any]:
+    """:func:`_in_front` for every ``(back, front, overlap)``, the plane-plane cases batched.
+
+    Between two planes the answer is the overlap cut by a half-plane, so those
+    half-planes are built first, as polygons in one call, and cut in one
+    ``intersection``.
+    """
+    out: list[Any] = [None] * len(cases)
+    if not cases:
+        return out
+    bounds = shapely.bounds(_array([overlap for *_, overlap in cases])).tolist()
+    planar: list[int] = []
+    halves: list[Any] = []
+    for i, (back, front, overlap) in enumerate(cases):
+        pa = back.pieces[0].plane if len(back.pieces) == 1 else None
+        pb = front.pieces[0].plane if len(front.pieces) == 1 else None
+        if pa is None or pb is None:
+            out[i] = _in_front(shapely, contourpy, back, front, overlap, eps, resolution)
+            continue
+        a, b, c = (pb[n] - pa[n] for n in range(3))
+        # Where two planes cross, the tuck moves the boundary into the hidden side.
+        shift = eps + tuck * float(np.hypot(a, b))
+        corners = _half_plane(bounds[i], a, b, c - shift)
+        if len(corners) >= 3:  # otherwise the half-plane misses the box: nothing in front
+            planar.append(i)
+            halves.append(corners)
+    if planar:
+        rings = shapely.linearrings(
+            np.concatenate(halves),
+            indices=np.repeat(np.arange(len(halves)), [len(h) for h in halves]),
+        )
+        cut = shapely.intersection(_array([cases[i][2] for i in planar]), shapely.polygons(rings))
+        for i, front in zip(planar, cut, strict=True):
+            out[i] = front
+    return out
 
 
 def planes_through(screen: Array, depth: Array) -> list[Plane | None]:
@@ -346,17 +432,12 @@ def _in_front(
     overlap: Any,
     eps: float,
     resolution: float,
-    tuck: float,
 ) -> Any:
-    """The part of ``overlap`` where ``front`` is nearer than ``back``."""
-    pa = back.pieces[0].plane if len(back.pieces) == 1 else None
-    pb = front.pieces[0].plane if len(front.pieces) == 1 else None
-    if pa is not None and pb is not None:
-        a, b, c = (pb[i] - pa[i] for i in range(3))
-        # Where two planes cross, the tuck moves the boundary into the hidden side.
-        shift = eps + tuck * float(np.hypot(a, b))
-        return overlap.intersection(_half_plane(shapely, overlap.bounds, a, b, c - shift))
+    """The part of ``overlap`` where ``front`` is nearer than ``back``, when either is curved.
 
+    The depth difference is probed, and where its sign changes its zero contour
+    is traced on a grid.
+    """
     probe = _probe_points(shapely, overlap)
     diff = _difference(shapely, front, back, probe)
     if np.all(diff > eps):
@@ -401,8 +482,8 @@ def _difference(shapely: Any, front: Surface, back: Surface, xy: Array) -> Array
     return z
 
 
-def _half_plane(shapely: Any, bounds: tuple[float, ...], a: float, b: float, c: float) -> Any:
-    """The part of a box, grown a little, where ``a x + b y + c > 0`` (Sutherland-Hodgman)."""
+def _half_plane(bounds: Sequence[float], a: float, b: float, c: float) -> list[tuple[float, float]]:
+    """The corners of a box, grown a little, where ``a x + b y + c > 0`` (Sutherland-Hodgman)."""
     x0, y0, x1, y1 = bounds
     m = 1.0 + 0.01 * max(x1 - x0, y1 - y0)
     box = [(x0 - m, y0 - m), (x1 + m, y0 - m), (x1 + m, y1 + m), (x0 - m, y1 + m)]
@@ -415,7 +496,7 @@ def _half_plane(shapely: Any, bounds: tuple[float, ...], a: float, b: float, c: 
         if (fp > 0) != (fq > 0):
             t = fp / (fp - fq)
             out.append((p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])))
-    return shapely.Polygon(out) if len(out) >= 3 else shapely.Polygon()
+    return out
 
 
 def _probe_points(shapely: Any, region: Any) -> Array:

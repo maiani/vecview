@@ -44,6 +44,10 @@ on its own side.
   The canvas describes each element of a sorted layer as a `Surface` (outline
   plus a depth that goes on smoothly past its edge) or a `Line`, lazily, and
   `resolve` clips and splits them. Keep closed-form depths closed-form.
+  Its shapely work is batched -- one tree query, then one vectorised call per
+  stage over every pair -- because per-call overhead, not GEOS, was most of the
+  time; keep new stages batched. Pairs keep the order the tree returns them in,
+  which fixes the order of everything built from them and so the output bytes.
 - `_vec.py` and `_types.py` are private. Re-export from `__init__.py` what should
   be public; `unit` is the only helper promoted so far.
 - Geometry that needs a camera to be computed does not belong in `shapes.py`.
