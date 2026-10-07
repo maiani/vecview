@@ -78,29 +78,37 @@ CairoSVG, shows the first frame, so a still made from the animation is
 
 ## What the file holds
 
-A frame is a whole scene, but most of it is usually the same in every frame.
-What every sample draws alike is written **once**, outside the timed groups, and
-keeps its own id:
-
-- definitions — gradients, clip paths — with the same id and content in every
-  frame, and
-- the elements at the bottom and at the top of the paint order that are the
-  same in every frame.
-
-So draw what does not move on the lowest layers, or the highest, and it costs
-nothing per frame: the pendulum's track, captions, and equations are written
-once, and each of its frames holds only the rod, the bob, and two readouts.
+A frame is a whole scene, but most of it is usually the same in every frame,
+and the file stores each thing once per change rather than once per frame.
 Elements are compared by their markup, so a label rendered once and added to
 every frame is shared even if each frame wraps it in a new object.
 
-The rest of each sample goes in its own `<g data-vecview-frame="i">`, shown
-during its interval. Consecutive samples with the same rest share one group, so
-a pause costs one frame, and an animation that never changes comes out as a
-static document. Ids inside a frame group are renamed `frame{i}-{id}`, the
-element keeping its own as `data-vecview-id`, and the frame's `url(#...)` and
-`href="#..."` references follow. An embedded stylesheet that changes between
-frames is scoped to its frame's group, and must then be plain rules, without
-at-rules or comments.
+What every sample draws alike is written **once**, in place, and keeps its own
+id: definitions — gradients, clip paths — with the same content in every frame,
+and every element drawn in every frame in the same paint order, wherever it
+falls in the layer stack. The pendulum's track, captions, and equations are
+written once, and so would be a caption between its rod and its bob.
+
+What changes sits between those elements, and each stretch of it is drawn by
+one `<use>` whose `href` steps through that stretch's contents with discrete
+SMIL timing. Each distinct content is written once in `<defs>`, however many
+frames show it and in whatever order: a pause, a motion that comes back, and a
+label that changes once all cost one copy per distinct content. A stretch
+with the same number of elements in every frame is split into one `<use>` per
+element when that is smaller, so the label that changes once is not copied
+along with the bob that moves every frame. An animation that never changes
+comes out as a static document.
+
+Ids inside a stretch's contents are renamed `frame{i}-{id}`, after the first
+sample `i` that drew that content, the element keeping its own as
+`data-vecview-id`, and the content's `url(#...)` and `href="#..."` references
+follow. A content of several elements, or of none, is a
+`<g id="frame{i}" data-vecview-frame="i">`, with `.{n}` after the frame number
+when several stretches change. Content that points into another stretch is
+drawn with it. An embedded stylesheet that changes between frames is scoped to
+its frame's group, and must then be plain rules, without at-rules or comments;
+all that changes is then drawn as one stretch, since the rules may reach any of
+it.
 
 Content svg.py cannot see inside — a [VecTeX](https://github.com/maiani/vectex)
 fragment is one — keeps its inner ids as they are. Render such a label once

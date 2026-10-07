@@ -103,7 +103,7 @@ class Animation:
         Samples ``N = max(1, ceil(duration * fps))`` evenly spaced times per
         cycle, plus the exact frame at ``duration`` for finite playback, which
         is held once playback ends.  What every sample draws alike is written
-        once, outside the timed frame groups.
+        once, in place, and each distinct content of what changes once.
         """
         return render_animation(
             self.frame,

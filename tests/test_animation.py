@@ -23,7 +23,15 @@ def document(frame, **options) -> ET.Element:
 
 
 def groups(root: ET.Element) -> list[ET.Element]:
-    return root.findall(f"{SVG}g[@data-vecview-frame]")
+    return root.findall(f".//{SVG}g[@data-vecview-frame]")
+
+
+def timings(root: ET.Element) -> list[tuple[str, str]]:
+    """Each drawn ``<use>``'s ``href`` values and key times, in paint order."""
+    return [
+        (use.find(f"{SVG}animate").get("values"), use.find(f"{SVG}animate").get("keyTimes"))
+        for use in root.findall(f"{SVG}use")
+    ]
 
 
 def test_animation_evaluates_in_closed_time_interval_without_calling_constructor_callback():
@@ -75,40 +83,36 @@ def test_samples_exact_interval_times_and_holds_the_terminal_frame():
         view_box=(-3, -4, 25, 30),
     )
     assert sampled == [0.0, 1 / 3, 2 / 3, 1.0]
-    assert [g.get("data-vecview-frame") for g in groups(root)] == ["0", "1", "2", "3"]
     assert (root.get("width"), root.get("height")) == ("25", "30")
     assert root.get("viewBox") == "-3 -4 25 30"
     assert root.find(f"{SVG}rect") is None  # a frame's own background does not leak in
-    first = groups(root)[0].find(f"{SVG}animate")
-    assert first is not None
-    assert (first.get("dur"), first.get("repeatCount")) == ("1s", "2")
-    assert first.get("calcMode") == "discrete"
-    terminal = groups(root)[-1].find(f"{SVG}set")
-    assert terminal is not None and terminal.get("begin") == "2s"
+    use = root.find(f"{SVG}use")
+    assert use.get("href") == "#frame0-ball"  # what a viewer without animation shows
+    timing = use.find(f"{SVG}animate")
+    assert (timing.get("dur"), timing.get("repeatCount")) == ("1s", "2")
+    assert (timing.get("attributeName"), timing.get("calcMode")) == ("href", "discrete")
+    assert timing.get("fill") == "freeze"
+    # The value at key time 1 is the terminal sample, held once playback ends.
+    assert timings(root) == [
+        (
+            "#frame0-ball;#frame1-ball;#frame2-ball;#frame3-ball",
+            "0;0.333333333333;0.666666666667;1",
+        )
+    ]
 
 
 def test_indefinite_playback_loops_the_cycle_without_a_terminal_sample():
     sampled = []
     root = document(lambda t: sampled.append(t) or make_scene(t), fps=2, repeat=None)
     assert sampled == [0, 0.5]
-    assert len(groups(root)) == 2
     assert root.find(f".//{SVG}animate").get("repeatCount") == "indefinite"
-    assert root.find(f".//{SVG}set") is None
+    assert timings(root) == [("#frame0-ball;#frame1-ball;#frame1-ball", "0;0.5;1")]
 
 
-def test_each_group_is_shown_for_its_own_interval_with_constant_size_timing():
+def test_each_sample_is_shown_for_its_own_interval():
     root = document(lambda t: make_scene(t), fps=4, repeat=None)
-    timings = [
-        (g.get("display"), a.get("values"), a.get("keyTimes"))
-        for g in groups(root)
-        for a in g.findall(f"{SVG}animate")
-    ]
-    assert timings == [
-        ("inline", "inline;none;none", "0;0.25;1"),
-        ("none", "none;inline;none;none", "0;0.25;0.5;1"),
-        ("none", "none;inline;none;none", "0;0.5;0.75;1"),
-        ("none", "none;inline;none", "0;0.75;1"),
-    ]
+    values = ";".join(f"#frame{i}-ball" for i in (0, 1, 2, 3, 3))
+    assert timings(root) == [(values, "0;0.25;0.5;0.75;1")]
 
 
 def test_what_every_frame_draws_alike_is_written_once_with_its_own_id():
@@ -120,22 +124,58 @@ def test_what_every_frame_draws_alike_is_written_once_with_its_own_id():
         return scene
 
     root = document(frame)
-    ids = [node.get("id") for node in root.iter() if node.get("id")]
-    assert ids == ["floor", "frame0-ball", "frame1-ball", "caption"]
-    assert [node.tag for node in root][-1] == f"{SVG}text"  # still on top of the frames
+    assert [node.get("id") for node in root.find(f"{SVG}defs")] == ["frame0-ball", "frame1-ball"]
+    drawn = [(node.tag.removeprefix(SVG), node.get("id")) for node in root][1:]
+    assert drawn == [("circle", "floor"), ("use", None), ("text", "caption")]
 
 
-def test_consecutive_identical_frames_share_one_group():
+def test_what_does_not_move_is_written_once_even_between_what_does():
+    def frame(t):
+        scene = vecview.Scene(CAMERA)
+        scene.sphere(0, (t, 0, 0), 0.5, id="low")
+        scene.text2d(1, 0, 0, "between", id="between")
+        scene.sphere(2, (0, t, 0), 0.5, id="high")
+        return scene
+
+    root = document(frame, fps=2, repeat=None)
+    drawn = [(node.tag.removeprefix(SVG), node.get("id")) for node in root][1:]
+    assert drawn == [("use", None), ("text", "between"), ("use", None)]
+    assert [values for values, _ in timings(root)] == [
+        "#frame0-low;#frame1-low;#frame1-low",
+        "#frame0-high;#frame1-high;#frame1-high",
+    ]
+
+
+def test_an_element_is_written_once_per_change_not_once_per_frame():
+    def frame(t):
+        scene = make_scene(t)
+        scene.text2d(1, 0, 0, "before" if t < 0.6 else "after", id="state")
+        return scene
+
+    root = document(frame, fps=10, repeat=None)
+    states = [node.text for node in root.iter(f"{SVG}text")]
+    assert states == ["before", "after"]
+    assert timings(root)[-1] == ("#frame0-state;#frame6-state;#frame6-state", "0;0.6;1")
+
+
+def test_identical_samples_share_one_content_wherever_they_fall():
+    def frame(t):
+        return make_scene(abs(t - 0.5))  # there and back
+
+    root = document(frame, fps=4, repeat=None)
+    assert len(root.find(f"{SVG}defs")) == 3
+    values = ";".join(f"#frame{i}-ball" for i in (0, 1, 2, 1, 1))
+    assert timings(root) == [(values, "0;0.25;0.5;0.75;1")]
+
+
+def test_consecutive_identical_samples_are_one_step():
     def frame(t):
         return make_scene(min(t, 0.5))  # still from t = 0.5 on
 
     root = document(frame, fps=4, repeat=1)
-    shown = [(g.get("data-vecview-frame"), g.find(f"{SVG}animate")) for g in groups(root)]
-    assert [name for name, _ in shown] == ["0", "1", "2"]
-    # The last group runs to the end of the cycle and is the terminal frame too.
-    assert shown[-1][1].get("keyTimes") == "0;0.5;1"
-    assert shown[-1][1].get("values") == "none;inline;inline"
-    assert root.find(f".//{SVG}set") is None
+    assert len(root.find(f"{SVG}defs")) == 3
+    values = ";".join(f"#frame{i}-ball" for i in (0, 1, 2, 2))
+    assert timings(root) == [(values, "0;0.25;0.5;1")]
 
 
 def test_an_animation_that_never_changes_is_a_static_document():
@@ -154,7 +194,22 @@ def test_frames_with_different_element_counts_render():
 
     root = document(frame)
     assert root.find(f"{SVG}circle").get("id") == "ball"
-    assert [g.find(f".//{SVG}circle").get("id") for g in groups(root)] == ["frame1-extra"]
+    empty, extra = root.find(f"{SVG}defs")
+    assert (empty.get("id"), len(empty)) == ("frame0", 0)  # nothing to draw is a target too
+    assert extra.get("id") == "frame1-extra"
+    assert timings(root) == [("#frame0;#frame1-extra", "0;1")]
+
+
+def test_content_pointing_into_another_slot_is_drawn_with_it():
+    def frame(t):
+        scene = make_scene(t)
+        scene.add(1, svg.Use(href="#ball", x=t))  # a moving copy of the moving ball
+        return scene
+
+    root = document(frame)
+    for group in groups(root):
+        ball, copy = group
+        assert copy.get("href") == "#" + ball.get("id")
 
 
 def test_references_follow_their_targets():
@@ -166,8 +221,8 @@ def test_references_follow_their_targets():
         return scene
 
     root = document(frame)
-    shared = root.find(f"{SVG}defs")
-    assert [d.get("id") for d in shared] == ["still"]
+    defs = [d.get("id") for d in root.find(f"{SVG}defs")]
+    assert defs == ["still", "frame0-paint", "frame0-wash", "frame1-paint", "frame1-wash"]
     washes = [node for node in root.iter() if node.get("data-vecview-id") == "wash"]
     assert [(w.get("fill"), w.get("stroke")) for w in washes] == [
         ("url(#frame0-paint)", "url(#still)"),

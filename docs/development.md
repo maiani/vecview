@@ -95,7 +95,9 @@ scene's projected elements without fitting a viewBox. Keep it so -- an animation
 must draw every frame exactly as a still would. Frames are compared by their
 markup, since an element can hold content the dataclass comparison does not
 see. Timing is checked in real browsers, not only in tests: a change to it
-needs Chromium and Firefox to show the right frame at seeked times.
+needs Chromium and Firefox to show the right frame at seeked times. Seek from
+the `load` event: Firefox seeks an animated `href` wrongly past the first cycle
+before the document has loaded, though it plays correctly.
 
 ## Testing
 
