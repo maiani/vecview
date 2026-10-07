@@ -7,6 +7,7 @@ nav = [
   { "Overview" = "index.md" },
   { "Cameras" = "cameras.md" },
   { "Scenes and layers" = "scenes.md" },
+  { "Animation" = "animation.md" },
   { "Shapes" = "shapes.md" },
   { "Outlines" = "outlines.md" },
   { "Gallery" = "gallery.md" },

@@ -213,12 +213,32 @@ VecView knowing about the tool. The fitted viewBox usually does *not* start at
 In Jupyter a scene displays itself inline. Rasterizing and PDF export are out of
 scope; they belong to whatever assembles the final page.
 
+## Animation
+
+An `Animation` is a function from seconds to a whole scene. VecView renders a
+sample per frame and writes one SVG that plays itself with native SVG timing —
+every frame still vector, no script — and writes once what every frame draws
+alike:
+
+```python
+def frame(t: float) -> vecview.Scene:
+    scene = vecview.Scene(camera)
+    scene.sphere(1, (2 * cos(t), 2 * sin(t), 0), 0.25, id="planet", fill="#3b6fb6")
+    return scene
+
+
+vecview.Animation(frame, duration=6.283, view_box=(-150, -110, 300, 220)).save("orbit.svg")
+```
+
+Keyframed tracks, easing, and turning parts about a pivot are in
+`vecview.animation`; see the [animation guide](docs/animation.md).
+
 ## Examples
 
 The [gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md) has the static figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
-solenoid, crossing mirror planes, and two device sketches. Each is one
-self-contained script:
+solenoid, crossing mirror planes, and two device sketches — and an animated
+pendulum. Each is one self-contained script:
 
 ```bash
 uv run python examples                                        # all of them
@@ -230,7 +250,8 @@ uv run python examples/altermagnetic_dot.py --projection all  # a device sketch,
 ```
 
 See [examples/README.md](examples/README.md) for the full list and what each
-needs.
+needs; the pendulum typesets its equations with
+[VecTeX](https://github.com/maiani/vectex), which needs TeX.
 
 `slab_polarizer` is a picture of a polarizing slab, rebuilt per
 projection because it mixes in screen-space glows. `altermagnetic_dot` is a

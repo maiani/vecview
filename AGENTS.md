@@ -32,8 +32,14 @@ on its own side.
   - `projections.py` holds the concrete projections: `OrthographicCamera` and
     `ObliqueCamera`.
   - Only the rendering modules import `svg`: `scene.py` and the private
-    `_elements.py`, `_canvas.py`, and `_solids.py`. `shapes.py`, `camera.py`,
-    `projections.py`, `_occlusion.py`, `_place.py`, and `_drawing.py` never do.
+    `_elements.py`, `_canvas.py`, and `_solids.py`, and for animation
+    `_animation_svg.py` and `_animation_refs.py`. `shapes.py`, `camera.py`,
+    `projections.py`, `_occlusion.py`, `_place.py`, `_drawing.py`,
+    `_tracks.py`, and `_transforms.py` never do.
+- `animation.py` samples a pure time-to-scene callback through the static
+  renderer and writes once what every frame draws alike. A frame is drawn
+  exactly as the same scene would be as a still; do not add an animation-only
+  rendering path.
 - `_occlusion.py` is private: exact visibility for `sort_by_depth(layer)`.
   The canvas describes each element of a sorted layer as a `Surface` (outline
   plus a depth that goes on smoothly past its edge) or a `Line`, lazily, and

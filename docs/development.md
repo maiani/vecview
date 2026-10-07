@@ -55,8 +55,9 @@ dimetric, and trimetric cases.
   this. `shapely` clips polygons and `contourpy` traces depth contours; both
   load only when they are first needed.
 - **Keep the three-way split**: `shapes` knows only numbers, `camera` and
-  `projections` know projection, and `scene`, with its private rendering
-  modules (`_elements`, `_canvas`, `_solids`), is the only code that touches
+  `projections` know projection, and `scene` and `animation`, with their
+  private rendering modules (`_elements`, `_canvas`, `_solids`,
+  `_animation_svg`, `_animation_refs`), are the only code that touches
   `svg.py`. Geometry that needs a camera to be computed does not belong in
   `shapes`.
 - **A scene records; a canvas projects.** Each public drawing method on `Scene`
@@ -74,6 +75,27 @@ dimetric, and trimetric cases.
   diffable in version control.
 - **Before 1.0, make API changes directly** — update consumers, tests, and docs
   in the same change. No compatibility aliases or deprecated wrappers.
+
+## Animation
+
+`vecview.animation` holds the public names; the work is split by what it
+touches:
+
+| Module | Responsibility |
+| --- | --- |
+| `animation.py` | `Animation`: options, the time-to-scene callback, export. |
+| `_tracks.py` | `Track`, interpolation, and easing: values only, no scenes or SVG. |
+| `_transforms.py` | `rotate` and `scale` about a pivot, through `Part.place`. |
+| `_animation_svg.py` | Sampling, sharing what frames draw alike, and SVG timing. |
+| `_animation_refs.py` | Finding ids and references, and renaming a frame's. |
+| `_numeric.py` | The finite-number checks the rest of the animation API shares. |
+
+A sample is the static renderer's output: `_Canvas._elements` assembles a
+scene's projected elements without fitting a viewBox. Keep it so -- an animation
+must draw every frame exactly as a still would. Frames are compared by their
+markup, since an element can hold content the dataclass comparison does not
+see. Timing is checked in real browsers, not only in tests: a change to it
+needs Chromium and Firefox to show the right frame at seeked times.
 
 ## Testing
 

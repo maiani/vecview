@@ -41,6 +41,15 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ty check
       - run: uv run pytest --cov --cov-report=term-missing
+      - name: Install TeX and VecTeX for the pendulum's equations
+        # dvisvgm is its own package, which texlive-binaries only recommends,
+        # so with --no-install-recommends it has to be named.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            texlive-latex-base texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended texlive-binaries dvisvgm
+          uv pip install vectex
       - run: uv run python examples/slab_polarizer.py
       - run: uv run python examples
       - run: uv run zensical build

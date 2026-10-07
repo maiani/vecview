@@ -1,9 +1,9 @@
 """Build every example, with timings: ``python examples [--docs]``.
 
 Each example is a self-contained script, also runnable on its own as
-``python examples/<name>.py``.  This writes each one's SVG and a 2x PNG preview
-to ``examples/out``; ``--docs`` also refreshes the gallery SVGs in
-``docs/gallery``.
+``python examples/<name>.py``.  This writes each one's SVG to ``examples/out``,
+with a 2x PNG preview of every still figure; ``--docs`` also refreshes the
+gallery SVGs in ``docs/gallery``.
 
 Rasterizing is deliberately not vecview's job; cairosvg is example-only.
 """
@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 
 import cairosvg
+
+import vecview
 
 HERE = Path(__file__).resolve().parent
 OUT = HERE / "out"
@@ -32,6 +34,7 @@ EXAMPLES = [
     "mirror_planes",
     "altermagnetic_dot",  # at its active camera, "main"
     "slab_polarizer",  # at its default camera
+    "pendulum",
 ]
 
 
@@ -49,12 +52,14 @@ def main() -> None:
         rendered = time.perf_counter() - began
         path = OUT / f"{name}.svg"
         path.write_text(document, encoding="utf-8")
-        cairosvg.svg2png(url=str(path), write_to=str(path.with_suffix(".png")), scale=2.0)
-        if args.docs:
-            DOCS.mkdir(parents=True, exist_ok=True)
-            (DOCS / path.name).write_text(document, encoding="utf-8")
+        still = isinstance(example, vecview.Scene)
+        if still:
+            cairosvg.svg2png(url=str(path), write_to=str(path.with_suffix(".png")), scale=2.0)
+            if args.docs:
+                DOCS.mkdir(parents=True, exist_ok=True)
+                (DOCS / path.name).write_text(document, encoding="utf-8")
         print(
-            f"{name:>18}  build {built * 1000:4.0f} ms"
+            f"{name:>18}  {'scene' if still else 'animation':>9}  build {built * 1000:4.0f} ms"
             f"  render {rendered * 1000:5.0f} ms  {len(document) / 1024:5.0f} kB"
         )
 

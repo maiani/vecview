@@ -8,6 +8,7 @@ them without the others.
 uv run python examples/perovskite.py                       # one figure
 uv run python examples/slab_polarizer.py --projection all  # under all five projections
 uv run python examples/altermagnetic_dot.py --projection all
+uv run python examples/pendulum.py                         # an animated SVG
 ```
 
 From the repository root, `uv sync --all-extras` installs what they need, and
@@ -18,7 +19,10 @@ uv run python examples --docs    # and refresh the SVGs in docs/gallery/
 ```
 
 builds them all. The PNG previews and the two device sketches use CairoSVG,
-which is example-only: rasterizing is not VecView's job.
+which is example-only: rasterizing is not VecView's job. The pendulum typesets
+its equations with [VecTeX](https://github.com/maiani/vectex), which needs a TeX
+engine (`pdflatex`, `xelatex`, or `lualatex`) and `dvisvgm` on `PATH`; TeX Live
+and MiKTeX ship both.
 
 ## Figures
 
@@ -33,3 +37,8 @@ which is example-only: rasterizing is not VecView's job.
 - `mirror_planes.py` — mirror planes in a cubic cell
 - `altermagnetic_dot.py` — layered quantum-dot device
 - `slab_polarizer.py` — spin texture and polarizing slab
+
+## Animation
+
+- `pendulum.py` — a pendulum swinging through one seamless period, with its
+  equations typeset by TeX

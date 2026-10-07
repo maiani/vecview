@@ -26,8 +26,10 @@ document.
 
 from __future__ import annotations
 
+from vecview import animation as animation
 from vecview import outlines as outlines
 from vecview._vec import unit
+from vecview.animation import Animation
 from vecview.camera import Camera, ParallelCamera
 from vecview.projections import (
     ISOMETRIC_ELEV_DEG,
@@ -62,6 +64,7 @@ __version__ = "0.2.0"
 __all__ = [
     "ISOMETRIC_ELEV_DEG",
     "ISOMETRIC_RATIO",
+    "Animation",
     "Camera",
     "Face",
     "ObliqueCamera",
@@ -70,6 +73,7 @@ __all__ = [
     "Part",
     "Scene",
     "__version__",
+    "animation",
     "annulus_sector",
     "arc_shape",
     "arrow_shape",

@@ -148,19 +148,26 @@ class _Canvas:
         """Assemble the document, fitting the viewBox to the content plus ``pad``."""
         if self.is_empty:
             raise ValueError("cannot render an empty scene: no geometry to fit a viewBox to")
-        if self._sorted:
-            self._occlude()
         lo, hi = self._lo - pad, self._hi + pad
         # One rounding for the viewBox and the background, so the one covers the other.
         x, y, w, h = (round(float(v), 1) for v in (*lo, *(hi - lo)))
+        elements = self._elements()
+        if background:
+            elements.insert(
+                1 if self.defs else 0, svg.Rect(x=x, y=y, width=w, height=h, fill=background)
+            )
+        return svg.SVG(width=w, height=h, viewBox=svg.ViewBoxSpec(x, y, w, h), elements=elements)
+
+    def _elements(self) -> list[svg.Element]:
+        """Assemble projected elements without fitting a viewport or adding a background."""
+        if self._sorted:
+            self._occlude()
         elements: list[svg.Element] = []
         if self.defs:
             elements.append(svg.Defs(elements=list(self.defs)))
-        if background:
-            elements.append(svg.Rect(x=x, y=y, width=w, height=h, fill=background))
         elements += [el for _, _, el in sorted(self.items, key=self._order)]
         _check_unique_ids(elements)
-        return svg.SVG(width=w, height=h, viewBox=svg.ViewBoxSpec(x, y, w, h), elements=elements)
+        return elements
 
     def _grow(self, pts2: np.ndarray) -> None:
         p = np.atleast_2d(pts2)

@@ -7,6 +7,22 @@ All notable changes to this project are documented here, following
 
 ### Added
 
+- `Animation(frame, *, duration, view_box, fps=30, repeat=1, background=None)`
+  -- a function from seconds to a whole `Scene`, sampled at evenly spaced
+  times, rendered by the static renderer, and written as one standalone SVG
+  that plays itself with native SVG timing.  Finite playback holds the exact
+  frame at `duration`; `repeat=None` loops.  What every frame draws alike --
+  identical definitions, and the identical elements at the bottom and top of
+  the paint order -- is written once with its own ids; each frame's remainder
+  is a `<g data-vecview-frame>` whose ids become `frame{i}-{id}` (the original
+  kept as `data-vecview-id`), consecutive identical frames share one group, and
+  an animation that never changes is a static document.
+- `vecview.animation`: `Track` with `keyframes` and `map`, the interpolators
+  `linear` (numbers and 3D points) and `hold`, the easing `smoothstep`, and
+  `rotate` and `scale`, which copy a part turned or scaled about a pivot.
+- `examples/pendulum.py` -- a pendulum swinging through one seamless period,
+  with its equations typeset by VecTeX.  See `docs/animation.md`.
+
 - `class_=` on every drawing call that takes style keywords: one string,
   space-separated, or a sequence of names.  An id names one object, a class a
   kind of object -- every gate, every oxygen -- for a stylesheet, a selector in

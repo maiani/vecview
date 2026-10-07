@@ -17,7 +17,7 @@ API may change before 1.0.
 
 ## The shape of the package
 
-Three concerns in five modules, with a hard line between them:
+Four concerns in six modules, with a hard line between them:
 
 | Module | Knows about |
 | --- | --- |
@@ -25,10 +25,13 @@ Three concerns in five modules, with a hard line between them:
 | [`outlines`](outlines.md) | Numbers only, in 2D: footprints and cross-sections, offset, filmed, and combined, then lifted into 3D. |
 | [`camera`](cameras.md) | What a camera *is*: the projection contract, and the affine machinery every parallel projection shares. |
 | [`projections`](cameras.md#orthographiccamera) | The projections shipped: orthographic (isometric, dimetric, trimetric) and oblique (cavalier, cabinet). |
-| [`scene`](scenes.md) | Objects, parts, named cameras, the layer stack, and document assembly. With its private rendering modules, the only part that touches `svg.py`. |
+| [`scene`](scenes.md) | Objects, parts, named cameras, the layer stack, and document assembly. |
+| [`animation`](animation.md) | Time: a whole scene for every moment, written as one SVG that plays itself; keyframed tracks, easing, and parts turned about a pivot. |
 
-That split is what keeps geometry testable as plain numbers, and lets one polygon
-be drawn twice with different fills or reused as a clip path.
+`scene` and `animation`, with their private rendering modules, are the only code
+that touches `svg.py`. That split is what keeps geometry testable as plain
+numbers, and lets one polygon be drawn twice with different fills or reused as a
+clip path.
 
 ## Conventions
 

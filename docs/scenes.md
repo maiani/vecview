@@ -662,6 +662,13 @@ named cameras, and renders each by name.
 World-space arrays are held by reference, not copied, so do not mutate them after
 adding.
 
+## Animation
+
+A scene is also one frame of an [animation](animation.md): an `Animation`
+calls a function of time for a whole scene per sample, renders each exactly as
+this page describes -- its active camera, its layers, its depth sorting -- and
+writes them all into one SVG that plays itself.
+
 ## Output
 
 ```python
