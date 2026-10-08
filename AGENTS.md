@@ -121,6 +121,11 @@ Do not add these without the user changing the design first:
 - `uv sync --all-extras` for a full environment.
 - Run `uv run ruff format --check .`, `uv run ruff check .`, `uv run ty check`,
   and `uv run pytest` before reporting a change complete.
+- Typing serves the code, not the other way round. Type public signatures and
+  what types naturally, and keep `ty check` passing; where precise types would
+  contort the code -- a decorator that changes what a parameter accepts, say --
+  use a looser annotation or a targeted `# ty: ignore[code]`. Do not raise the
+  Python floor for typing features.
 - Run `uv run python examples/slab_polarizer.py --projection all`,
   `uv run python examples/altermagnetic_dot.py --projection all`, and
   `uv run python examples` after touching geometry or projection, and
