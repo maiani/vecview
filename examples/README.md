@@ -22,8 +22,8 @@ builds them all. The PNG previews and the two device sketches use CairoSVG,
 which is example-only: rasterizing is not VecView's job. The figures with
 mathematical labels -- the Bloch sphere, the Brillouin zone, the Dirac cone, the
 solenoid, the Kitaev chain, the pendulum, and the rotating dipole -- typeset
-them with [VecTeX](https://github.com/maiani/vectex) 0.3 or newer
-(`pip install 'vectex>=0.3'`), which needs a TeX engine (`pdflatex`, `xelatex`,
+them with [VecTeX](https://github.com/maiani/vectex) 0.4 or newer
+(`pip install 'vectex>=0.4'`), which needs a TeX engine (`pdflatex`, `xelatex`,
 or `lualatex`) and `dvisvgm` on `PATH`; TeX Live and MiKTeX ship both. dvisvgm
 reads PDF through MuPDF's `mutool` when Ghostscript is 10.01 or newer
 (`mupdf-tools` on Debian and Ubuntu). Each renders its labels in one TeX run, with

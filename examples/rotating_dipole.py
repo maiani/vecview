@@ -196,16 +196,6 @@ def electric(turn: float) -> vecview.Part:
     return arrows
 
 
-def tex(scene: vecview.Scene, x: float, y: float, fragment: vectex.VectexFragment) -> None:
-    """A TeX fragment with its baseline starting at screen point ``(x, y)``.
-
-    A fragment's own origin is its top-left corner, so it is moved up by the
-    height of its baseline to sit on the same line as the text around it.
-    """
-    top = y - fragment.baseline_px
-    scene.add(0, svg.G(transform=f"translate({x} {top:g})", elements=[fragment.to_svg_py()]))
-
-
 def legend(scene: vecview.Scene, y: float, label: list[svg.TSpan], colors: list[str]) -> None:
     """A row of swatches and its label, with the text's baseline at ``y``."""
     for i, color in enumerate(colors):
@@ -261,10 +251,11 @@ def build() -> vecview.Animation:
     notes = "Shades start at 0.2, 0.6, and 0.9 of the peak at each radius;"
     notes += " arrows saturate near the dipole."
     scene.text2d(0, -262, 292, notes, size=9, fill=MUTED)
-    tex(scene, -262, 326, LAW)
-    tex(scene, -262, 358, ELECTRIC)
-    tex(scene, -262, 390, MAGNETIC)
-    tex(scene, -262, 418, VALUES)
+    # VecTeX places each equation with its baseline at (x, y), on the line.
+    scene.add(0, LAW.to_svg_py(x=-262, y=326, valign="baseline"))
+    scene.add(0, ELECTRIC.to_svg_py(x=-262, y=358, valign="baseline"))
+    scene.add(0, MAGNETIC.to_svg_py(x=-262, y=390, valign="baseline"))
+    scene.add(0, VALUES.to_svg_py(x=-262, y=418, valign="baseline"))
 
     # One cycle is one turn, cut into PERIOD * fps = 48 frames, and `repeat=None`
     # loops it forever.  The view box is the fixed window every frame is seen

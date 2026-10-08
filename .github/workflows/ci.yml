@@ -51,7 +51,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             texlive-latex-base texlive-latex-recommended texlive-latex-extra \
             texlive-fonts-recommended texlive-binaries dvisvgm mupdf-tools
-          uv pip install 'vectex>=0.3'
+          uv pip install 'vectex>=0.4'
       - run: uv run python examples/slab_polarizer.py
       - run: uv run python examples
       - run: uv run zensical build

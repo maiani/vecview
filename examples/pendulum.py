@@ -15,7 +15,6 @@ from __future__ import annotations
 from math import cos, degrees, pi, radians, sin, sqrt
 from pathlib import Path
 
-import svg
 import vectex
 
 import vecview
@@ -65,16 +64,6 @@ THETA = Track(lambda t: AMPLITUDE * cos(OMEGA * t))
 BOB = THETA.map(position)
 
 
-def tex(scene: vecview.Scene, x: float, y: float, fragment: vectex.VectexFragment) -> None:
-    """A TeX fragment with its baseline starting at screen point ``(x, y)``.
-
-    A fragment's own origin is its top-left corner, so it is moved up by the
-    height of its baseline to sit on the same line as the text around it.
-    """
-    top = y - fragment.baseline_px
-    scene.add(0, svg.G(transform=f"translate({x} {top:g})", elements=[fragment.to_svg_py()]))
-
-
 def build() -> vecview.Animation:
     # The first number of every call is its layer: layers are painted in
     # increasing order, so 0 is the background, 1 the swinging pendulum, and 2
@@ -117,8 +106,9 @@ def build() -> vecview.Animation:
     scene.text2d(0, 96, 197, f"T = {PERIOD:.2f} s", size=11, fill=MUTED)
     scene.text2d(0, -17, 291, "equilibrium", size=10, fill=MUTED, text_anchor="middle")
     scene.rect2d(0, -210, 319, 420, 1, fill="#e2e8f0")  # a 1 px rule above the equations
-    tex(scene, -210, 348, LAW)
-    tex(scene, -210, 375, VALUES)
+    # VecTeX places each equation with its baseline at (x, y), on the line.
+    scene.add(0, LAW.to_svg_py(x=-210, y=348, valign="baseline"))
+    scene.add(0, VALUES.to_svg_py(x=-210, y=375, valign="baseline"))
 
     # One cycle is one period, cut into ceil(PERIOD * fps) = 187 frames, and
     # `repeat=None` loops it forever.  The view box is the fixed window every
