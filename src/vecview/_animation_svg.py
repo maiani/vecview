@@ -4,10 +4,10 @@ Each sample is rendered by the static renderer, and what it draws is split by
 how it changes.  What every sample draws alike is written once, in place: the
 definitions with the same content, and the anchors -- elements every sample
 draws in the same order.  Between two anchors, what is left of each sample is
-a slot, split further into one slot per element when every sample has the same
-number there and that is estimated to be smaller.  Each distinct content of a
-slot is written once in ``<defs>``, and the slot is drawn by one ``<use>``
-whose ``href`` steps through them with discrete timing.
+cut into slots at the layer boundaries, and per element when every sample has
+the same number there, wherever that is estimated to be smaller.  Each distinct
+content of a slot is written once in ``<defs>``, and the slot is drawn by one
+``<use>`` whose ``href`` steps through them with discrete timing.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from vecview.scene import Scene
 
 # Rough markup sizes, in bytes, for choosing how finely to split a slot.
+_STYLES = -(2**62)  # the layer a stylesheet moved out of <defs> counts as drawn on
 _TIMING = 160  # a <use> and its <animate>, less the values and key times
 _RUN = 30  # one value and its key time
 _WRAPPER = 45  # a <g> around content that is not a single element
@@ -42,10 +43,11 @@ class _Sample(NamedTuple):
     items: list[svg.Element]
     def_text: list[str]
     item_text: list[str]
+    layers: list[int]
 
 
 class _Slot(NamedTuple):
-    """A stretch of the paint order as every sample draws it.
+    """A stretch of the paint order as every sample draws it, and the layers it is on.
 
     A fixed slot is an anchor: one element alike in every sample, written once.
     """
@@ -53,6 +55,11 @@ class _Slot(NamedTuple):
     items: list[list[svg.Element]]
     texts: list[tuple[str, ...]]
     fixed: bool
+    on: list[tuple[int, ...]]  # the layer of each element, sample by sample
+
+    @property
+    def layers(self) -> tuple[int, ...]:
+        return tuple(sorted({layer for row in self.on for layer in row}))
 
 
 def _fmt(value: float) -> str:
@@ -66,14 +73,14 @@ def _number(value: float) -> int | float:
 def _sample(scene: Scene) -> _Sample:
     if scene.camera is None:
         raise ValueError("every animation frame needs an active camera")
-    items = scene._project(None)._elements()
-    defs: list[svg.Element] = []
-    if items and isinstance(items[0], svg.Defs):
-        defs, items = list(items[0].elements or []), items[1:]
+    canvas = scene._project(None)
+    canvas._elements()  # occludes, and checks that the ids are unique
+    drawn = canvas._layered()
     # A stylesheet applies wherever it is, so one in <defs> counts as drawn.
-    items = [d for d in defs if isinstance(d, svg.Style)] + items
-    defs = [d for d in defs if not isinstance(d, svg.Style)]
-    return _Sample(defs, items, [str(d) for d in defs], [str(e) for e in items])
+    styles = [(_STYLES, d) for d in canvas.defs if isinstance(d, svg.Style)]
+    defs = [d for d in canvas.defs if not isinstance(d, svg.Style)]
+    layers, items = zip(*(styles + drawn), strict=True) if styles or drawn else ((), ())
+    return _Sample(defs, list(items), [str(d) for d in defs], [str(e) for e in items], list(layers))
 
 
 def _anchors(samples: list[_Sample]) -> list[list[int]]:
@@ -103,28 +110,61 @@ def _anchors(samples: list[_Sample]) -> list[list[int]]:
     return chain
 
 
-def _cost(texts: list[tuple[str, ...]], *, wrapped: bool) -> int:
+def _cost(slot: _Slot) -> int:
     """Roughly how many bytes a slot drawing these samples takes."""
-    distinct = dict.fromkeys(texts)
+    distinct = dict.fromkeys(slot.texts)
     content = sum(len(text) for key in distinct for text in key)
     if len(distinct) == 1:
         return content
-    runs = 1 + sum(a != b for a, b in pairwise(texts))
+    runs = 1 + sum(a != b for a, b in pairwise(slot.texts))
+    wrapped = any(len(key) != 1 for key in distinct)  # a lone element is its own target
     return content + _TIMING + _RUN * runs + (_WRAPPER * len(distinct) if wrapped else 0)
 
 
-def _split(items: list[list[svg.Element]], texts: list[tuple[str, ...]]) -> list[_Slot]:
-    """One slot for a stretch, or one per element where that is smaller."""
-    whole = [_Slot(items, texts, fixed=False)]
-    sizes = {len(row) for row in texts}
+def _split(slot: _Slot) -> list[_Slot]:
+    """One slot, or one per element where every sample has as many and that is smaller."""
+    sizes = {len(row) for row in slot.texts}
     if len(sizes) != 1 or sizes == {1}:
-        return whole
+        return [slot]
     parts = [
-        _Slot([[row[j]] for row in items], [(row[j],) for row in texts], fixed=False)
+        _Slot(
+            [[row[j]] for row in slot.items],
+            [(row[j],) for row in slot.texts],
+            False,
+            [(row[j],) for row in slot.on],
+        )
         for j in range(sizes.pop())
     ]
-    smaller = sum(_cost(p.texts, wrapped=False) for p in parts) < _cost(texts, wrapped=True)
-    return parts if smaller else whole
+    return parts if sum(map(_cost, parts)) < _cost(slot) else [slot]
+
+
+def _stretch(rows: list[list[tuple[int, svg.Element, str]]]) -> list[_Slot]:
+    """The slots a stretch between two anchors is drawn in: cut where that is smallest.
+
+    Paint order runs layer by layer, so the stretch can be cut at any layer
+    boundary; the cuts are chosen by a dynamic programme over the boundaries,
+    each run of layers drawn whole or per element, as its estimate says.
+    """
+    layers = sorted({layer for row in rows for layer, _, _ in row})
+
+    def run(lo: int, hi: int) -> list[_Slot]:
+        keep = set(layers[lo:hi])
+        picked = [[(layer, e, t) for layer, e, t in row if layer in keep] for row in rows]
+        return _split(
+            _Slot(
+                [[e for _, e, _ in row] for row in picked],
+                [tuple(t for _, _, t in row) for row in picked],
+                False,
+                [tuple(layer for layer, _, _ in row) for row in picked],
+            )
+        )
+
+    best: list[tuple[int, list[_Slot]]] = [(0, [])]
+    for j in range(1, len(layers) + 1):
+        options = [(best[i][0], best[i][1], run(i, j)) for i in range(j)]
+        cost, before, slots = min(options, key=lambda o: o[0] + sum(map(_cost, o[2])))
+        best.append((cost + sum(map(_cost, slots)), before + slots))
+    return best[-1][1]
 
 
 def _layout(samples: list[_Sample]) -> list[_Slot]:
@@ -133,14 +173,17 @@ def _layout(samples: list[_Sample]) -> list[_Slot]:
     before = [-1] * len(samples)
     for at in [*_anchors(samples), None]:
         stop = [len(s.items) for s in samples] if at is None else at
-        spans = list(zip(samples, before, stop, strict=True))
-        items = [s.items[b + 1 : e] for s, b, e in spans]
-        if any(items):
-            layout += _split(items, [tuple(s.item_text[b + 1 : e]) for s, b, e in spans])
+        rows = [
+            list(zip(s.layers[b + 1 : e], s.items[b + 1 : e], s.item_text[b + 1 : e], strict=True))
+            for s, b, e in zip(samples, before, stop, strict=True)
+        ]
+        if any(rows):
+            layout += _stretch(rows)
         if at is not None:
             pairs = list(zip(samples, at, strict=True))
             texts: list[tuple[str, ...]] = [(s.item_text[a],) for s, a in pairs]
-            layout.append(_Slot([[s.items[a]] for s, a in pairs], texts, fixed=True))
+            anchor = [[s.items[a]] for s, a in pairs]
+            layout.append(_Slot(anchor, texts, True, [(s.layers[a],) for s, a in pairs]))
             before = at
     return layout
 
@@ -221,7 +264,8 @@ def _settle(samples: list[_Sample], layout: list[_Slot]) -> tuple[list[svg.Eleme
             merged = _Slot(
                 [[e for s in run for e in s.items[i]] for i in range(len(samples))],
                 [tuple(t for s in run for t in s.texts[i]) for i in range(len(samples))],
-                fixed=False,
+                False,
+                [tuple(x for s in run for x in s.on[i]) for i in range(len(samples))],
             )
             layout = [*layout[:a], merged, *layout[b + 1 :]]
 
@@ -314,12 +358,14 @@ def render_animation(
         targets: dict[tuple[str, ...], str] = {}
         for key, i in first.items():
             own = copy(slot, i)
-            if len(own) == 1 and own[0].id and not styled:
-                targets[key] = own[0].id
+            name = f"frame{i}" if moving < 2 else f"frame{i}.{stretch}"
+            if len(own) == 1 and not styled:
+                # A lone element is its own target, named for the frame if it has no id.
+                own[0].id = targets[key] = own[0].id or name
                 defs += own
             else:
-                targets[key] = f"frame{i}" if moving < 2 else f"frame{i}.{stretch}"
-                defs.append(group(targets[key], i, own))
+                targets[key] = name
+                defs.append(group(name, i, own))
         shown = [targets[key] for key in slot_keys]
         timing = _timing(shown, intervals, duration, repeat)
         body.append(svg.Use(href=f"#{shown[0]}", elements=[timing]))

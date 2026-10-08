@@ -404,3 +404,27 @@ def test_part_rotation_and_scaling_act_about_the_pivot():
         scale(bead, 0)
     with pytest.raises(TypeError):
         rotate("bead", (0, 0, 1), 30)
+
+
+def test_a_lone_element_without_an_id_is_its_own_target():
+    def frame(t):
+        scene = make_scene()
+        scene.text2d(1, 0, 0, f"{t:.1f}")  # no id
+        return scene
+
+    root = document(frame, fps=2, repeat=None)
+    texts = root.find(f"{SVG}defs").findall(f"{SVG}text")
+    assert [t.get("id") for t in texts] == ["frame0", "frame1"]
+    assert root.find(f"{SVG}defs").find(f"{SVG}g") is None
+
+
+def test_what_changes_rarely_is_cut_from_what_changes_often_at_a_layer_boundary():
+    def frame(t):
+        scene = make_scene(t)
+        if t > 0.45:
+            scene.sphere(0, (0, t, 0), 0.2, id="late")  # so the stretch varies in size
+        scene.text2d(1, 0, 0, "early" if t < 0.5 else "late", id="caption")
+        return scene
+
+    root = document(frame, fps=10, repeat=None)
+    assert [t.text for t in root.iter(f"{SVG}text")] == ["early", "late"]

@@ -131,6 +131,7 @@ class _Canvas:
         self._hi: Array = np.array([-np.inf, -np.inf])
         self._depths: dict[int, float] = {}
         self._sorted: set[int] = set()
+        self._resolved = False  # whether the sorted layers have been occluded
         self._shapes: dict[int, Callable[[], Shape | None]] = {}
         self._opaque: set[int] = set()
         self._rank: dict[int, int] = {}
@@ -161,14 +162,18 @@ class _Canvas:
 
     def _elements(self) -> list[svg.Element]:
         """Assemble projected elements without fitting a viewport or adding a background."""
-        if self._sorted:
-            self._occlude()
-        elements: list[svg.Element] = []
-        if self.defs:
-            elements.append(svg.Defs(elements=list(self.defs)))
-        elements += [el for _, _, el in sorted(self.items, key=self._order)]
+        drawn = [el for _, el in self._layered()]  # occluding first adds clip paths to defs
+        elements: list[svg.Element] = [svg.Defs(elements=list(self.defs))] if self.defs else []
+        elements += drawn
         _check_unique_ids(elements)
         return elements
+
+    def _layered(self) -> list[tuple[int, svg.Element]]:
+        """Every projected element with its layer, in paint order, the sorted layers occluded."""
+        if self._sorted and not self._resolved:
+            self._occlude()
+            self._resolved = True
+        return [(layer, el) for layer, _, el in sorted(self.items, key=self._order)]
 
     def _grow(self, pts2: np.ndarray) -> None:
         p = np.atleast_2d(pts2)

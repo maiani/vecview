@@ -163,18 +163,21 @@ What changes sits between those elements, and each stretch of it is drawn by
 one `<use>` whose `href` steps through that stretch's contents with discrete
 SMIL timing. Each distinct content is written once in `<defs>`, however many
 frames show it and in whatever order: a pause, a motion that comes back, and a
-label that changes once all cost one copy per distinct content. A stretch
-with the same number of elements in every frame is split into one `<use>` per
-element when that is smaller, so the label that changes once is not copied
-along with the bob that moves every frame. An animation that never changes
-comes out as a static document.
+label that changes once all cost one copy per distinct content. A stretch is
+cut at the boundaries between its layers, and split into one `<use>` per
+element where every frame draws as many there, wherever that is estimated to
+be smaller: a caption on a layer of its own that changes four times is stored
+four times, however often the electrons beside it move. So give what changes
+rarely a layer of its own. An animation that never changes comes out as a
+static document.
 
 Ids inside a stretch's contents are renamed `frame{i}-{id}`, after the first
 sample `i` that drew that content, the element keeping its own as
 `data-vecview-id`, and the content's `url(#...)` and `href="#..."` references
 follow. A content of several elements, or of none, is a
 `<g id="frame{i}" data-vecview-frame="i">`, with `.{n}` after the frame number
-when several stretches change. Content that points into another stretch is
+when several stretches change; a lone element is its own target, given that id
+if it has none. Content that points into another stretch is
 drawn with it. An embedded stylesheet that changes between frames is scoped to
 its frame's group, and must then be plain rules, without at-rules or comments;
 all that changes is then drawn as one stretch, since the rules may reach any of

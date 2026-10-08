@@ -29,8 +29,9 @@ All notable changes to this project are documented here, following
   Each stretch that changes is one `<use>` whose `href` steps through its
   distinct contents with discrete timing, each written once in `<defs>` with
   its ids renamed `frame{i}-{id}` (the original kept as `data-vecview-id`);
-  a stretch is split per element when that is smaller, and an animation that
-  never changes is a static document.
+  a stretch is cut at layer boundaries and per element wherever that is
+  estimated to be smaller, a lone element is its own target, and an animation
+  that never changes is a static document.
 - `vecview.animation`: `Track` with `keyframes` and `map`, the interpolators
   `linear` (numbers and 3D points) and `hold`, the easing `smoothstep`, and
   `rotate` and `scale`, which copy a part turned or scaled about a pivot and
