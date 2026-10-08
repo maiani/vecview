@@ -31,7 +31,8 @@ All notable changes to this project are documented here, following
   its ids renamed `frame{i}-{id}` (the original kept as `data-vecview-id`);
   a stretch is cut at layer boundaries and per element wherever that is
   estimated to be smaller, a lone element is its own target, and an animation
-  that never changes is a static document.
+  that never changes is a static document.  `animation.breakdown()` says where
+  the file's bytes go, stretch by stretch.
 - `vecview.animation`: `Track` with `keyframes` and `map`, the interpolators
   `linear` (numbers and 3D points) and `hold`, the easing `smoothstep`, and
   `rotate` and `scale`, which copy a part turned or scaled about a pivot and

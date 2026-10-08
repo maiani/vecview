@@ -428,3 +428,22 @@ def test_what_changes_rarely_is_cut_from_what_changes_often_at_a_layer_boundary(
 
     root = document(frame, fps=10, repeat=None)
     assert [t.text for t in root.iter(f"{SVG}text")] == ["early", "late"]
+
+
+def test_a_breakdown_says_where_the_bytes_go():
+    def frame(t):
+        scene = vecview.Scene(CAMERA)
+        scene.sphere(0, (0, 0, -1), 0.5, id="floor")
+        scene.sphere(1, (t, 0, 0), 0.5, id="ball")
+        return scene
+
+    animation = Animation(frame, duration=1, fps=4, repeat=None, view_box=(0, 0, 9, 9))
+    breakdown = animation.breakdown()
+    assert breakdown.frames == 4
+    assert breakdown.bytes == len(animation.to_svg_document())
+    floor, ball = breakdown.stretches
+    assert (floor.names, floor.contents, floor.layers) == (("floor",), 1, (0,))
+    assert (ball.names, ball.contents, ball.elements) == (("ball",), 4, (1, 1))
+    assert ball.bytes > floor.bytes
+    report = str(breakdown)
+    assert report.startswith("4 frames,") and "4 contents" in report

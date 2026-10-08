@@ -260,6 +260,29 @@ factor so every solid keeps its exact outline, screen sizes unscaled. They nest
 inside first: `rotate(scale(arm, 2, pivot=hinge), (0, 0, 1), 30, pivot=hinge)`
 grows the arm about its hinge, then swings it.
 
+## Where the bytes go
+
+`animation.breakdown()` says what the file stores, stretch by stretch in paint
+order: each `Stretch` has its `layers`, the fewest and most `elements` a frame
+draws there, how many distinct `contents` are stored, and the `bytes` they
+take. Printed, it gives the total, what is written once, and the heaviest
+stretches that change:
+
+```text
+360 frames, 1.93 MB
+written once: 104 elements, 71.6 kB
+what changes, heaviest first:
+   465.5 kB  24%    61 contents     49 elements  layers 15       polygon, polygon, polygon, polygon, ...
+   283.0 kB  15%   240 contents    1-2 elements  layers 20       polygon, polygon
+     2.1 kB   0%     4 contents      3 elements  layers 26       text, text, text
+```
+
+A stretch with as many contents as there are frames changes in every frame,
+and its bytes are what each frame redraws: fewer points in a shape, fewer
+frames, or moving what changes rarely to a layer of its own are the remedies.
+The breakdown renders the animation to find out, as `render` does. Most hosts
+serve SVG gzipped, which shrinks repeated markup several times over.
+
 ## Cost
 
 Every sample is a full render, so an animation costs `N` times the still, plus

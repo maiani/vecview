@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from collections.abc import Callable
+from dataclasses import dataclass
 from itertools import pairwise
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -60,6 +61,65 @@ class _Slot(NamedTuple):
     @property
     def layers(self) -> tuple[int, ...]:
         return tuple(sorted({layer for row in self.on for layer in row}))
+
+
+@dataclass(frozen=True)
+class Stretch:
+    """One stretch of an animated file's paint order, and what storing it costs.
+
+    Attributes:
+        layers: The layers its elements are drawn on.
+        elements: The fewest and the most elements a frame draws there.
+        contents: How many distinct contents are stored: 1 for what is written
+            once, however many frames show it.
+        bytes: The markup written for it, contents and timing together.
+        names: The ids, or else the tag names, of what the first frame draws there.
+    """
+
+    layers: tuple[int, ...]
+    elements: tuple[int, int]
+    contents: int
+    bytes: int
+    names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Breakdown:
+    """Where an animated file's bytes go, stretch by stretch in paint order."""
+
+    frames: int
+    bytes: int
+    stretches: tuple[Stretch, ...]
+
+    def __str__(self) -> str:
+        """The total, what is written once, and the heaviest stretches that change."""
+
+        def size(n: int) -> str:
+            return f"{n / 1e6:.2f} MB" if n >= 1e6 else f"{n / 1e3:.1f} kB"
+
+        once = [s for s in self.stretches if s.contents == 1]
+        changing = sorted((s for s in self.stretches if s.contents > 1), key=lambda s: -s.bytes)
+        lines = [
+            f"{self.frames} frames, {size(self.bytes)}",
+            f"written once: {sum(s.elements[1] for s in once)} elements,"
+            f" {size(sum(s.bytes for s in once))}",
+        ]
+        if changing:
+            lines.append("what changes, heaviest first:")
+        for s in changing[:10]:
+            counts = f"{s.elements[0]}" + (
+                f"-{s.elements[1]}" if s.elements[1] > s.elements[0] else ""
+            )
+            layers = f"{s.layers[0]}" + (f"-{s.layers[-1]}" if len(s.layers) > 1 else "")
+            names = ", ".join(s.names[:4]) + (", ..." if len(s.names) > 4 else "")
+            lines.append(
+                f"  {size(s.bytes):>9} {100 * s.bytes / self.bytes:3.0f}%  {s.contents:4d} contents"
+                f"  {counts:>5} elements  layers {layers:<7}  {names}"
+            )
+        if len(changing) > 10:
+            rest = changing[10:]
+            lines.append(f"  and {len(rest)} more, {size(sum(s.bytes for s in rest))}")
+        return "\n".join(lines)
 
 
 def _fmt(value: float) -> str:
@@ -313,8 +373,11 @@ def render_animation(
     fps: float,
     repeat: int | None,
     background: str | None,
-) -> svg.SVG:
-    """Render validated animation settings through the ordinary scene projector."""
+) -> tuple[svg.SVG, Breakdown]:
+    """Render validated animation settings through the ordinary scene projector.
+
+    Returns the document and where its bytes go.
+    """
     intervals = max(1, math.ceil(duration * fps))
     times = [i * duration / intervals for i in range(intervals)]
     if repeat is not None:
@@ -330,6 +393,14 @@ def render_animation(
     defs: list[svg.Element] = list(shared_defs)
     written: set[str] = set()
     body: list[svg.Element] = []
+    stretches: list[Stretch] = []
+
+    def record(slot: _Slot, contents: int, markup: list[svg.Element]) -> None:
+        sizes = [len(row) for row in slot.items]
+        names = tuple(e.id or e.element_name for e in slot.items[0])
+        layers = tuple(layer for layer in slot.layers if layer != _STYLES)
+        cost = sum(len(str(e)) for e in markup)
+        stretches.append(Stretch(layers, (min(sizes), max(sizes)), contents, cost, names))
 
     def copy(slot: _Slot, i: int) -> list[svg.Element]:
         """Sample ``i`` of a slot renamed as frame ``i``, its private definitions written."""
@@ -346,14 +417,17 @@ def render_animation(
 
     stretch = 0
     for slot, slot_keys in zip(layout, keys, strict=True):
+        start, before = len(defs), len(body)
         if slot.fixed:
             body.append(slot.items[0][0])
+            record(slot, 1, body[before:])
             continue
         styled = any(isinstance(e, svg.Style) for row in slot.items for e in walk(row))
         first = {key: slot_keys.index(key) for key in dict.fromkeys(slot_keys)}
         if len(first) == 1:  # alike in every sample, but pointing at private definitions
             own = copy(slot, 0)
             body += [group(None, 0, own)] if styled else own
+            record(slot, 1, defs[start:] + body[before:])
             continue
         targets: dict[tuple[str, ...], str] = {}
         for key, i in first.items():
@@ -369,6 +443,7 @@ def render_animation(
         shown = [targets[key] for key in slot_keys]
         timing = _timing(shown, intervals, duration, repeat)
         body.append(svg.Use(href=f"#{shown[0]}", elements=[timing]))
+        record(slot, len(first), defs[start:] + body[before:])
         stretch += 1
 
     x, y, width, height = view_box
@@ -384,10 +459,11 @@ def render_animation(
             )
         )
     elements += body
-    return svg.SVG(
+    document = svg.SVG(
         width=_number(width),
         height=_number(height),
         viewBox=svg.ViewBoxSpec(*map(_number, view_box)),
         overflow="hidden",
         elements=elements,
     )
+    return document, Breakdown(intervals, len(str(document)), tuple(stretches))

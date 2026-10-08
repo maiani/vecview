@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from vecview._animation_svg import render_animation
+from vecview._animation_svg import Breakdown, Stretch, render_animation
 from vecview._numeric import finite_number as _number
 from vecview._tracks import Track, hold, linear, smoothstep
 from vecview._transforms import rotate, scale
@@ -112,6 +112,20 @@ class Animation:
         is held once playback ends.  What every sample draws alike is written
         once, in place, and each distinct content of what changes once.
         """
+        return self._encode()[0]
+
+    def breakdown(self) -> Breakdown:
+        """Where the animated file's bytes go, stretch by stretch in paint order.
+
+        Each :class:`Stretch` is a run of the paint order the file stores
+        together: its layers, how many elements a frame draws there, how many
+        distinct contents are stored, and the bytes they take.  Printed, it
+        gives the total, what is written once, and the heaviest stretches that
+        change.  It renders the animation to find out, as :meth:`render` does.
+        """
+        return self._encode()[1]
+
+    def _encode(self) -> tuple[svg.SVG, Breakdown]:
         return render_animation(
             self.frame,
             duration=self.duration,
@@ -134,6 +148,8 @@ class Animation:
 
 __all__ = [
     "Animation",
+    "Breakdown",
+    "Stretch",
     "Track",
     "hold",
     "linear",
