@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vecview"
-version = "0.2.0"
+version = "0.3.0"
 description = "Layered 3D scenes that render to SVG, for scientific schematics"
 readme = "README.md"
 requires-python = ">=3.12"

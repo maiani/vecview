@@ -5,6 +5,10 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
+Animation is new in this release, and its API may still change before 1.0.
+
 ### Added
 
 - `slot(..., content=element)` -- a slot can hold an svg.py element instead of

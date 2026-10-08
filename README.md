@@ -6,10 +6,10 @@ stays editable afterwards: elements keep the ids you give them, the same scene
 renders to byte-identical SVG, and the output opens in Inkscape.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/maiani/vecview/v0.2.0/docs/images/readme.svg" alt="A gate-defined quantum dot on a layered slab, with leads, gates, spin densities and a bias circuit" width="640">
+  <img src="https://raw.githubusercontent.com/maiani/vecview/v0.3.0/docs/images/readme.svg" alt="A gate-defined quantum dot on a layered slab, with leads, gates, spin densities and a bias circuit" width="640">
 </p>
 
-<p align="center"><sub>A device sketch: layered solids, Gaussian densities, camera-facing arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md">gallery</a>.</sub></p>
+<p align="center"><sub>A device sketch: layered solids, Gaussian densities, camera-facing arrows and a circuit, from <code>examples/altermagnetic_dot.py</code>. More in the <a href="https://github.com/maiani/vecview/blob/v0.3.0/docs/gallery.md">gallery</a>.</sub></p>
 
 VecView is a small projection layer on top of
 [`svg.py`](https://pypi.org/project/svg.py/). `svg.py` builds the elements;
@@ -224,7 +224,7 @@ scene.slot(
 a string, rendered by the active camera. That method is the whole embedding
 contract: any tool that accepts an object exposing it can place a scene, without
 VecView knowing about the tool. The fitted viewBox usually does *not* start at
-`0, 0`, so a consumer must honour its origin. See [Embedding a scene](https://github.com/maiani/vecview/blob/v0.2.0/docs/embedding.md).
+`0, 0`, so a consumer must honour its origin. See [Embedding a scene](https://github.com/maiani/vecview/blob/v0.3.0/docs/embedding.md).
 
 In Jupyter a scene displays itself inline. Rasterizing and PDF export are out of
 scope; they belong to whatever assembles the final page.
@@ -246,11 +246,11 @@ vecview.Animation(scene, duration=6.283, view_box=(-150, -110, 300, 220)).save("
 
 `Track` with keyframes and easing, turning parts about a pivot, and frame
 callbacks for anything else are in `vecview.animation`; see the [animation
-guide](docs/animation.md).
+guide](https://github.com/maiani/vecview/blob/v0.3.0/docs/animation.md).
 
 ## Examples
 
-The [gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md) has the static figures everyone draws — a perovskite
+The [gallery](https://github.com/maiani/vecview/blob/v0.3.0/docs/gallery.md) has the static figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
 solenoid, crossing mirror planes, and two device sketches — and two
 animations, a pendulum and a rotating dipole radiating. Each is one
@@ -265,7 +265,7 @@ uv run python examples/slab_polarizer.py --projection all     # all five
 uv run python examples/altermagnetic_dot.py --projection all  # a device sketch, under four cameras
 ```
 
-See [examples/README.md](examples/README.md) for the full list and what each
+See [examples/README.md](https://github.com/maiani/vecview/blob/v0.3.0/examples/README.md) for the full list and what each
 needs; several typeset their labels with
 [VecTeX](https://github.com/maiani/vectex), which needs TeX.
 
@@ -301,13 +301,15 @@ VecView depends on none of them and contains no code specific to any of them.
 
 ## Documentation
 
-- [Overview](https://github.com/maiani/vecview/blob/v0.2.0/docs/index.md)
-- [Cameras](https://github.com/maiani/vecview/blob/v0.2.0/docs/cameras.md)
-- [Scenes and layers](https://github.com/maiani/vecview/blob/v0.2.0/docs/scenes.md)
-- [Shapes](https://github.com/maiani/vecview/blob/v0.2.0/docs/shapes.md)
-- [Gallery](https://github.com/maiani/vecview/blob/v0.2.0/docs/gallery.md)
-- [Embedding a scene](https://github.com/maiani/vecview/blob/v0.2.0/docs/embedding.md)
-- [Development](https://github.com/maiani/vecview/blob/v0.2.0/docs/development.md)
+- [Overview](https://github.com/maiani/vecview/blob/v0.3.0/docs/index.md)
+- [Cameras](https://github.com/maiani/vecview/blob/v0.3.0/docs/cameras.md)
+- [Scenes and layers](https://github.com/maiani/vecview/blob/v0.3.0/docs/scenes.md)
+- [Shapes](https://github.com/maiani/vecview/blob/v0.3.0/docs/shapes.md)
+- [Outlines](https://github.com/maiani/vecview/blob/v0.3.0/docs/outlines.md)
+- [Animation](https://github.com/maiani/vecview/blob/v0.3.0/docs/animation.md)
+- [Gallery](https://github.com/maiani/vecview/blob/v0.3.0/docs/gallery.md)
+- [Embedding a scene](https://github.com/maiani/vecview/blob/v0.3.0/docs/embedding.md)
+- [Development](https://github.com/maiani/vecview/blob/v0.3.0/docs/development.md)
 
 ## License
 
