@@ -125,6 +125,10 @@ All notable changes to this project are documented here, following
 
 ### Fixed
 
+- Text is escaped: a label holding `<`, `>`, or `&` -- `"B < 0"`, `"Smith &
+  Jones"` -- made the document unreadable, because svg.py writes text as it is
+  given.  `text`, `text2d`, and their `svg.TSpan` runs are escaped now, the
+  runs copied rather than changed.
 - `double_arrow_shape` clamps a `head_len` longer than half the arrow, as
   `arrow_shape` already did, instead of returning a self-crossing polygon.
 - `Scene.is_empty` is true exactly when rendering would find nothing to fit a

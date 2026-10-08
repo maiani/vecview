@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
+from html import escape
 from typing import Literal
 
 import numpy as np
@@ -113,6 +115,31 @@ type TextContent = str | Sequence[svg.TSpan]
 def _text_length(s: TextContent) -> int:
     """Characters in a label, for the nominal-width bounding-box estimate."""
     return len(s) if isinstance(s, str) else sum(len(run.text or "") for run in s)
+
+
+def _escaped_runs(runs: Sequence[svg.Element]) -> list[svg.Element]:
+    """Copies of ``svg.TSpan`` runs with their text escaped; the runs given are left as they are."""
+    return [
+        replace(
+            run,
+            text=None if run.text is None else escape(run.text, quote=False),
+            elements=None if run.elements is None else _escaped_runs(run.elements),
+        )
+        if isinstance(run, svg.TSpan)
+        else run
+        for run in runs
+    ]
+
+
+def _text_content(s: TextContent) -> dict[str, Style]:
+    """A label as ``svg.Text`` content, escaped: svg.py writes text as it is given.
+
+    Without this, a label such as ``B < 0`` or ``Smith & Jones`` would make the
+    document unreadable.
+    """
+    if isinstance(s, str):
+        return {"text": escape(s, quote=False)}
+    return {"elements": _escaped_runs(list(s))}
 
 
 def _named(base: str | None, suffix: str) -> dict[str, Style]:

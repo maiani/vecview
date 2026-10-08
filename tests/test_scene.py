@@ -904,3 +904,18 @@ class TestNamedCameras:
         assert view.to_svg_document() == str(scene.render("cabinet"))
         view.cameras["top"] = OrthographicCamera(0.0, 90.0, 10.0)
         assert "top" not in scene.cameras
+
+
+def test_text_is_escaped_so_the_document_stays_readable():
+    import xml.etree.ElementTree as ET
+
+    run = svg.TSpan(text="x < 1 & y > 2")
+    scene = Scene(OrthographicCamera.isometric(20))
+    scene.text2d(0, 0, 0, "B < 0 & up", id="plain")
+    scene.text(0, (0, 0, 0), [svg.TSpan(text="E"), run], id="runs")
+    root = ET.fromstring(scene.to_svg_document())
+    texts = {
+        t.get("id"): "".join(t.itertext()) for t in root.iter("{http://www.w3.org/2000/svg}text")
+    }
+    assert texts == {"plain": "B < 0 & up", "runs": "Ex < 1 & y > 2"}
+    assert run.text == "x < 1 & y > 2"  # the caller's run is left as it was

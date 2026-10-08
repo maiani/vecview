@@ -26,6 +26,7 @@ from vecview._elements import (
     _num,
     _path,
     _points,
+    _text_content,
     _text_length,
 )
 from vecview._occlusion import (
@@ -839,7 +840,7 @@ class _Canvas:
             anchor = style.get("text_anchor", "start")
             x0 = x if anchor == "start" else (x - w if anchor == "end" else x - w / 2)
             self._grow(np.array([[x0, y - 0.82 * size], [x0 + w, y + 0.25 * size]]))
-        content: dict[str, Style] = {"text": s} if isinstance(s, str) else {"elements": list(s)}
+        content = _text_content(s)
         self._emit(
             layer,
             svg.Text(
