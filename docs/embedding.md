@@ -20,6 +20,12 @@ The document is standalone and self-describing:
 - `width`/`height` always agree with the `viewBox` extents, so scaling by either
   gives the same result
 - every `<defs>` element the content references, inline
+- a Dublin Core `<metadata>` block naming VecView and its version as the
+  creator, as Matplotlib and Inkscape do; `Scene.render()` returns the drawing
+  without it
+- one tag per line, indented by depth, so a regenerated figure diffs line by
+  line; a `<text>` or `<foreignObject>` element stays on one line, since
+  whitespace inside it would render
 - no external references or scripts
 
 Text names its font rather than embedding it — `DejaVu Sans, Verdana,

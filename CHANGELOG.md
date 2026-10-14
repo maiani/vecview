@@ -10,6 +10,14 @@ All notable changes to this project are documented here, following
 - `annulus(center, r_in, r_out, n, *, theta0_deg=0)`: a ring footprint,
   `Region(outer, [inner])`, for washers, microrings, and loops. `annulus_sector`
   keeps returning one outline, and a full turn raises, pointing to `annulus`.
+- Written documents credit VecView. `Scene.to_svg_document()`, `Scene.save()`
+  and the `Animation` equivalents add a Dublin Core `<metadata>` block naming
+  "VecView vX, https://github.com/maiani/vecview" as the creator, after any
+  `<defs>`. `render()` still returns the drawing alone.
+- Written documents put one tag per line, indented, so a regenerated figure's
+  diff shows what changed instead of one changed line. `<text>` and
+  `<foreignObject>` elements stay whole, where whitespace would render, and the
+  markup is otherwise unchanged: every example renders pixel-identically.
 - `Region(exterior, holes=())` explicitly represents one connected planar
   region. Disconnected components are lists of regions, not lists of rings.
   The record copies coordinates into read-only arrays; `rings` exposes its boundaries.

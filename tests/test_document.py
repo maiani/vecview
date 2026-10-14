@@ -10,10 +10,12 @@ a test must not invent one.
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 
 import numpy as np
 import pytest
+import svg
 
 import vecview
 from vecview import OrthographicCamera, Scene
@@ -82,9 +84,50 @@ class TestDocumentShape:
         assert defs is not None
         assert [child.get("id") for child in defs] == ["glow"]
 
+    def test_credits_vecview_in_the_document_only(self, scene: Scene) -> None:
+        """The written document names its creator; the drawing from render() does not."""
+        title = f"<dc:title>VecView v{vecview.__version__}, https://github.com/maiani/vecview"
+        assert scene.to_svg_document().count(title) == 1
+        assert "<metadata" not in str(scene.render())
+
+    def test_puts_one_tag_per_line_but_leaves_text_whole(self) -> None:
+        """Line breaks keep diffs readable; inside ``<text>`` they would render as gaps."""
+        scene = Scene(OrthographicCamera(30.0, 30.0, 40.0))
+        scene.sphere(0, (0, 0, 0), 1.0, fill="#36c", highlight="#fff", id="ball")
+        runs = [svg.TSpan(text="E"), svg.TSpan(text="in", font_size=8, dy=3)]
+        scene.text(1, (0, 0, 1.2), runs, id="label")
+        lines = scene.to_svg_document().splitlines()
+        assert lines[0].startswith("<svg") and lines[-1] == "</svg>"
+        assert '  <circle id="ball"' in "\n".join(lines)
+        (text,) = (line for line in lines if "<text" in line)
+        assert text.strip().endswith(
+            '<tspan>E</tspan><tspan font-size="8" dy="3">in</tspan></text>'
+        )
+        flat = re.sub(r">\n *<", "><", scene.to_svg_document()).rstrip("\n")
+        assert ET.fromstring(flat) is not None and "\n" not in flat
+
+    def test_layout_reads_quoted_angle_brackets_and_keeps_embedded_html_whole(self) -> None:
+        from vecview._elements import _indented
+
+        markup = (
+            '<svg><g data-x="a>b"><path d="M0 0"/></g><!-- a > b -->'
+            "<foreignObject><p>a <b>b</b></p></foreignObject></svg>"
+        )
+        lines = _indented(markup).splitlines()
+        assert lines == [
+            "<svg>",
+            '  <g data-x="a>b">',
+            '    <path d="M0 0"/>',
+            "  </g>",
+            "  <!-- a > b -->",
+            "  <foreignObject><p>a <b>b</b></p></foreignObject>",
+            "</svg>",
+        ]
+
     def test_has_no_external_references(self, scene: Scene) -> None:
         """No fetched fonts, images, or scripts: the document must stand alone."""
-        document = scene.to_svg_document()
+        # The credit's namespaces and link name the creator; nothing there is fetched.
+        document = re.sub(r"<metadata>.*</metadata>", "", scene.to_svg_document(), flags=re.S)
         for marker in ("<image", "<script", "xlink:href", "http://", "https://"):
             if marker == "http://":
                 # the SVG namespace declaration is the one permitted URL

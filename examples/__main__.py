@@ -50,7 +50,7 @@ def main() -> None:
         example = importlib.import_module(name).build()
         built = time.perf_counter() - began
         began = time.perf_counter()
-        document = str(example.render())
+        document = example.to_svg_document()
         rendered = time.perf_counter() - began
         path = OUT / f"{name}.svg"
         path.write_text(document, encoding="utf-8")

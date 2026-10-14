@@ -872,7 +872,7 @@ class TestObjectsAndCamera:
         scene = self.build()
         passed = str(scene.render(cam))
         scene.camera = cam
-        assert scene.to_svg_document() == passed
+        assert str(scene.render()) == passed
 
     def test_rendering_is_pure(self, cam: Camera) -> None:
         scene = self.build()
@@ -883,7 +883,7 @@ class TestObjectsAndCamera:
 
     def test_save_takes_a_camera(self, cam: Camera, tmp_path) -> None:
         out = self.build().save(tmp_path / "s.svg", cam)
-        assert out.read_text(encoding="utf-8") == str(self.build().render(cam))
+        assert out.read_text(encoding="utf-8") == self.build().with_camera(cam).to_svg_document()
 
     def test_bbox_follows_the_camera(self, cam: Camera) -> None:
         scene = self.build()
@@ -950,7 +950,7 @@ class TestNamedCameras:
     def test_the_active_camera_is_chosen_by_name(self, scene: Scene) -> None:
         assert scene.camera is scene.cameras["main"]
         scene.camera = "cabinet"
-        assert scene.to_svg_document() == str(scene.render("cabinet"))
+        assert str(scene.render()) == str(scene.render("cabinet"))
 
     def test_an_active_name_follows_its_entry(self, scene: Scene) -> None:
         replacement = OrthographicCamera.isometric(10.0)
@@ -966,7 +966,7 @@ class TestNamedCameras:
     def test_with_camera_keeps_the_named_cameras(self, scene: Scene) -> None:
         view = scene.with_camera("cabinet")
         assert set(view.cameras) == {"main", "cabinet"}
-        assert view.to_svg_document() == str(scene.render("cabinet"))
+        assert str(view.render()) == str(scene.render("cabinet"))
         view.cameras["top"] = OrthographicCamera(0.0, 90.0, 10.0)
         assert "top" not in scene.cameras
 

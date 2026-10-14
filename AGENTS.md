@@ -70,6 +70,9 @@ on its own side.
   in the aligned box and never parsed, copied, or rewritten. That is the one
   way content from elsewhere -- a VecTeX label -- goes into a scene without a
   consumer; anything that would need VecView to read or change it does not.
+  A written document lays its tags out one per line, so whitespace may fall
+  between the content's tags, which SVG ignores; never inside `<text>` or
+  `<foreignObject>`, where it would render.
 - `Scene` records objects and nothing else; it never projects. Every public
   drawing method validates what it can without a camera and appends one record.
   The canvas holds a camera and implements each method of the same name;

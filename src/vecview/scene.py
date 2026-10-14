@@ -13,7 +13,7 @@ from pathlib import Path
 import svg
 
 from vecview._drawing import _trackable
-from vecview._elements import DEFAULT_FONT, DEFAULT_TEXT_FILL, Align, TextContent
+from vecview._elements import DEFAULT_FONT, DEFAULT_TEXT_FILL, Align, TextContent, document_text
 from vecview._place import _Call
 from vecview._solid_drawing import Part, _SolidDrawing
 from vecview._solids import _SolidCanvas
@@ -237,9 +237,11 @@ class Scene(_SolidDrawing):
 
         This is the whole surface a consumer needs.  A tool that assembles a
         larger document can accept any object exposing this method and place a
-        scene without importing this package, or being imported by it.
+        scene without importing this package, or being imported by it.  The
+        document credits VecView in a Dublin Core ``<metadata>`` block, which
+        :meth:`render` leaves out of the drawing it returns.
         """
-        return str(self.render())
+        return document_text(self.render())
 
     def save(self, path: str | Path, camera: CameraRef | None = None) -> Path:
         """Write the document rendered by ``camera`` (default: the active one); return the path.
@@ -250,7 +252,7 @@ class Scene(_SolidDrawing):
         assembles the final page.
         """
         out = Path(path)
-        out.write_text(str(self.render(camera)), encoding="utf-8")
+        out.write_text(document_text(self.render(camera)), encoding="utf-8")
         return out
 
     # --- drawing ----------------------------------------------------------

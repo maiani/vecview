@@ -125,7 +125,11 @@ def test_what_every_frame_draws_alike_is_written_once_with_its_own_id():
 
     root = document(frame)
     assert [node.get("id") for node in root.find(f"{SVG}defs")] == ["frame0-ball", "frame1-ball"]
-    drawn = [(node.tag.removeprefix(SVG), node.get("id")) for node in root][1:]
+    drawn = [
+        (node.tag.removeprefix(SVG), node.get("id"))
+        for node in root
+        if node.tag != f"{SVG}metadata"
+    ][1:]
     assert drawn == [("circle", "floor"), ("use", None), ("text", "caption")]
 
 
@@ -138,7 +142,11 @@ def test_what_does_not_move_is_written_once_even_between_what_does():
         return scene
 
     root = document(frame, fps=2, repeat=None)
-    drawn = [(node.tag.removeprefix(SVG), node.get("id")) for node in root][1:]
+    drawn = [
+        (node.tag.removeprefix(SVG), node.get("id"))
+        for node in root
+        if node.tag != f"{SVG}metadata"
+    ][1:]
     assert drawn == [("use", None), ("text", "between"), ("use", None)]
     assert [values for values, _ in timings(root)] == [
         "#frame0-low;#frame1-low;#frame1-low",

@@ -225,7 +225,7 @@ class TestContract:
         rebuilt.sort_by_depth(0)
         rebuilt.sphere(0, (0, 0, 0), 1.0, fill="#c33", id="a")
         rebuilt.sphere(0, (1.2, 0, 0), 0.8, fill="#33c", id="b")
-        assert str(s.render(other)) == rebuilt.to_svg_document()
+        assert str(s.render(other)) == str(rebuilt.render())
 
 
 def test_every_clip_is_a_valid_polygon_at_its_written_precision() -> None:

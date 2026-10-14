@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from vecview._animation_svg import Breakdown, Stretch, render_animation
+from vecview._elements import document_text
 from vecview._numeric import finite_number as _number
 from vecview._tracks import Track, hold, linear, smoothstep
 from vecview._transforms import rotate, scale
@@ -136,8 +137,8 @@ class Animation:
         )
 
     def to_svg_document(self) -> str:
-        """Return the deterministic standalone SVG from :meth:`render`."""
-        return str(self.render())
+        """Return the deterministic standalone SVG from :meth:`render`, crediting VecView."""
+        return document_text(self.render())
 
     def save(self, path: str | Path) -> Path:
         """Write animated SVG as UTF-8 and return the output path."""

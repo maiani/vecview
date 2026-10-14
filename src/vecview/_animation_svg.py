@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, NamedTuple
 import svg
 
 from vecview._animation_refs import ids, namespace, references, walk
+from vecview._elements import document_text
 
 if TYPE_CHECKING:
     from vecview.scene import Scene
@@ -466,4 +467,5 @@ def render_animation(
         overflow="hidden",
         elements=elements,
     )
-    return document, Breakdown(intervals, len(str(document)), tuple(stretches))
+    # The breakdown counts the bytes written, credit included.
+    return document, Breakdown(intervals, len(document_text(document)), tuple(stretches))

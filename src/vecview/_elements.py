@@ -1,11 +1,11 @@
-"""SVG emission shared by the canvases: coordinates, paths, ellipses, text, and ids."""
+"""SVG emission shared by the canvases: coordinates, paths, ellipses, text, ids, and credit."""
 
 from __future__ import annotations
 
 import math
 import re
 from collections.abc import Iterable, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from html import escape
 from typing import Literal
 
@@ -188,3 +188,64 @@ def _slug(color: str) -> str:
 DEFAULT_FONT = "DejaVu Sans, Verdana, sans-serif"
 
 DEFAULT_TEXT_FILL = "#222222"
+
+
+def _rdf(name: str, *children: svg.Element, text: str | None = None, **extra: str) -> svg.Element:
+    """An element of the RDF vocabulary, which svg.py has no class for."""
+    kind = dataclass(type(name, (svg.Element,), {"element_name": name}))
+    return kind(elements=list(children) or None, text=text, extra=extra or None)
+
+
+def credit() -> svg.Metadata:
+    """Dublin Core metadata naming VecView the document's creator, as Matplotlib does."""
+    from vecview import __version__
+
+    title = _rdf("dc:title", text=f"VecView v{__version__}, https://github.com/maiani/vecview")
+    work = _rdf("cc:Work", _rdf("dc:creator", _rdf("cc:Agent", title)))
+    namespaces = {
+        "xmlns:rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        "xmlns:dc": "http://purl.org/dc/elements/1.1/",
+        "xmlns:cc": "http://creativecommons.org/ns#",
+    }
+    return svg.Metadata(elements=[_rdf("rdf:RDF", work, **namespaces)])
+
+
+def document_text(document: svg.SVG) -> str:
+    """``document`` as written to a file: credited after any ``<defs>``, one tag per line.
+
+    The drawing itself is left alone.  Line breaks make a regenerated figure's
+    diff readable; they go only between two adjacent tags outside ``<text>``,
+    where whitespace would render as a gap between runs.
+    """
+    elements = list(document.elements or [])
+    at = 1 if elements and isinstance(elements[0], svg.Defs) else 0
+    return _indented(str(replace(document, elements=[*elements[:at], credit(), *elements[at:]])))
+
+
+# A comment, CDATA, or tag -- quoted attribute values may hold ">" -- or text between.
+_TOKEN = re.compile(r"<!--.*?-->|<!\[CDATA\[.*?\]\]>|<(?:[^>\"']|\"[^\"]*\"|'[^']*')*>|[^<]+", re.S)
+# Whitespace between tags is insignificant in SVG except in these, where it would
+# render: as a gap between text runs, or as a space in embedded HTML.
+_WHOLE = re.compile(r"</?(text|foreignObject)[\s/>]")
+
+
+def _indented(markup: str) -> str:
+    """``markup`` with each tag that follows another tag on its own line, indented by depth."""
+    out: list[str] = []
+    depth = whole = 0
+    previous_tag = False
+    for token in _TOKEN.findall(markup):
+        tag = token.startswith("<")
+        closing = token.startswith("</")
+        opening = tag and not closing and not token.endswith("/>") and token[1] not in "?!"
+        if closing:
+            depth -= 1
+        if tag and previous_tag and not whole:
+            out.append("\n" + "  " * depth)
+        out.append(token)
+        if _WHOLE.match(token):
+            whole += 1 if opening else -1 if closing else 0
+        if opening:
+            depth += 1
+        previous_tag = tag
+    return "".join(out) + "\n"
