@@ -12,9 +12,10 @@ from pathlib import Path
 
 import svg
 
-from vecview._drawing import Part, _Drawing, _trackable
+from vecview._drawing import _trackable
 from vecview._elements import DEFAULT_FONT, DEFAULT_TEXT_FILL, Align, TextContent
 from vecview._place import _Call
+from vecview._solid_drawing import Part, _SolidDrawing
 from vecview._solids import _SolidCanvas
 from vecview._tracks import Track
 from vecview._types import Array, Style
@@ -32,7 +33,7 @@ type CameraRef = Camera | str
 """A camera, or the name of one in :attr:`Scene.cameras`."""
 
 
-class Scene(_Drawing):
+class Scene(_SolidDrawing):
     """A 3D scene: objects in world space, and the cameras that view them.
 
     Drawing calls record objects and nothing more; nothing is projected until

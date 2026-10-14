@@ -6,9 +6,10 @@ from collections.abc import Callable
 
 import numpy as np
 
-from vecview._drawing import Part, _moving, _read_call
+from vecview._drawing import _moving, _read_call
 from vecview._numeric import finite_vector3 as _vector3
 from vecview._place import _placement
+from vecview._solid_drawing import Part
 from vecview._tracks import Track
 from vecview._types import Point3
 

@@ -31,11 +31,12 @@ on its own side.
     because it is a camera question, not a scene one.
   - `projections.py` holds the concrete projections: `OrthographicCamera` and
     `ObliqueCamera`.
-  - Only the rendering modules import `svg`: `scene.py` and the private
-    `_elements.py`, `_canvas.py`, and `_solids.py`, and for animation
-    `_animation_svg.py` and `_animation_refs.py`. `shapes.py`, `camera.py`,
-    `projections.py`, `_occlusion.py`, `_place.py`, `_drawing.py`,
-    `_tracks.py`, and `_transforms.py` never do.
+  - Only the rendering modules build `svg` elements: `scene.py` and the
+    private `_elements.py`, `_canvas.py`, and `_solids.py`, and for animation
+    `_animation_svg.py` and `_animation_refs.py`. `_drawing.py` imports it only
+    to check what `slot` is given, and `_occlusion.py` only for a type.
+    `shapes.py`, `camera.py`, `projections.py`, `_place.py`,
+    `_solid_drawing.py`, `_tracks.py`, and `_transforms.py` never do.
 - `animation.py` samples a pure time-to-scene callback through the static
   renderer and writes once what every frame draws alike. A scene holding tracks
   is that callback underneath: a drawing call given a `Track` anywhere in its
@@ -75,12 +76,14 @@ on its own side.
   visibility, and the flat calls; `_SolidCanvas` (`_solids.py`) adds the curved
   solids and is the canvas a render uses. `_elements.py` holds the SVG emission
   helpers both share.
-- The world-space drawing calls live on the private `_Drawing` base
-  (`_drawing.py`, with `Part`), shared by
-  `Scene` and `Part`. `Scene` adds what only makes sense for a whole document:
-  cameras, rendering, `sort_by_depth` (a property of the layer stack), `<defs>`,
-  raw elements, and screen-space calls. Keep a call off `_Drawing` unless it has
-  a world position, because a part must be able to move everything it holds.
+- The world-space drawing calls live on private bases, split as the canvases
+  are: `_Drawing` (`_drawing.py`) has the flat calls and the recording and
+  track replay; `_SolidDrawing` (`_solid_drawing.py`, with `Part`) adds the
+  curved solids and is what `Scene` and `Part` derive from. `Scene` adds what
+  only makes sense for a whole document: cameras, rendering, `sort_by_depth` (a
+  property of the layer stack), `<defs>`, raw elements, and screen-space calls.
+  Keep a call off the drawing bases unless it has a world position, because a
+  part must be able to move everything it holds.
 - `place` copies a part's recorded calls with their geometry moved by a `_Frame`
   (`_place.py`).
   `_MOVES` says, per call, which arguments are points, directions, edges, or

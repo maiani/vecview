@@ -243,10 +243,11 @@ class TestChecks:
             Scene().place(0, Part(), **kwargs)
 
     def test_every_world_space_call_knows_how_to_move(self) -> None:
-        from vecview._drawing import _Drawing
         from vecview._place import _MOVES
+        from vecview._solid_drawing import _SolidDrawing
 
-        calls = {name for name in vars(_Drawing) if not name.startswith("_")} - {"place", "at"}
+        names = {name for cls in _SolidDrawing.__mro__[:-1] for name in vars(cls)}
+        calls = {name for name in names if not name.startswith("_")} - {"place", "at"}
         assert calls == set(_MOVES)
 
     def test_a_part_holds_no_document_level_calls(self) -> None:

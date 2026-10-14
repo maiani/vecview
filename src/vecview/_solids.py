@@ -6,23 +6,40 @@ or group, and describes its exact depth for a depth-sorted layer.
 
 from __future__ import annotations
 
+import dataclasses
+import functools
 import itertools
 import math
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 import numpy as np
 import svg
 
-from vecview._canvas import _ball_axes, _Canvas, _coverage, _parallel
+from vecview._canvas import _Canvas, _coverage, _parallel
 from vecview._elements import _ellipse_axes, _ellipse_element, _named, _num, _path, _points, _slug
 from vecview._occlusion import (
     Piece,
+    Shape,
     Surface,
     capsule_depth,
 )
 from vecview._types import Array, Point3, Points3, Style
 from vecview._vec import as_points, basis_for, convex_hull, unit
-from vecview.shapes import Face, Pivot
+from vecview.camera import ParallelCamera
+from vecview.shapes import Face, Pivot, ellipse_shape
+
+
+def _ball_axes(cam: ParallelCamera, radius: float) -> Array:
+    """Axes of the ellipse a ball of ``radius`` projects to: ``radius * sqrt(S S^T)``.
+
+    ``S`` is the camera's linear map, so this is exact for any parallel
+    projection.  The square root is the symmetric one, so the result is a
+    valid ``axes`` for :func:`_ellipse_element`.
+    """
+    u, s, _ = np.linalg.svd(cam.matrix * cam.scale)
+    axes: Array = radius * (u * s) @ u.T
+    return axes
 
 
 def _frustum_outline(
@@ -576,3 +593,143 @@ class _SolidCanvas(_Canvas):
             return Surface([piece], opaque, edge, chain)
 
         self._shape(surface)
+
+    def _sphere_piece(self, center: Point3, radius: float, pad: float = 0.0) -> Piece:
+        """A sphere: the exact depth of its front surface along each ray."""
+        cam = _parallel(self.cam, "resolve occlusion")
+        c = np.asarray(center, dtype=np.float64)
+        radius += self._grown(pad)
+        n = 96
+        t = np.linspace(0.0, 2.0 * np.pi, n, endpoint=False)
+        ring = np.column_stack([np.cos(t), np.sin(t)]) / math.cos(math.pi / n)
+        outline = np.asarray(cam.at(c)) + ring @ _ball_axes(cam, radius).T
+        back = np.linalg.pinv(cam.matrix * cam.scale)
+        view = cam.view
+
+        def reach(xy: Array) -> tuple[Array, Array]:
+            base = cam.origin + xy @ back.T  # on each ray
+            w = base - c
+            along = w @ view
+            return base @ view - along, along**2 - np.einsum("ij,ij->i", w, w) + radius**2
+
+        def depth(xy: Array) -> Array:
+            # Past the rim, the depth of the rim: the ray's closest approach.
+            mid, disc = reach(xy)
+            out: Array = mid + np.sqrt(np.maximum(disc, 0.0))
+            return out
+
+        def covers(xy: Array) -> Any:
+            return reach(xy)[1] >= 0
+
+        return Piece(outline, depth, covers=covers)
+
+    def gaussian(
+        self,
+        layer: int,
+        center: Point3,
+        u: Point3,
+        v: Point3,
+        a: float,
+        b: float,
+        *,
+        id: str,
+        color: str,
+        opacity: float = 1.0,
+        extent: float = 2.0,
+        stops: int = 9,
+        **style: Style,
+    ) -> None:
+        """A soft Gaussian spot lying in a world plane, as one gradient-filled polygon."""
+        cam = _parallel(self.cam, "map a gradient through a plane")
+        if stops < 2:
+            raise ValueError("a gradient needs at least two stops")
+        # Gradient coordinates (s, t) in units of the half-widths, mapped onto the plane.
+        matrix = cam.plane_matrix(center, a * unit(u), b * unit(v))
+        floor = np.exp(-(extent**2))
+        profile: list[svg.Element] = [
+            svg.Stop(
+                offset=round(k / (stops - 1), 4),
+                stop_color=color,
+                stop_opacity=round(
+                    opacity * (np.exp(-((extent * k / (stops - 1)) ** 2)) - floor) / (1 - floor), 4
+                ),
+            )
+            for k in range(stops)
+        ]
+        self.defs.append(
+            svg.RadialGradient(
+                id=f"{id}-profile",
+                gradientUnits="userSpaceOnUse",
+                gradientTransform=[svg.Matrix(*(round(value, 4) for value in matrix))],
+                cx=0,
+                cy=0,
+                r=extent,
+                elements=profile,
+            )
+        )
+        outline = ellipse_shape(center, u, v, a * extent, b * extent)
+        self.polygon(layer, outline, fill=f"url(#{id}-profile)", id=id, **style)
+        # A soft spot fades to nothing, so it hides nothing behind it.
+        build = self._shapes[self._seq - 1]
+
+        def translucent() -> Shape | None:
+            shape = build()
+            return dataclasses.replace(shape, opaque=False) if isinstance(shape, Surface) else shape
+
+        self._shape(translucent)
+
+    def sphere_curve(
+        self,
+        layer: int,
+        center: Point3,
+        pts3: Points3,
+        *,
+        closed: bool = False,
+        back: Mapping[str, Style] | None = None,
+        back_layer: int | None = None,
+        **style: Style,
+    ) -> None:
+        """A curve on a sphere's surface, split where it passes behind the sphere."""
+        cam = _parallel(self.cam, "split a curve at a sphere's outline")
+        style.setdefault("fill", "none")
+        base = style.pop("id", None)
+        pts = as_points(pts3)
+        if closed:
+            pts = np.vstack([pts, pts[:1]])
+        side = (pts - np.asarray(center, dtype=np.float64)) @ cam.view
+        front = side >= 0
+        runs: list[tuple[bool, list[Array]]] = []
+        current, state = [pts[0]], bool(front[0])
+        for i in range(len(pts) - 1):
+            if bool(front[i + 1]) != state:
+                t = side[i] / (side[i] - side[i + 1])
+                cut = pts[i] + t * (pts[i + 1] - pts[i])
+                current.append(cut)
+                runs.append((state, current))
+                current, state = [cut], bool(front[i + 1])
+            current.append(pts[i + 1])
+        runs.append((state, current))
+        if closed and len(runs) > 1 and runs[0][0] == runs[-1][0]:
+            runs = [(runs[0][0], runs[-1][1] + runs[0][1][1:]), *runs[1:-1]]
+        for visible, at, extra, suffix in (
+            (True, layer, {}, "front"),
+            (False, layer if back_layer is None else back_layer, back, "back"),
+        ):
+            if extra is None:
+                continue
+            chosen = [np.array(run) for state, run in runs if state is visible]
+            if not chosen:
+                continue
+            projected = [self.cam.project(run) for run in chosen]
+            for run in projected:
+                self._grow(run)
+            attrs: dict[str, Style] = {**style, **extra}
+            if base is not None:
+                attrs["id"] = f"{base}-{suffix}"
+            self._emit(
+                at,
+                svg.Path(d=_path(projected), **attrs),
+                self._depth(np.vstack(chosen)),
+            )
+            hide = back if visible else None
+            self._shape(functools.partial(self._line, chosen, attrs, hide))
