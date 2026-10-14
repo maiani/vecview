@@ -41,6 +41,8 @@ reads PDF through MuPDF's `mutool` when Ghostscript is 10.01 or newer
 - `solenoid.py` — solenoid on a core
 - `kitaev_chain.py` — Kitaev chain in a nanowire
 - `mirror_planes.py` — mirror planes in a cubic cell
+- `aharonov_bohm_ring.py` — a mesoscopic ring threaded by a flux: one solid
+  with a hole
 - `altermagnetic_dot.py` — layered quantum-dot device
 - `slab_polarizer.py` — spin texture and polarizing slab
 

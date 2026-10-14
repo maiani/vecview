@@ -150,9 +150,10 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | Function | Returns |
 | --- | --- |
 | `box_faces(center, size)` | an axis-aligned box as six named, correctly wound `Face`s |
-| `prism_faces(footprint, z0, z1)` | any simple footprint, convex or not, extruded along `z`, culling like a box |
-| `extrude(section, along)` | a planar section swept along any vector: a nanowire along `x`, a fin |
+| `prism_faces(footprint, z0, z1)` | any simple footprint, convex or not, holes allowed, extruded along `z`, culling like a box |
+| `extrude(section, along)` | a planar section swept along any vector: a nanowire along `x`, a fin, a tube |
 | `annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg)` | an arc-shaped footprint, such as a gate |
+| `annulus(center, r_in, r_out)` | a ring footprint with its hole, for a washer or a microring |
 | `rect_shape`, `circle_shape`, `ellipse_shape` | flat outlines in any plane |
 | `arrow_shape`, `double_arrow_shape` | flat arrows with a shaft and head |
 | `sine_ribbon` | a transverse wave along an axis, for `polyline`; the amplitude may be an envelope |
@@ -166,7 +167,13 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 Cross-sections and footprints are built in 2D by `vecview.outlines`: `regular`
 and `rect` to start, `offset` and `film` to grow them — a film is a deposited
 layer on chosen facets — and `union`, `difference`, and `intersection` to
-combine them; `to_plane` lifts the result into 3D for `extrude`.
+combine them. Booleans return a list of `Region` objects, one per connected
+component; offsets and films return one `Region`. A `Region(exterior, holes)`
+represents a ring or a plate with vias without confusing holes with disconnected
+islands. Plain point arrays still work for simple outlines. `to_plane` lifts
+each region into 3D for `extrude`; `prism_faces` and `polygon` accept it too.
+Hole walls come first, so a culled ring paints its bore under its cap; pick
+the cap by name. A deep plate with several holes needs `scene.sort_by_depth(layer)`.
 
 At an azimuth of 35°, neither `+x` nor `+y` moves a point horizontally across
 the picture. `screen_basis()` returns the two in-plane world directions that do:
@@ -253,7 +260,7 @@ guide](https://github.com/maiani/vecview/blob/v0.3.0/docs/animation.md).
 
 The [gallery](https://github.com/maiani/vecview/blob/v0.3.0/docs/gallery.md) has the static figures everyone draws — a perovskite
 cell, the fcc Brillouin zone, C60, the Bloch sphere, a Dirac cone, a skyrmion, a
-solenoid, crossing mirror planes, and two device sketches — and two
+solenoid, crossing mirror planes, an Aharonov–Bohm ring, and two device sketches — and two
 animations, a pendulum and a rotating dipole radiating. Each is one
 self-contained script:
 

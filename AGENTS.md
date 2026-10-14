@@ -22,10 +22,12 @@ on its own side.
 - Keep the three-way split, and do not let it blur:
   - `shapes.py` knows numbers only — world-space arrays and `Face` records. No
     camera, no style, no SVG import.
-  - `outlines.py` is the same in 2D: `(n, 2)` footprints and cross-sections,
-    combined through `shapely`, which is the only module besides `_occlusion.py`
-    that imports it. A result an outline cannot hold -- a hole -- raises
-    rather than being dropped.
+  - `outlines.py` builds 2D footprints and cross-sections. `Region(exterior,
+    holes)` explicitly distinguishes one connected region from a list of
+    disconnected regions. Plain point arrays remain shorthand for one boundary.
+    The private `_planar.py` centralizes planar validation, region reconstruction,
+    and clipping with Shapely; `shapes.py` delegates topology to it. Shapely is
+    also used by `outlines.py` and `_occlusion.py`, never exposed in the public API.
   - `camera.py` defines what a camera *is*: `Camera` (the abstract contract) and
     `ParallelCamera` (the affine machinery). Back-face culling lives here
     because it is a camera question, not a scene one.
@@ -36,7 +38,8 @@ on its own side.
     `_animation_svg.py` and `_animation_refs.py`. `_drawing.py` imports it only
     to check what `slot` is given, and `_occlusion.py` only for a type.
     `shapes.py`, `camera.py`, `projections.py`, `_place.py`,
-    `_solid_drawing.py`, `_tracks.py`, and `_transforms.py` never do.
+    `_solid_drawing.py`, `_planar.py`, `_tracks.py`, and `_transforms.py` never
+    do.
 - `animation.py` samples a pure time-to-scene callback through the static
   renderer and writes once what every frame draws alike. A scene holding tracks
   is that callback underneath: a drawing call given a `Track` anywhere in its

@@ -5,8 +5,38 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- `annulus(center, r_in, r_out, n, *, theta0_deg=0)`: a ring footprint,
+  `Region(outer, [inner])`, for washers, microrings, and loops. `annulus_sector`
+  keeps returning one outline, and a full turn raises, pointing to `annulus`.
+- `Region(exterior, holes=())` explicitly represents one connected planar
+  region. Disconnected components are lists of regions, not lists of rings.
+  The record copies coordinates into read-only arrays; `rings` exposes its boundaries.
+  `prism_faces`, `extrude`, and `Scene.polygon` accept regions or plain point arrays;
+  `Scene.polygon` refuses holes off the outline's plane, outside it, or crossing.
+- `Face.holes` and `Face.region` expose interior boundaries. Holed faces render
+  as even-odd paths, with correct coverage in depth-sorted layers. Placement,
+  animation, edge drawing, and seamless walls preserve their boundaries.
+- `examples/aharonov_bohm_ring.py`: a ring and its leads as one shape with a
+  hole, threaded by a flux, in the gallery.
+
 ### Changed
 
+- Outline booleans always return `list[Region]`; offsets and films return
+  one `Region`. `to_plane` lifts arrays to arrays and regions to regions.
+  Ambiguous lists of bare rings are rejected.
+- A holed extrusion lists its hole walls first, then caps and outer walls, so
+  `faces(..., cull=True)` paints a hole's far side under the cap: exact for one
+  convex hole and for shallow multi-hole plates; deep or non-convex ones need a
+  sorted layer. `prism_walls` draws the hole walls as a path of their own,
+  `"{id}-holes"`, before the outer walls, so their stroke stays hidden too. Pick
+  the cap by name. Hole-free extrusions keep their order. Hole walls are named
+  `"hole{k}_side-{i}"`, so a drawn one's id reads `plate-hole0_sidem3`; edge
+  indices still follow the supplied boundaries.
+- Planar validation and clipping share a private Shapely backend. Input holes
+  must be separated from the exterior and one another; point-touching holes
+  produced by booleans are also rejected. `trim_corners` rejects holed faces.
 - A depth-sorted layer emits far fewer clip paths.  An unstroked flat polygon
   that is partly hidden is redrawn as its visible part -- one `<path>` with the
   same id, classes, and style -- instead of a `<polygon>` with a
@@ -24,10 +54,20 @@ All notable changes to this project are documented here, following
   body `{id}-body` and its two sides as a separate `{id}-edge` path, so a beam
   of light is outlined along its length only.  A sliced open cylinder strokes
   no end arc either.
+- The shapes docs gave a wall's id as `wire-side-3`; it is `wire-sidem3`.
+- `cut` along the plane of one of the solid's own faces no longer keeps that face
+  and adds a cap over it, doubling the cut: the face is dropped and the cap takes
+  its place.  A face with an edge lying in the plane -- the top of a U cut along
+  its inner wall -- is clipped ring by ring instead of folding back on itself,
+  so the solid closes up with the right volume.
 - `sphere`, `cylinder`, `cone`, and `arrow3d` accept `stroke_linejoin`,
   `stroke_linecap`, and `stroke_miterlimit` instead of raising `TypeError`.
   They apply to the outline paths; circles and ellipses -- spheres and end
   disks -- have no corners or ends, so they are left off there.
+- Seamless hole walls now traverse connected edges regardless of input winding.
+- Every face uses region-aware half-space clipping, including simple concave
+  faces. Repeated cuts can open holes and split faces into disconnected pieces
+  without emitting self-intersecting cap polygons.
 
 ## [0.3.0] - 2026-10-08
 

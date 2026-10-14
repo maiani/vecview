@@ -23,9 +23,41 @@ for name, section, fill in (("wire", wire, "#7fae8c"), ("al", al, "#9bb8e0")):
     scene.faces(10, solid, cull=True, fill=fill, stroke="#33475b", stroke_width=0.8, id=name)
 ```
 
-Like [shapes](shapes.md), these are numbers only: every function takes and
-returns `(n, 2)` arrays, knows no camera or style, and returns outlines wound
-counter-clockwise. `shapely` does the clipping.
+Like [shapes](shapes.md), these are numbers only, with no camera or style.
+`rect` and `regular` return point arrays. Booleans return a list of `Region`
+objects; `offset` and `film` return one `Region`. Shapely performs planar topology.
+
+## Holes
+
+`vecview.Region(exterior, holes=())` represents one connected planar region.
+The exterior and holes are point arrays; input winding may be either direction.
+Results have a counter-clockwise exterior and clockwise holes, ordered by position.
+The record copies its coordinates into read-only arrays. Its `rings` property
+returns the exterior followed by the holes; these are boundaries, not components.
+
+A collection of disconnected regions is a list of `Region` objects. An island
+inside a hole is a separate component. Lists of bare rings are deliberately
+rejected: use `Region(outer, [inner])` to distinguish a hole from an island.
+
+`union`, `difference`, `intersection`, `offset`, `to_plane`, `prism_faces`,
+`extrude`, and `Scene.polygon` accept regions. A plain `(n, 2)` or `(n, 3)`
+array remains shorthand for a simple boundary. Input holes must lie strictly
+inside the exterior, apart from it and from each other; crossing or touching
+rings raise `ValueError`. A boolean result with a point-touching hole is also
+rejected. Check `region.holes` to see whether a result has holes.
+
+```python
+frame = outlines.rect((-2, -1), (2, 1))
+(plate,) = outlines.difference(frame, outlines.regular(24, 0.4))
+scene.sort_by_depth(10)
+scene.faces(10, vecview.prism_faces(plate, 0.0, 0.2), cull=True, fill="#c9a86a")
+
+# Process disconnected components explicitly, keeping their identities separate.
+parts = outlines.union(frame, outlines.rect((3, 0), (4, 1)))
+for index, region in enumerate(parts):
+    solid = vecview.extrude(outlines.to_plane(region), (0, 0, 0.2))
+    scene.faces(10, solid, cull=True, fill="#c9a86a", id=f"part-{index}")
+```
 
 ## Building
 
@@ -43,14 +75,15 @@ on top, edge `4` underneath — which is how a wire lies on a substrate.
 ## Growing
 
 ```python
-outlines.offset(outline, distance, *, join="mitre")  ->  array
-outlines.film(outline, edges, thickness, *, join="mitre")  ->  array
+outlines.offset(outline, distance, *, join="mitre")  ->  Region
+outlines.film(outline, edges, thickness, *, join="mitre")  ->  Region
 ```
 
 `offset` grows an outline outward by `distance`, or shrinks it for a negative
 one. `join` is how the offset meets itself at a corner: `"mitre"` keeps it
 sharp, `"round"` rounds it, `"bevel"` cuts it straight. Shrinking an outline so
-far that it vanishes or splits raises `ValueError`.
+far that it vanishes or splits raises `ValueError`. The holes of a shape shrink
+as it grows; a C grown until its mouth closes comes back as a ring.
 
 `film` is a layer of `thickness` deposited on some edges of a body: the Al shell
 on a nanowire, an oxide on a mesa's side walls. Edge `i` runs from vertex `i` to
@@ -60,14 +93,15 @@ lies on carry the same index. The edges must form one unbroken run, which may
 wrap past the last vertex (`[5, 0, 1]`). The film lies outside the body
 whichever way the outline winds, its ends are cut square to the first and last
 edge, and it never reaches into the body, so a film on a concave run stays out of
-the notch.
+the notch. A film on every edge is a shell all the way round, the shape
+`Region(outside, [body])`. `film` takes an outline without holes.
 
 ## Combining
 
 ```python
-outlines.union(*outlines)  ->  list of arrays
-outlines.difference(outline, *cuts)  ->  list of arrays
-outlines.intersection(*outlines)  ->  list of arrays
+outlines.union(*outlines)  ->  list[Region]
+outlines.difference(outline, *cuts)  ->  list[Region]
+outlines.intersection(*outlines)  ->  list[Region]
 ```
 
 ```python
@@ -82,18 +116,19 @@ on the clipping library's internals. Unpack it when you know how many pieces to
 expect — `(gate,) = outlines.difference(...)` fails loudly if the notch cut the
 plate in two.
 
-An outline is a simple polygon, so it cannot hold a hole. A result with one — a
-square with a smaller square cut out of its middle — raises `ValueError` rather
-than silently dropping the hole. An outline that crosses or touches itself raises
-`ValueError` too.
+A piece with a hole — a square with a smaller square cut out of its middle, or
+four strips joined into a frame — is a [Region](#holes) with interior boundaries. An
+outline that crosses or touches itself raises `ValueError`, as does a shape
+whose holes are not inside its outline and apart.
 
 ## Lifting into 3D
 
 ```python
-outlines.to_plane(outline, origin=(0, 0, 0), u=(1, 0, 0), v=(0, 1, 0))  ->  (n, 3) array
+outlines.to_plane(outline, origin=(0, 0, 0), u=(1, 0, 0), v=(0, 1, 0))  ->  (n, 3) array, or Region
 ```
 
 The point `(x, y)` lands on `origin + x u + y v`, with `u` and `v` used as given:
 for a section across a wire that runs along `x`, `u = (0, 1, 0)` and
 `v = (0, 0, 1)`. The result is what [`extrude`](shapes.md#extrusions) sweeps and
-what `Scene.polygon` draws. Parallel `u` and `v` raise `ValueError`.
+what `Scene.polygon` draws. A Region is lifted boundary by boundary and stays a
+Region; a plain array stays an array. Parallel `u` and `v` raise `ValueError`.

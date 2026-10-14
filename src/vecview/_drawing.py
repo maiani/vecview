@@ -10,8 +10,10 @@ import svg
 
 from vecview._elements import _ALIGN, Align, TextContent
 from vecview._place import _Call, _moved, _placement
+from vecview._planar import check_holed_polygon
 from vecview._tracks import Track
-from vecview._types import Point3, Points2, Points3, Style
+from vecview._types import Point3, Points3, Shape2, Shape3, Style
+from vecview._vec import as_points, as_rings
 from vecview.shapes import Face, Pivot, prism_faces
 
 if TYPE_CHECKING:
@@ -200,8 +202,17 @@ class _Drawing:
             self._log.append(_moved(call, frame, int(layer), id, extra))
 
     @_trackable
-    def polygon(self, layer: int, pts3: Points3, **style: Style) -> None:
-        """Filled polygon through projected world points."""
+    def polygon(self, layer: int, pts3: Shape3, **style: Style) -> None:
+        """Filled polygon through projected world points.
+
+        Given a Region with holes, as
+        :func:`~vecview.outlines.to_plane` returns one -- it is drawn as one
+        ``<path>`` with ``fill-rule="evenodd"``, through which whatever is
+        behind shows, in a layer sorted by depth as on screen.  Its holes must lie
+        in the outline's plane, inside it and apart, or this raises ``ValueError``.
+        """
+        if len(rings := as_rings(pts3, 3)) > 1:
+            check_holed_polygon([as_points(ring) for ring in rings])
         self._add("polygon", layer, pts3, **style)
 
     @_trackable
@@ -375,7 +386,7 @@ class _Drawing:
 
     @_trackable
     def prism_walls(
-        self, layer: int, footprint: Points2, z0: float, z1: float, **style: Style
+        self, layer: int, footprint: Shape2, z0: float, z1: float, **style: Style
     ) -> None:
         """Draw the camera-facing walls of an extruded footprint as one seamless shape.
 
@@ -397,9 +408,15 @@ class _Drawing:
         visible for a tall non-convex one.  There is no depth sort to fix that,
         by design.
 
+        A footprint with holes -- a ring -- adds each hole's facing walls, the
+        far side of the hole, as a path of their own drawn first, with the id
+        ``"{id}-holes"``.  Those walls lie behind the cap and the outer walls,
+        so walls-then-cap stays exact even stroked, for a convex hole.
+
         Args:
             layer: Draw order.
-            footprint: Simple polygon, as for :func:`~vecview.shapes.prism_faces`.
+            footprint: Simple polygon, or one with holes, as for
+                :func:`~vecview.shapes.prism_faces`.
             z0: Height of the base.
             z1: Height of the top.
             **style: SVG presentation attributes of the path.

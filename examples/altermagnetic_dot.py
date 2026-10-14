@@ -180,7 +180,7 @@ def lead_footprint() -> np.ndarray:
     return convex_hull(np.vstack([edge, tip]))
 
 
-def gate_footprint() -> np.ndarray:
+def gate_footprint() -> vecview.Region:
     """The gate in the first quadrant: an arc around the dot and its arm out to the slab edge.
 
     The arc spans the quadrant less half the opening for the lead on one side
@@ -198,7 +198,7 @@ def gate_footprint() -> np.ndarray:
     return gate
 
 
-def electrode(kind: str, footprint: np.ndarray, height: float) -> Part:
+def electrode(kind: str, footprint: np.ndarray | vecview.Region, height: float) -> Part:
     """A metal film on the gas: seamless walls (``walls``), then the cap (``cap-pz``) over them.
 
     ``kind`` picks the colours, ``"gate"`` or ``"lead"``.  Walls-then-cap is

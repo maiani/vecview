@@ -277,6 +277,34 @@ class TestFewerClipPaths:
         assert not any(isinstance(el, svg.Defs) for el in document.elements or [])
         assert len(by_id(document)) == 121
 
+    def test_what_is_behind_a_hole_shows_through_it(self) -> None:
+        s = scene()
+        washer = vecview.annulus((0, 0), 0.5, 1.5, n=32)
+        s.polygon(0, vecview.outlines.to_plane(washer), fill="#ccc", id="washer")
+        # Behind the washer along the view: one seen through the hole, one under the ring.
+        s.sphere(0, -CAM.view, 0.12, fill="#c33", id="ball")  # the hole is foreshortened
+        s.sphere(0, (1, 0, 0) - 0.5 * CAM.view, 0.2, fill="#33c", id="hidden")
+        s.polyline(0, [(0, 0, -2), (0, 0, 2)], stroke="#000", back={}, id="axis")
+        elements = by_id(s.render())
+        assert "hidden" not in elements
+        assert elements["ball"].clip_path is None
+        # The axis runs on, unbroken, through the hole; only the stretch under
+        # the washer's ring is hidden.
+        assert "axis-hidden" in elements
+        washer_el = elements["washer"]
+        assert isinstance(washer_el, svg.Path) and washer_el.fill_rule == "evenodd"
+
+    def test_a_holed_face_is_clipped_to_what_shows_through_a_nearer_one(self) -> None:
+        s = scene()
+        washer = vecview.annulus((0, 0), 0.5, 1.5, n=32)
+        s.polygon(0, vecview.outlines.to_plane(washer, origin=(0, 0, 1)), fill="#ccc", id="top")
+        s.polygon(0, vecview.outlines.to_plane(washer), fill="#888", id="low")
+        region = shown_region(s.render(), "low")
+        # Part of the lower washer shows through the upper one's hole.
+        assert region.area > 0
+        x, y = CAM.at((1.0, 0, 1))  # on the upper washer's ring: covered there
+        assert not region.contains(shapely.Point(x, y))
+
     def test_a_stroked_face_partly_hidden_keeps_its_clip(self) -> None:
         s = scene()
         near = 2.0 * CAM.view

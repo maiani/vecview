@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from vecview import animation as animation
 from vecview import outlines as outlines
+from vecview._types import Region
 from vecview._vec import unit
 from vecview.animation import Animation
 from vecview.camera import Camera, ParallelCamera
@@ -40,6 +41,7 @@ from vecview.projections import (
 from vecview.scene import Part, Scene
 from vecview.shapes import (
     Face,
+    annulus,
     annulus_sector,
     arc_shape,
     arrow_shape,
@@ -71,9 +73,11 @@ __all__ = [
     "OrthographicCamera",
     "ParallelCamera",
     "Part",
+    "Region",
     "Scene",
     "__version__",
     "animation",
+    "annulus",
     "annulus_sector",
     "arc_shape",
     "arrow_shape",

@@ -1,7 +1,7 @@
 # Shapes
 
-Every function here returns plain world-space points — an `(n, 3)` array, or a
-list of `Face` for solids. Nothing in this module knows about a camera, a style,
+Functions here return world-space point arrays, `Region` objects with holes,
+or lists of `Face` for solids. Nothing in this module knows about a camera, a style,
 or SVG.
 
 That is worth stating plainly because it is what makes the geometry testable as
@@ -54,6 +54,7 @@ class Face(NamedTuple):
     name: str  # a box's are "+x", "-x", "+y", "-y", "+z", "-z", in that order
     points: Array  # (n, 3), wound CCW about the normal; (4, 3) for a box
     normal: Array  # outward unit normal
+    holes: tuple[Array, ...] = ()  # rings cut out of it, each wound the other way
 ```
 
 Every function below that returns solids returns `Face`s. Carrying the normal
@@ -83,7 +84,8 @@ A footprint in the `xy` plane, extruded from `z0` to `z1` — a tapered electrod
 a hexagonal pillar, an arc-shaped gate. The faces come in a fixed order: the cap
 `"+z"`, the base `"-z"`, as for a box, then the walls, wall `i` spanning
 footprint vertices `i` and `i + 1` and named `"side-{i}"`. So `faces[0]` is the
-top, and `faces[2:]` the walls. Every face is wound counter-clockwise about its
+top and `faces[2:]` the walls -- for a footprint without holes; with holes, see
+[below](#shapes-with-holes). Every face is wound counter-clockwise about its
 outward normal, so `faces(..., cull=True)` works. `z1` must exceed `z0`.
 
 The footprint may come in either winding and may be non-convex, but it must be
@@ -96,6 +98,37 @@ outline; [`extrude`](#extrusions) numbers walls by the outline as given.
 For a convex footprint, culling leaves exactly the visible walls. For a
 non-convex one it leaves the walls that *face* the camera, and one of those can
 still sit behind another wall of the same solid.
+
+### Shapes with holes
+
+A footprint can have holes: a ring, a washer, a plate with vias. Use
+`Region(exterior, holes)`, where each boundary is an `(n, 2)` array in either
+winding. Holes must lie inside the exterior and apart from it and each other;
+crossing or touching input boundaries raise `ValueError`. A plain array still
+represents one boundary. A list of regions represents disconnected components;
+extrude each component separately.
+
+```python
+washer = vecview.Region(vecview.outlines.regular(48, 1.5), [vecview.outlines.regular(48, 0.8)])
+solid = vecview.prism_faces(washer, 0.0, 0.4)
+scene.sort_by_depth(20)
+scene.faces(20, solid, cull=True, fill="#9bb8e0", stroke="#33475b", id="washer")
+```
+
+Caps are faces with holes, drawn as one even-odd `<path>`, with the holes wound
+opposite to the exterior. `face.region` exposes these boundaries as a Region.
+Each hole sweeps walls facing into the hole, named `"hole{k}_side-{i}"`; drawn
+with `faces(..., id="plate")`, the id is `plate-hole0_sidem3`, as an outer wall's
+is `plate-sidem3`.
+Hole walls come first, then cap, base and outer walls, so `faces(...,
+cull=True)` paints the far side of a hole under the cap, and pick a holed
+solid's cap by name (`"+z"`), not by index. That painting is exact for one
+convex hole -- a ring, a washer, a tube -- and for holes too shallow to show
+through each other. A deep plate with several holes needs a depth-sorted layer,
+because which hole lies behind which depends on the camera, and so does a
+non-convex hole, whose walls can hide each other.
+[`outlines`](outlines.md) builds these regions with booleans and offsets;
+[`annulus`](#annular-sectors-and-rings) returns a ring.
 
 Either way, walls drawn one polygon each show hairline seams where their
 anti-aliased edges meet. Draw them with
@@ -113,7 +146,7 @@ horizontal plane swept up `z`. The section is the `"start"` face, the section
 moved by `along` is the `"end"` face, and wall `i` spans section vertices `i`
 and `i + 1` **as given**, whichever way the section winds, and is named
 `"side-{i}"`. So a wall can be picked out by the edge it was built on, and its
-id — `wire-side-3` — keeps naming that edge.
+id — `wire-sidem3` — keeps naming that edge.
 
 ```python
 hexagon = vecview.circle_shape((-4, 0, 0.4), 0.4, (1, 0, 0), n=6)
@@ -131,6 +164,18 @@ above. To build a section in 2D first — a wire with a film on some facets, a
 gate with a notch — see [Outlines](outlines.md), whose `to_plane` lifts it into
 the plane to sweep.
 
+The section can be a [Region with holes](#shapes-with-holes) in one plane,
+which sweeps a tube or a hollow fin. Hole walls again come first, then start,
+end and the outer walls. Hole wall `"hole{k}_side-{i}"` still names the input edge,
+regardless of winding:
+
+```python
+pipe = vecview.outlines.to_plane(vecview.annulus((0, 0), 0.3, 0.45, n=32), u=(0, 1, 0), v=(0, 0, 1))
+tube = vecview.extrude(pipe, (4, 0, 0))  # a tube along x
+```
+
+### Annular sectors and rings
+
 ```python
 vecview.annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg, n=32)
 ```
@@ -138,9 +183,18 @@ vecview.annulus_sector(center, r_in, r_out, theta0_deg, theta1_deg, n=32)
 The footprint of an annular sector about the 2D point `center`, as an `(m, 2)`
 array, counter-clockwise: the outer arc from
 `theta0_deg` to `theta1_deg` in `n` segments, then the inner arc back. With
-`r_in=0` it is a pie wedge. The span must lie strictly between 0° and 360°, since
-a full ring is not a simple polygon. Join it to other outlines yourself to build
-a compound footprint.
+`r_in=0` it is a pie wedge. The span must lie in `(0°, 360°)`: a full turn has
+a hole, so it is a ring, and raises `ValueError` pointing here.
+
+```python
+vecview.annulus(center, r_in, r_out, n=32, *, theta0_deg=0.0)
+```
+
+A ring: the [shape](#shapes-with-holes) `Region(outer, [inner])`, each circle of
+`n` vertices starting at `theta0_deg`, the inner one — the hole — clockwise.
+`0 < r_in < r_out`; a full disk is `outlines.regular`. Join either footprint to
+other outlines with [`outlines.union`](outlines.md#combining) to build a
+compound footprint.
 
 ## Circles
 
@@ -260,8 +314,8 @@ zone or a coordination polyhedron, and not meant for a mesh of thousands.
 `trim_corners` cuts a disk of `radius` out of every corner of every face, for a
 polyhedron with an atom on each vertex whose faces must themselves stop at the
 atoms. A [depth-sorted layer](scenes.md#sorting-by-depth) does not need it: it
-clips each face exactly where an atom hides it. Pair it with
-`Scene.edges(trim=radius)`:
+clips each face exactly where an atom hides it. A face with holes raises
+`ValueError`. Pair it with `Scene.edges(trim=radius)`:
 
 ```python
 octahedron = vecview.convex_polyhedron(oxygens)
@@ -295,8 +349,12 @@ scene.faces(10, section, cull=True, fill="#cfe6d5", id="wire-section")
 The faces must close a solid, each wound counter-clockwise about its outward
 normal — as `box_faces`, `prism_faces`, `extrude`, and `convex_polyhedron` return
 them — and the solid may be non-convex. Curved solids drawn by the scene (spheres,
-cylinders) are not faces and cannot be cut. A cut whose cap would have a hole in
-it, such as a plane across a hollow tube, raises `ValueError`.
+cylinders) are not faces and cannot be cut. A plane across a hollow solid — a
+tube cut square — leaves a cap with a hole in it. Every face is clipped as a planar region, including concave faces without holes; where the plane runs through a hole,
+or along one of its sides, the hole opens into a notch in the outline. Should
+clipping split such a face, its pieces are named `"{name}-0"`, `"{name}-1"`, ….
+A face lying in the plane itself is dropped, and the cap takes its place. Faces
+that do not close up along the cut raise `ValueError`.
 
 ## Waves
 

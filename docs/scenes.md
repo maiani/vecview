@@ -111,8 +111,8 @@ and the hidden part of a line with an id becomes a second path, `{id}-hidden`.
 A layer of a few hundred solids takes a second or two to render, where a layer
 drawn in order takes milliseconds, and its SVG can be twice the size. A mesh
 seen from where it does not fold over itself gains no clip paths at all.
-`shapely` and `contourpy`, which do the clipping, load only when a sorted layer
-first renders.
+`contourpy` loads when a sorted layer first needs contours. Shapely is also
+used by the shared planar geometry backend.
 
 What no visibility rule can do is order a beam inside a translucent slab: a
 translucent face hides nothing, so the beam above, the attenuated segment
@@ -126,13 +126,18 @@ back-face culling of a convex solid is
 ## World-space calls
 
 ```python
-scene.polygon(layer, points3, **style)  # filled polygon
+scene.polygon(layer, points3, **style)  # filled polygon, or a shape with holes
 scene.polyline(layer, points3, back=None, **style)  # open path, fill="none" by default
 scene.faces(layer, faces, cull=False, **style)  # one polygon per Face, one style
 scene.text(layer, point3, s, dx=0, dy=0, size=22, **style)
 scene.arrow(layer, origin, direction, length, normal=..., shaft_w=..., head_w=..., head_len=...)
 scene.gaussian(layer, center, u, v, a, b, id=..., color=..., opacity=1.0, extent=2.0, stops=9)
 ```
+
+`polygon` also takes a [Region with holes](shapes.md#shapes-with-holes) and draws it as one `<path>` with
+`fill-rule="evenodd"`; `faces` draws a face with holes the same way. In a
+[sorted layer](#sorting-by-depth) what lies behind a hole shows through it, and a
+line through it is not hidden.
 
 Style keyword arguments pass straight through to `svg.py`, so Python's
 underscores map to SVG's hyphens: `stroke_width` → `stroke-width`,
@@ -402,7 +407,8 @@ top-level element the call emits carries them, and nothing inside it does.**
 
 | Call | Elements that carry the classes |
 | --- | --- |
-| `polygon`, `polyline`, `arrow`, `gaussian`, `sphere`, `silhouette`, `prism_walls`, `text`, `text2d`, `rect2d` | the one element |
+| `polygon`, `polyline`, `arrow`, `gaussian`, `sphere`, `silhouette`, `text`, `text2d`, `rect2d` | the one element |
+| `prism_walls` | the one element, and with holes also the `"{id}-holes"` path drawn before it |
 | `faces` | every face polygon |
 | `edges`, `sphere_curve` | the front path and the back path |
 | `cylinder`, `cone`, `arrow3d` | the solid's `<g>`, not the body and end disks inside it |
@@ -632,7 +638,9 @@ footprint with the camera that renders, merges each run of consecutive facing
 walls into one strip — along the base, back along the top — and emits all strips
 as one `<path>`. Draw the cap over it. It handles non-convex footprints, and
 rejects one that is not a simple polygon at the call, as
-[`prism_faces`](shapes.md#prisms) does.
+[`prism_faces`](shapes.md#prisms) does. A footprint with
+[holes](shapes.md#shapes-with-holes) adds the facing walls of each hole — the
+far side of the hole — as runs of their own in the same path.
 
 Walls-then-cap is **exact at any height** when the walls are unstroked and the
 cap faces the camera:
@@ -640,7 +648,9 @@ cap faces the camera:
 - along any view ray, the cap is never *behind* a wall, so painting it last is
   always right where it shows;
 - where one facing wall hides another of the same solid, both share one fill, so
-  which is painted on top cannot be seen.
+  which is painted on top cannot be seen. The far wall of a hole, which every
+  other facing wall of the solid lies in front of, is a path of its own,
+  `"{id}-holes"`, drawn first, so even its stroke stays hidden.
 
 Only a **stroke** breaks this: the outline of a wall hidden by another wall of
 the same solid shows through. For a low extrusion that hidden part is a sliver

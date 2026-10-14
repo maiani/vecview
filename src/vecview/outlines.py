@@ -13,55 +13,32 @@ the cross-sections they are::
     section = outlines.to_plane(al, origin=(-1, 0, 0), u=(0, 1, 0), v=(0, 0, 1))
     shell = extrude(section, (2, 0, 0))
 
+Boolean operations return lists of :class:`~vecview.Region`, one per connected
+component. Offsets and films return one Region; each has an exterior and a
+possibly empty tuple of holes. Point arrays remain shorthand for a simple
+region. ``to_plane`` preserves the distinction: an array lifts to an array,
+a Region to a Region. No list is interpreted as a list of holes.
+
 Like :mod:`vecview.shapes`, this knows numbers only: no camera, no style, no
-SVG.  Every outline returned is wound counter-clockwise.  ``shapely`` does the
-clipping.
+SVG.  Every outline returned is wound counter-clockwise, and every hole
+clockwise.  ``shapely`` does the clipping.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, Polygon
-from shapely.geometry.polygon import orient
+from shapely.geometry import LineString
 
-from vecview._types import Array, Point3, Points2
+from vecview._planar import _polygon, _shapes
+from vecview._types import Array, Point3, Region, Shape2
+from vecview._vec import as_rings
 
 type Join = Literal["mitre", "round", "bevel"]
 """How an offset meets itself at a corner: sharp, rounded, or cut straight."""
-
-
-def _polygon(outline: Points2) -> Polygon:
-    """An outline as a shapely polygon, checked to be simple."""
-    pts = np.asarray(outline, dtype=np.float64)
-    if pts.ndim != 2 or pts.shape[1] != 2 or len(pts) < 3:
-        raise ValueError(f"an outline must have shape (n, 2) with n >= 3, got {pts.shape}")
-    polygon = Polygon(pts)
-    if polygon.area == 0.0:
-        raise ValueError("outline encloses no area")
-    if not polygon.is_valid:
-        raise ValueError("outline must be a simple polygon: its edges cross or touch")
-    return polygon
-
-
-def _outline(polygon: Polygon, what: str) -> Array:
-    """A shapely polygon as a counter-clockwise outline, refusing one with holes."""
-    if polygon.interiors:
-        raise ValueError(f"{what} has a hole, which an outline cannot hold")
-    ring = np.asarray(orient(polygon, sign=1.0).exterior.coords, dtype=np.float64)
-    return ring[:-1].copy()  # shapely repeats the first vertex at the end
-
-
-def _outlines(geometry: Any, what: str) -> list[Array]:
-    """Every polygon of a shapely result, largest first, as outlines."""
-    parts = [g for g in getattr(geometry, "geoms", [geometry]) if isinstance(g, Polygon)]
-    parts = [g for g in parts if not g.is_empty and g.area > 0.0]
-    # Largest first, then by position, so the order never depends on GEOS internals.
-    parts.sort(key=lambda g: (-round(g.area, 12), *(round(c, 12) for c in g.bounds)))
-    return [_outline(g, what) for g in parts]
 
 
 def rect(lo: Sequence[float], hi: Sequence[float]) -> Array:
@@ -93,14 +70,18 @@ def regular(
     return out
 
 
-def offset(outline: Points2, distance: float, *, join: Join = "mitre") -> Array:
+def offset(outline: Shape2, distance: float, *, join: Join = "mitre") -> Region:
     """The outline grown outward by ``distance``, or shrunk for a negative one.
+
+    Holes shrink as the outline grows, and grow as it shrinks; a hole that
+    closes is gone, and one an outline closes around -- a C grown into an O
+    -- is kept, so the result can be a shape with holes.
 
     Raises:
         ValueError: If shrinking makes the outline vanish or split in two.
     """
     shape = _polygon(outline).buffer(distance, join_style=join)
-    parts = _outlines(shape, "the offset outline")
+    parts = _shapes(shape)
     if len(parts) != 1:
         raise ValueError(
             f"offsetting by {distance} leaves {len(parts)} outlines, not one; "
@@ -110,8 +91,8 @@ def offset(outline: Points2, distance: float, *, join: Join = "mitre") -> Array:
 
 
 def film(
-    outline: Points2, edges: Iterable[int], thickness: float, *, join: Join = "mitre"
-) -> Array:
+    outline: Shape2, edges: Iterable[int], thickness: float, *, join: Join = "mitre"
+) -> Region:
     """The cross-section of a layer of ``thickness`` deposited on some edges of a body.
 
     Edge ``i`` runs from vertex ``i`` to vertex ``i + 1`` of ``outline``, as
@@ -120,17 +101,21 @@ def film(
     around the outline (it may wrap past the last vertex), and the film lies
     on their outside, whichever way the outline winds.  Its two ends are cut
     square to the first and last edge, and it never reaches inside the body,
-    so a film on a concave run stays out of the notch's interior.
+    so a film on a concave run stays out of the notch's interior.  A film on
+    every edge is a shell all the way round: ``Region(outside, holes=(body,))``,
+    the body its hole.
 
     Combine it with :func:`union` -- the film on a wire plus the pad it runs
     onto -- and lift it with :func:`to_plane` to extrude it.
 
     Raises:
         ValueError: For a non-positive thickness, an edge index out of range,
-            or edges that do not form one run.
+            edges that do not form one run, or an outline with holes.
     """
+    if len(as_rings(outline, 2)) > 1:
+        raise ValueError("a film lies on the edges of an outline, which must have no holes")
     body = _polygon(outline)
-    pts = np.asarray(outline, dtype=np.float64)
+    pts = as_rings(outline, 2)[0]
     n = len(pts)
     if not thickness > 0:
         raise ValueError(f"thickness must be positive, got {thickness}")
@@ -138,7 +123,8 @@ def film(
     if not chosen or chosen[0] < 0 or chosen[-1] >= n:
         raise ValueError(f"edges must be indices in 0..{n - 1}, got {chosen}")
     if len(chosen) == n:
-        raise ValueError("a film on every edge is a ring, which an outline cannot hold")
+        (ring,) = _shapes(body.buffer(thickness, join_style=join).difference(body))
+        return ring
     # Start the run just after an edge that is not in it, so a run that wraps
     # past the last vertex comes out in one piece.
     start = next(i for i in range(n) if (i - 1) % n not in chosen and i in chosen)
@@ -152,58 +138,55 @@ def film(
     ccw = float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y)) > 0
     side = -thickness if ccw else thickness
     layer = chain.buffer(side, single_sided=True, join_style=join, cap_style="flat")
-    parts = _outlines(layer.difference(body), "the film")
+    parts = _shapes(layer.difference(body))
     if len(parts) != 1:
         raise ValueError(f"the film falls apart into {len(parts)} pieces")
     return parts[0]
 
 
-def union(*outlines: Points2) -> list[Array]:
-    """Everything covered by any of the outlines, as separate outlines, largest first.
+def union(*outlines: Shape2) -> list[Region]:
+    """Everything covered by any of the outlines, as separate shapes, largest first.
 
-    Raises:
-        ValueError: If the union encloses a hole.
+    Outlines that close around an uncovered region leave a shape with a hole.
     """
     if not outlines:
         raise ValueError("union needs at least one outline")
-    return _outlines(shapely.union_all([_polygon(o) for o in outlines]), "the union")
+    return _shapes(shapely.union_all([_polygon(o) for o in outlines]))
 
 
-def difference(outline: Points2, *cuts: Points2) -> list[Array]:
-    """``outline`` with every one of ``cuts`` taken away, as outlines, largest first.
+def difference(outline: Shape2, *cuts: Shape2) -> list[Region]:
+    """``outline`` with every one of ``cuts`` taken away, as shapes, largest first.
 
     A cut through the middle leaves two outlines; one that removes everything
-    leaves none.
-
-    Raises:
-        ValueError: If a cut lies wholly inside, leaving a hole.
+    leaves none; one wholly inside leaves a shape with a hole.
     """
     shape = _polygon(outline)
     if cuts:
         shape = shape.difference(shapely.union_all([_polygon(c) for c in cuts]))
-    return _outlines(shape, "the difference")
+    return _shapes(shape)
 
 
-def intersection(*outlines: Points2) -> list[Array]:
-    """What every one of the outlines covers, as outlines, largest first."""
+def intersection(*outlines: Shape2) -> list[Region]:
+    """What every one of the outlines covers, as shapes, largest first."""
     if not outlines:
         raise ValueError("intersection needs at least one outline")
     shapes = [_polygon(o) for o in outlines]
-    return _outlines(shapely.intersection_all(shapes), "the intersection")
+    return _shapes(shapely.intersection_all(shapes))
 
 
 def to_plane(
-    outline: Points2,
+    outline: Shape2,
     origin: Point3 = (0.0, 0.0, 0.0),
     u: Point3 = (1.0, 0.0, 0.0),
     v: Point3 = (0.0, 1.0, 0.0),
-) -> Array:
+) -> Array | Region:
     """An outline lifted into 3D: the point ``(x, y)`` lands on ``origin + x u + y v``.
 
     ``u`` and ``v`` are the world vectors for one unit of ``x`` and of ``y``,
     used as given; for a section across a wire along ``x``, ``u = (0, 1, 0)``
     and ``v = (0, 0, 1)``.  The result is what
-    :func:`~vecview.shapes.extrude` and ``Scene.polygon`` take.
+    :func:`~vecview.shapes.extrude` and ``Scene.polygon`` take.  A shape
+    is lifted boundary by boundary and stays a Region.
 
     Raises:
         ValueError: If ``u`` and ``v`` are parallel, which flattens the outline.
@@ -211,11 +194,11 @@ def to_plane(
     a, b = np.asarray(u, dtype=np.float64), np.asarray(v, dtype=np.float64)
     if np.linalg.norm(np.cross(a, b)) <= 1e-12 * max(np.linalg.norm(a) * np.linalg.norm(b), 1.0):
         raise ValueError("u and v are parallel, so the plane they span is a line")
-    pts = np.asarray(outline, dtype=np.float64)
-    out: Array = (
-        np.asarray(origin, dtype=np.float64) + np.outer(pts[:, 0], a) + np.outer(pts[:, 1], b)
-    )
-    return out
+    o = np.asarray(origin, dtype=np.float64)
+    lifted: list[Array] = [
+        o + np.outer(pts[:, 0], a) + np.outer(pts[:, 1], b) for pts in as_rings(outline, 2)
+    ]
+    return Region(lifted[0], lifted[1:]) if isinstance(outline, Region) else lifted[0]
 
 
 __all__ = [

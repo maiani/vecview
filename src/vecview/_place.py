@@ -9,8 +9,8 @@ from typing import Any, cast
 
 import numpy as np
 
-from vecview._types import Array, Point3, Points3, Style
-from vecview._vec import as_points, unit
+from vecview._types import Array, Point3, Points3, Region, Shape3, Style
+from vecview._vec import as_points, as_rings, unit
 from vecview.shapes import Face
 
 
@@ -53,10 +53,19 @@ class _Frame:
 
     def face(self, face: Face, *, keep_order: bool = False) -> Face:
         """A face moved with the part, its winding kept true to its normal under a mirror."""
-        pts = self.points(face.points)
+        pts, *holes = (self.points(ring) for ring in (face.points, *face.holes))
         if not keep_order and np.linalg.det(self.rotation) < 0:
-            pts = pts[::-1].copy()
-        return Face(face.name, pts, unit(self.vector(face.normal)))
+            pts, holes = pts[::-1].copy(), [hole[::-1].copy() for hole in holes]
+        return Face(face.name, pts, unit(self.vector(face.normal)), tuple(holes))
+
+    def shape(self, shape: Shape3) -> Array | Region:
+        """Move every boundary while preserving array versus Region inputs."""
+        rings = as_rings(shape, 3)
+        return (
+            Region(self.points(rings[0]), [self.points(r) for r in rings[1:]])
+            if isinstance(shape, Region)
+            else self.points(rings[0])
+        )
 
 
 def _moved_solid(frame: _Frame, solid: list[Any]) -> list[Any]:
@@ -84,6 +93,8 @@ _POINT: _Move = _Frame.point
 
 _POINTS: _Move = _Frame.points
 
+_SHAPE: _Move = _Frame.shape
+
 _VECTOR: _Move = _Frame.vector
 
 _EDGE: _Move = lambda frame, v: frame.linear @ np.asarray(v, dtype=np.float64)  # noqa: E731
@@ -91,7 +102,7 @@ _EDGE: _Move = lambda frame, v: frame.linear @ np.asarray(v, dtype=np.float64)  
 _FACES: _Move = lambda frame, faces: [frame.face(face) for face in faces]  # noqa: E731
 
 _MOVES: dict[str, tuple[tuple[_Move, ...], dict[str, _Move]]] = {
-    "polygon": ((_POINTS,), {}),
+    "polygon": ((_SHAPE,), {}),
     "polyline": ((_POINTS,), {}),
     "faces": ((_FACES,), {}),
     "plane": ((_POINT, _EDGE, _EDGE), {}),

@@ -15,12 +15,24 @@ L_SHAPE = np.array([(0, 0), (3, 0), (3, 1), (1, 1), (1, 3), (0, 3)], dtype=float
 
 
 def signed_area(outline: np.ndarray) -> float:
+    outline = outline.exterior if isinstance(outline, vecview.Region) else outline
     x, y = outline[:, 0], outline[:, 1]
     return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
 
 
 def region(outline: np.ndarray) -> Polygon:
-    shape = Polygon(outline)
+    shape = (
+        Polygon(outline.exterior, outline.holes)
+        if isinstance(outline, vecview.Region)
+        else Polygon(outline)
+    )
+    assert shape.is_valid
+    return shape
+
+
+def shaped(rings: list[np.ndarray]) -> Polygon:
+    """A shape with holes as shapely fills it: the outline less every hole."""
+    shape = Polygon(rings.exterior, rings.holes)
     assert shape.is_valid
     return shape
 
@@ -96,10 +108,9 @@ class TestFilm:
             ([0, 2], 0.1, "unbroken run"),
             ([6], 0.1, "indices"),
             ([], 0.1, "indices"),
-            (range(6), 0.1, "ring"),
             ([0], 0.0, "positive"),
         ],
-        ids=["gap", "out-of-range", "none", "all", "zero"],
+        ids=["gap", "out-of-range", "none", "zero"],
     )
     def test_refuses_what_is_not_one_film(self, edges, thickness, message) -> None:  # type: ignore[no-untyped-def]
         with pytest.raises(ValueError, match=message):
@@ -119,7 +130,9 @@ class TestBooleans:
     def test_a_cut_through_the_middle_leaves_two(self) -> None:
         parts = outlines.difference(outlines.rect((0, 0), (3, 1)), outlines.rect((1, -1), (2, 2)))
         assert [region(p).area for p in parts] == pytest.approx([1.0, 1.0])
-        assert parts[0][:, 0].min() < parts[1][:, 0].min()  # ties ordered by position
+        assert (
+            parts[0].exterior[:, 0].min() < parts[1].exterior[:, 0].min()
+        )  # ties ordered by position
 
     def test_a_cut_that_removes_everything_leaves_none(self) -> None:
         assert outlines.difference(SQUARE, outlines.rect((-1, -1), (2, 2))) == []
@@ -139,9 +152,60 @@ class TestBooleans:
         ],
         ids=["difference", "union"],
     )
-    def test_a_hole_is_refused_rather_than_dropped(self, make) -> None:  # type: ignore[no-untyped-def]
-        with pytest.raises(ValueError, match="hole"):
+    def test_a_hole_is_kept_as_a_ring_of_its_own(self, make) -> None:  # type: ignore[no-untyped-def]
+        (ring,) = make()
+        outline, hole = ring.rings
+        assert signed_area(outline) == pytest.approx(9.0)
+        assert signed_area(hole) == pytest.approx(-1.0)  # clockwise
+        assert shaped(ring).area == pytest.approx(8.0)
+        assert not shaped(ring).contains(Point(1.5, 1.5))
+
+    def test_a_result_without_holes_is_still_a_region(self) -> None:
+        (both,) = outlines.union(SQUARE, outlines.rect((0.5, 0.5), (2, 2)))
+        assert isinstance(both, vecview.Region) and not both.holes
+
+    def test_holed_shapes_combine_further(self) -> None:
+        (ring,) = outlines.difference(outlines.rect((0, 0), (3, 3)), outlines.rect((1, 1), (2, 2)))
+        # Filling the window closes the hole; cutting across the frame opens it.
+        (closed,) = outlines.union(ring, outlines.rect((0.5, 0.5), (2.5, 2.5)))
+        assert isinstance(closed, vecview.Region) and region(closed).area == pytest.approx(9.0)
+        (opened,) = outlines.difference(ring, outlines.rect((1.2, -1), (1.8, 1.5)))
+        assert isinstance(opened, vecview.Region) and region(opened).area == pytest.approx(7.4)
+
+    def test_two_holes_come_in_order_of_position(self) -> None:
+        plate = outlines.rect((0, 0), (5, 2))
+        vias = [outlines.regular(8, 0.3, center=(x, 1)) for x in (3.5, 1.5)]
+        (result,) = outlines.difference(plate, *vias)
+        first, second = result.holes
+        assert first[:, 0].mean() == pytest.approx(1.5) and second[:, 0].mean() == pytest.approx(
+            3.5
+        )
+
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda: outlines.difference(SQUARE * 4, [[2, 0], [3, 1], [1, 1]]),
+            lambda: outlines.difference(
+                SQUARE * 4, [[1, 1], [2, 1], [2, 2]], [[2, 2], [3, 2], [3, 3]]
+            ),
+            lambda: outlines.union(
+                outlines.rect((0, 0), (3, 1)),
+                outlines.rect((0, 0), (1, 3)),
+                outlines.rect((2, 0), (3, 2)),
+                outlines.rect((1, 2), (2, 3)),
+            ),
+            lambda: outlines.offset(vecview.Region(SQUARE * 4, [[[2, 0], [3, 1], [1, 1]]]), 0.0),
+        ],
+        ids=["hole-on-outline", "holes-at-a-vertex", "c-closed-at-a-point", "given"],
+    )
+    def test_a_hole_touching_at_a_point_is_refused(self, make) -> None:  # type: ignore[no-untyped-def]
+        """What extrude would refuse is refused here too, so a result passes on as it comes."""
+        with pytest.raises(ValueError, match="touching"):
             make()
+
+    def test_a_hole_outside_the_outline_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="holes"):
+            outlines.union(vecview.Region(SQUARE, [SQUARE + 5]))
 
     def test_intersection(self) -> None:
         (common,) = outlines.intersection(SQUARE, outlines.rect((0.5, -1), (2, 0.5)))
@@ -151,6 +215,38 @@ class TestBooleans:
     def test_a_self_crossing_outline_is_refused(self) -> None:
         with pytest.raises(ValueError, match="simple"):
             outlines.union([(0, 0), (1, 1), (1, 0), (0, 2)])
+
+
+class TestHoledShapes:
+    def test_a_film_on_every_edge_is_a_shell_round_the_body(self) -> None:
+        outside, body = outlines.film(WIRE, range(6), 0.1).rings
+        assert np.allclose(sorted(map(tuple, body)), sorted(map(tuple, WIRE)))
+        assert signed_area(body) < 0 < signed_area(outside)
+        assert shaped(vecview.Region(outside, [body])).area == pytest.approx(
+            region(outlines.offset(WIRE, 0.1)).area - region(WIRE).area
+        )
+
+    def test_growing_a_c_closes_it_into_a_ring(self) -> None:
+        slit = outlines.rect((1.9, 2.5), (2.1, 4.5))
+        (c,) = outlines.difference(
+            outlines.rect((0, 0), (4, 4)), outlines.rect((1, 1), (3, 3)), slit
+        )
+        assert isinstance(c, vecview.Region)
+        _, hole = outlines.offset(c, 0.2).rings  # the slit closes, the window stays open
+        assert region(hole).area == pytest.approx(1.6**2)
+
+    def test_a_film_refuses_an_outline_with_holes(self) -> None:
+        with pytest.raises(ValueError, match="holes"):
+            outlines.film(
+                vecview.Region(outlines.rect((0, 0), (3, 3)), [outlines.rect((1, 1), (2, 2))]),
+                [0],
+                0.1,
+            )
+
+    def test_lifted_ring_by_ring(self) -> None:
+        ring = vecview.Region(outlines.rect((0, 0), (3, 3)), [outlines.rect((1, 1), (2, 2))[::-1]])
+        outline, hole = outlines.to_plane(ring, origin=(0, 0, 1)).rings
+        assert np.allclose(outline[:, 2], 1.0) and np.allclose(hole[:, :2], ring.holes[0])
 
 
 class TestToPlane:
@@ -168,4 +264,4 @@ class TestToPlane:
         )
         faces = vecview.extrude(section, (2, 0, 0))
         assert [f.name for f in faces[:2]] == ["start", "end"]
-        assert len(faces) == 2 + len(section)
+        assert len(faces) == 2 + len(section.exterior)

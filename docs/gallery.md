@@ -136,6 +136,22 @@ dashed back edges disappear where the planes cover them.
 
 `examples/mirror_planes.py`
 
+## Ring with a hole
+
+![An Aharonov-Bohm ring threaded by a flux](gallery/aharonov_bohm_ring.svg)
+
+An Aharonov–Bohm ring: a mesoscopic loop between two leads, the two paths round
+its arms enclosing a flux. The ring and its leads are one
+[shape with a hole](shapes.md#shapes-with-holes) — `outlines.union` of an
+`annulus` and two strips returns a `Region` — extruded into one
+solid. `prism_walls` draws its walls outside and inside the hole as one seamless
+path, the top is one even-odd `<path>`, and the flux line comes down through the
+hole in the same [depth-sorted layer](scenes.md#sorting-by-depth): it covers the
+far arm and the path along it, and stands inside the ring rather than on top of
+it.
+
+`examples/aharonov_bohm_ring.py`
+
 ## Devices
 
 ![A quantum-dot device sketch](gallery/altermagnetic_dot.svg)

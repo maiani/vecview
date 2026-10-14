@@ -245,6 +245,71 @@ class TestPrimitives:
             assert hi[0] == pytest.approx(0.0)
 
 
+class TestHoles:
+    WASHER = vecview.annulus((0, 0), 0.5, 1.5, n=24)
+
+    @pytest.mark.parametrize(
+        ("hole", "message"),
+        [
+            (vecview.outlines.rect((2, 2), (3, 3)), "inside its outline"),
+            (vecview.outlines.rect((0.5, -0.5), (2, 0.5)), "inside its outline"),
+        ],
+        ids=["outside", "crossing"],
+    )
+    def test_a_polygon_refuses_a_hole_outside_its_outline(
+        self, scene: Scene, hole: np.ndarray, message: str
+    ) -> None:
+        bad = vecview.Region(vecview.outlines.rect((-1, -1), (1, 1)), [hole])
+        with pytest.raises(ValueError, match=message):
+            scene.polygon(0, vecview.outlines.to_plane(bad))
+
+    def test_a_polygon_refuses_a_hole_off_its_plane(self, scene: Scene) -> None:
+        square = vecview.outlines.to_plane(vecview.outlines.rect((-1, -1), (1, 1)))
+        hole = vecview.outlines.to_plane(
+            vecview.outlines.rect((-0.2, -0.2), (0.2, 0.2)), origin=(0, 0, 1)
+        )
+        with pytest.raises(ValueError, match="plane"):
+            scene.polygon(0, vecview.Region(square, [hole]))
+
+    def test_a_face_with_holes_is_one_even_odd_path(self, scene: Scene) -> None:
+        cap = [f for f in vecview.prism_faces(self.WASHER, 0, 0.3) if f.name == "+z"]
+        scene.faces(0, cap, fill="#ccc", id="w")
+        (path,) = drawn(scene)
+        assert isinstance(path, svg.Path) and path.fill_rule == "evenodd" and path.id == "w-pz"
+        assert sum(isinstance(c, svg.M) for c in path.d or []) == 2
+
+    def test_prism_walls_draws_a_run_for_each_ring(self, scene: Scene) -> None:
+        scene.prism_walls(0, self.WASHER, 0, 0.3, fill="#456", stroke="#000", id="walls")
+        # The hole's walls first, so their stroke stays under the outer walls.
+        holes, outside = drawn(scene)
+        assert (holes.id, outside.id) == ("walls-holes", "walls")
+        assert all(sum(isinstance(c, svg.M) for c in p.d or []) == 1 for p in (holes, outside))
+
+    def test_edges_include_the_rims_of_holes(self, scene: Scene) -> None:
+        scene.edges(0, vecview.prism_faces(self.WASHER, 0, 0.3), back={}, stroke="#000", id="e")
+        segments = sum(sum(isinstance(c, svg.M) for c in el.d or []) for el in drawn(scene))
+        assert segments == 3 * (24 + 24)
+
+    def test_an_unfilled_shape_strokes_every_ring(self, scene: Scene) -> None:
+        scene.polygon(0, vecview.outlines.to_plane(self.WASHER), fill="none", stroke="#000")
+        (path,) = drawn(scene)
+        assert sum(isinstance(c, svg.Z) for c in path.d or []) == 2
+
+    def test_output_is_deterministic(self, cam: Camera) -> None:
+        def build() -> str:
+            s = Scene(cam)
+            s.sort_by_depth(0)
+            plate = vecview.outlines.difference(
+                vecview.outlines.rect((-2, -1), (2, 1)),
+                *[vecview.outlines.regular(12, 0.3, center=(x, 0)) for x in (-1, 0, 1)],
+            )[0]
+            s.faces(0, vecview.prism_faces(plate, 0, 0.2), cull=True, fill="#ccc", id="p")
+            s.cylinder(0, (0, 0, -0.5), (0, 0, 0.6), 0.1, fill="#c33", id="pin")
+            return s.to_svg_document()
+
+        assert build() == build()
+
+
 class TestDocumentProtocol:
     def test_to_svg_document_needs_no_arguments(self, scene: Scene) -> None:
         """A consumer calls this with no arguments, so the defaults must suffice."""

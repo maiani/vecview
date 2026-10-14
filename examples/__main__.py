@@ -32,6 +32,7 @@ EXAMPLES = [
     "solenoid",
     "kitaev_chain",
     "mirror_planes",
+    "aharonov_bohm_ring",
     "altermagnetic_dot",  # at its active camera, "main"
     "slab_polarizer",  # at its default camera
     "pendulum",

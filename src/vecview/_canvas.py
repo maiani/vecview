@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import heapq
+import itertools
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, Literal, cast
 
@@ -40,8 +41,8 @@ from vecview._occlusion import (
     planes_through,
 )
 from vecview._place import _Frame
-from vecview._types import Array, Point3, Points2, Points3, Style
-from vecview._vec import as_points, basis_for, convex_hull, unit
+from vecview._types import Array, Point3, Points3, Shape2, Shape3, Style
+from vecview._vec import as_points, as_rings, basis_for, convex_hull, unit
 from vecview.camera import Camera, ParallelCamera
 from vecview.shapes import Face, Pivot, arrow_shape, prism_faces
 
@@ -102,7 +103,7 @@ def _coverage(style: Mapping[str, Style]) -> tuple[bool, float]:
     return opaque, 0.5 * amount("stroke_width") if stroked else 0.0
 
 
-def _visible_part(element: svg.Polygon, rings: list[Array]) -> svg.Path:
+def _visible_part(element: svg.Polygon | svg.Path, rings: list[Array]) -> svg.Path:
     """An unstroked polygon redrawn as just its visible region: one ``<path>``.
 
     The same pixels as clipping the polygon to ``rings``, without the clip path
@@ -111,7 +112,7 @@ def _visible_part(element: svg.Polygon, rings: list[Array]) -> svg.Path:
     attrs = {
         f.name: getattr(element, f.name)
         for f in dataclasses.fields(element)
-        if f.name != "points" and getattr(element, f.name) is not None
+        if f.name not in ("points", "d") and getattr(element, f.name) is not None
     }
     if len(rings) > 1:
         attrs["fill_rule"] = "evenodd"
@@ -352,7 +353,7 @@ class _Canvas:
                 rings = seen.rings
                 if rings is None or seen.whole_fill:
                     items.append((layer, seq, element))
-                elif rings and seen.redraw and isinstance(element, svg.Polygon):
+                elif rings and seen.redraw and isinstance(element, svg.Polygon | svg.Path):
                     items.append((layer, seq, _visible_part(element, rings)))
                 elif rings:
                     name = getattr(element, "id", None)
@@ -378,12 +379,16 @@ class _Canvas:
         """Add an element to ``<defs>`` -- a gradient, marker, or clip path."""
         self.defs.append(element)
 
-    def polygon(self, layer: int, pts3: Points3, **style: Style) -> None:
-        """Filled polygon through projected world points."""
-        p = self.cam.project(pts3)
+    def polygon(self, layer: int, pts3: Shape3, **style: Style) -> None:
+        """Filled polygon through projected world points, or a shape with holes."""
+        rings = as_rings(pts3, 3)
+        if len(rings) > 1:
+            self._holed(layer, rings, **style)
+            return
+        (pts,) = rings
+        p = self.cam.project(pts)
         self._grow(p)
-        self._emit(layer, svg.Polygon(points=_points(p), **style), self._depth(pts3))
-        pts = as_points(pts3)
+        self._emit(layer, svg.Polygon(points=_points(p), **style), self._depth(pts))
         if style.get("fill") == "none":
             self._shape(lambda: self._line([np.vstack([pts, pts[:1]])], style, None))
         else:
@@ -394,6 +399,27 @@ class _Canvas:
                 return None if piece is None else Surface([piece], opaque, pad, redraw=True)
 
             self._shape(surface)
+
+    def _holed(self, layer: int, rings: list[Array], **style: Style) -> None:
+        """A polygon with holes: one even-odd ``<path>`` through every ring."""
+        projected = [self.cam.project(ring) for ring in rings]
+        self._grow(projected[0])
+        attrs: dict[str, Style] = {"fill_rule": "evenodd", **style}
+        self._emit(layer, svg.Path(d=_path(projected, closed=True), **attrs), self._depth(rings[0]))
+        if style.get("fill") == "none":
+            closed = [np.vstack([ring, ring[:1]]) for ring in rings]
+            self._shape(lambda: self._line(closed, style, None))
+            return
+        opaque, pad = _coverage(style)
+
+        def surface() -> Surface | None:
+            piece = self._planar_piece(rings[0])
+            if piece is None:
+                return None
+            piece.holes = projected[1:]
+            return Surface([piece], opaque, pad, redraw=True)
+
+        self._shape(surface)
 
     def polyline(
         self, layer: int, pts3: Points3, *, back: Mapping[str, Style] | None = None, **style: Style
@@ -414,10 +440,11 @@ class _Canvas:
         given = list(faces)
         drawn = self.cam.visible(given) if cull else given
         for face in drawn:
+            shape = face.region if face.holes else face.points
             if base is None:
-                self.polygon(layer, face.points, **style)
+                self.polygon(layer, shape, **style)
             else:
-                self.polygon(layer, face.points, id=_face_id(str(base), face.name), **style)
+                self.polygon(layer, shape, id=_face_id(str(base), face.name), **style)
 
     def plane(
         self,
@@ -509,7 +536,7 @@ class _Canvas:
     def prism_walls(
         self,
         layer: int,
-        footprint: Points2,
+        footprint: Shape2,
         z0: float,
         z1: float,
         *,
@@ -517,22 +544,44 @@ class _Canvas:
         **style: Style,
     ) -> None:
         """Draw the camera-facing walls of an extruded footprint as one seamless shape."""
-        walls = prism_faces(footprint, z0, z1)[2:]
+        outer, *holes = as_rings(footprint, 2)
+        walls = [f for f in prism_faces(footprint, z0, z1) if f.name not in ("+z", "-z")]
         if _frame is not None:
             # A placed part: the walls move with it, kept in order so runs stay runs.
             walls = [_frame.face(wall, keep_order=True) for wall in walls]
         facing = {id(face) for face in self.cam.visible(walls)}
-        runs = _runs([id(face) in facing for face in walls])
-        if not runs:
-            return
-        n = len(walls)
+        # prism_faces lists the hole walls first, then the outer ones.  The holes go
+        # in a path of their own, painted first, so a stroke along a hole's far
+        # wall stays under the outer walls; each ring keeps its edge indices.
+        k = len(walls) - len(outer)
+        if holes:
+            named = {"id": f"{style['id']}-holes"} if style.get("id") else {}
+            self._wall_strips(layer, walls[:k], [len(h) for h in holes], facing, {**style, **named})
+        self._wall_strips(layer, walls[k:], [len(outer)], facing, dict(style))
+
+    def _wall_strips(
+        self,
+        layer: int,
+        walls: list[Face],
+        rings: list[int],
+        facing: set[int],
+        style: dict[str, Style],
+    ) -> None:
+        """One path of the facing runs of walls around ``rings`` boundaries of these lengths."""
         outlines: list[Array] = []
-        for start, count in runs:
-            indices = [(start + k) % n for k in range(count)]
-            bottom = [walls[i].points[0] for i in indices] + [walls[indices[-1]].points[1]]
-            top = [walls[indices[-1]].points[2]] + [walls[i].points[3] for i in reversed(indices)]
-            outlines.append(self.cam.project(np.array(bottom + top)))
-            self._grow(outlines[-1])
+        for lo, hi in itertools.pairwise(np.cumsum([0, *rings]).tolist()):
+            ring = walls[lo:hi]
+            n = len(ring)
+            if n > 1 and not np.array_equal(ring[0].points[1], ring[1].points[0]):
+                ring = ring[::-1]
+            for start, count in _runs([id(face) in facing for face in ring]):
+                indices = [(start + k) % n for k in range(count)]
+                bottom = [ring[i].points[0] for i in indices] + [ring[indices[-1]].points[1]]
+                top = [ring[indices[-1]].points[2]] + [ring[i].points[3] for i in reversed(indices)]
+                outlines.append(self.cam.project(np.array(bottom + top)))
+                self._grow(outlines[-1])
+        if not outlines:
+            return
         depth = self._depth(np.vstack([wall.points for wall in walls]))
         self._emit(layer, svg.Path(d=_path(outlines, closed=True), **style), depth)
         shown = [wall for wall in walls if id(wall) in facing]
@@ -606,14 +655,14 @@ class _Canvas:
         ends: dict[tuple[tuple[float, ...], ...], Array] = {}
         shown: dict[tuple[tuple[float, ...], ...], bool] = {}
         for face in given:
-            ring: Array = np.asarray(face.points, dtype=np.float64)
-            for start, end in zip(ring, np.roll(ring, -1, axis=0), strict=True):
-                a, b = cast(Array, start), cast(Array, end)
-                key = tuple(sorted((tuple(np.round(a, 9)), tuple(np.round(b, 9)))))
-                if key not in ends:
-                    along = unit(b - a) * trim
-                    ends[key] = np.array([a + along, b - along])
-                shown[key] = shown.get(key, False) or id(face) in facing
+            for ring in (np.asarray(face.points, dtype=np.float64), *face.holes):
+                for start, end in zip(ring, np.roll(ring, -1, axis=0), strict=True):
+                    a, b = cast(Array, start), cast(Array, end)
+                    key = tuple(sorted((tuple(np.round(a, 9)), tuple(np.round(b, 9)))))
+                    if key not in ends:
+                        along = unit(b - a) * trim
+                        ends[key] = np.array([a + along, b - along])
+                    shown[key] = shown.get(key, False) or id(face) in facing
         for visible, at, extra, suffix in (
             (True, layer, {}, "front"),
             (False, layer if back_layer is None else back_layer, back, "back"),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from vecview._types import Array, Point3, Points3
+from vecview._types import Array, Point3, Points3, Region, Shape2, Shape3
 
 
 def unit(v: Point3) -> Array:
@@ -26,6 +26,32 @@ def as_points(pts: Points3) -> Array:
     if a.ndim != 2 or a.shape[1] != 3:
         raise ValueError(f"expected world points of shape (n, 3), got {a.shape}")
     return a
+
+
+def as_rings(shape: Shape2 | Shape3, dim: int) -> list[Array]:
+    """Normalize a region or plain ring, refusing ambiguous lists of rings."""
+    if isinstance(shape, Region):
+        out = list(shape.rings)
+    else:
+        try:
+            out = [np.asarray(shape, dtype=np.float64)]
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                "pass Region(exterior, holes), or process each component separately"
+            ) from error
+    for ring in out:
+        if isinstance(shape, Region) and ring.ndim == 2 and (ring.shape[1], dim) == (2, 3):
+            raise ValueError(
+                "a 2D region given where 3D points are needed: lift it with outlines.to_plane"
+            )
+        if ring.ndim != 2 or ring.shape[1] != dim:
+            raise ValueError(
+                f"expected one ring of shape (n, {dim}); use Region(exterior, holes) "
+                "for holes and process disconnected components separately"
+            )
+        if not np.isfinite(ring).all():
+            raise ValueError("ring coordinates must be finite")
+    return out
 
 
 def basis_for(normal: Point3) -> tuple[Array, Array]:
@@ -66,4 +92,4 @@ def convex_hull(pts2: Array) -> list[int]:
     return chains[0] + chains[1]
 
 
-__all__ = ["as_points", "basis_for", "convex_hull", "unit"]
+__all__ = ["as_points", "as_rings", "basis_for", "convex_hull", "unit"]

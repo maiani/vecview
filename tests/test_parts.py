@@ -38,6 +38,10 @@ def draw(target: Scene | Part) -> None:
     target.polyline(4, [(0, 0, 0), (0, 1, 1)], stroke="#000", id="ray")
     target.silhouette(4, BOX, fill="#9ab", id="hull")
     target.cone(4, (1, 0, 0), (1, 0, 0.5), 0.2, fill="#a5c", id="cone")
+    washer = vecview.annulus((0, 0), 0.1, 0.25, n=12)
+    target.polygon(5, vecview.outlines.to_plane(washer, origin=(0, 0, 1)), fill="#ccc", id="w")
+    target.faces(5, vecview.prism_faces(washer, 0.0, 0.1), cull=True, fill="#ccc", id="ring")
+    target.prism_walls(5, washer, 0.1, 0.2, fill="#456", id="ring-walls")
 
 
 def polygons(scene: Scene) -> list[np.ndarray]:
@@ -93,6 +97,25 @@ class TestPlacement:
         placed, direct = Scene(CAM), Scene(CAM)
         placed.place(0, part, mirror=(1, 0, 0))
         direct.faces(0, vecview.box_faces((-0.5, 0.0, 0.0), (1.0, 0.4, 0.2)), cull=True)
+        key = sorted(tuple(sorted(map(tuple, p))) for p in polygons(placed))
+        assert key == sorted(tuple(sorted(map(tuple, p))) for p in polygons(direct))
+
+    def test_a_mirrored_ring_draws_what_the_mirror_image_does(self) -> None:
+        """Under a mirror the holes turn round with the outline, so culling still holds."""
+        washer = vecview.annulus((0, 0), 0.4, 1.0, n=16)
+        part = Part()
+        part.faces(0, vecview.prism_faces(washer, 0.0, 0.5), cull=True, fill="#9ab")
+        placed, direct = Scene(CAM), Scene(CAM)
+        placed.place(0, part, mirror=(0, 0, 1))
+        direct.faces(0, vecview.prism_faces(washer, -0.5, 0.0), cull=True, fill="#9ab")
+
+        def drawn(scene: Scene) -> list[tuple[str, int]]:
+            return sorted(
+                (type(el).__name__, len(el.d or []) if isinstance(el, svg.Path) else 0)
+                for el in scene.render().elements or []
+            )
+
+        assert drawn(placed) == drawn(direct)
         key = sorted(tuple(sorted(map(tuple, p))) for p in polygons(placed))
         assert key == sorted(tuple(sorted(map(tuple, p))) for p in polygons(direct))
 

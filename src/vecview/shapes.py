@@ -1,7 +1,7 @@
 """World-space glyph geometry.
 
-Every function here returns plain world-space points -- an ``(n, 3)`` array, or
-a list of :class:`Face` for solids.  Nothing here knows about a camera, a style,
+Functions return world-space point arrays, Regions with holes, or lists of
+:class:`Face` for solids.  Nothing here knows about a camera, a style,
 or SVG.  That split is deliberate: geometry stays testable as numbers, and the
 same polygon can be drawn twice with different fills, or reused as a clip path.
 """
@@ -13,10 +13,10 @@ from itertools import combinations
 from typing import Literal, NamedTuple
 
 import numpy as np
-import numpy.typing as npt
 
-from vecview._types import Array, Point3, Points2, Points3
-from vecview._vec import as_points, basis_for, unit
+from vecview._planar import _check_holes, _clip_region, _regions, _self_intersects
+from vecview._types import Array, Point3, Points3, Region, Shape2, Shape3
+from vecview._vec import as_points, as_rings, basis_for, unit
 
 FaceName = Literal["-x", "+x", "-y", "+y", "-z", "+z"]
 
@@ -29,11 +29,21 @@ class Face(NamedTuple):
     Carrying the normal alongside the points is what lets
     :meth:`~vecview.camera.Camera.visible` decide which walls of a box to draw
     without the caller reasoning about which octant the camera sits in.
+
+    ``points`` winds counter-clockwise about ``normal``.  ``holes`` are rings
+    cut out of it, each wound the other way -- the cap of a ring or a plate
+    with vias; a face with holes is drawn as one even-odd ``<path>``.
     """
 
     name: str
     points: Array
     normal: Array
+    holes: tuple[Array, ...] = ()
+
+    @property
+    def region(self) -> Region:
+        """The face's planar region, usable by polygon and geometry operations."""
+        return Region(self.points, self.holes)
 
 
 def in_plane_dir(
@@ -93,69 +103,43 @@ def box_faces(center: Point3, size: Point3) -> list[Face]:
     return faces
 
 
-def _self_intersects(poly: Array) -> bool:
-    """Whether any two non-adjacent edges of a closed polygon cross or touch."""
-    n = len(poly)
-    a, b = poly, np.roll(poly, -1, axis=0)
-    scale = float(np.ptp(poly, axis=0).max()) or 1.0
-    eps = 1e-12 * scale * scale
-
-    def orient(p: Array, q: Array, r: Array) -> Array:
-        cross: Array = (q[..., 0] - p[..., 0]) * (r[..., 1] - p[..., 1]) - (
-            q[..., 1] - p[..., 1]
-        ) * (r[..., 0] - p[..., 0])
-        return cross
-
-    def within(p: Array, q: Array, r: Array) -> npt.NDArray[np.bool_]:
-        """Whether r lies in the bounding box of segment pq (for collinear r)."""
-        lo, hi = np.minimum(p, q), np.maximum(p, q)
-        inside: npt.NDArray[np.bool_] = np.all(
-            (r >= lo - 1e-12 * scale) & (r <= hi + 1e-12 * scale), axis=-1
-        )
-        return inside
-
-    i, j = np.triu_indices(n, k=2)
-    keep = ~((i == 0) & (j == n - 1))  # the closing edge is adjacent to the first
-    i, j = i[keep], j[keep]
-    ai, bi, aj, bj = a[i], b[i], a[j], b[j]
-    d1, d2 = orient(ai, bi, aj), orient(ai, bi, bj)
-    d3, d4 = orient(aj, bj, ai), orient(aj, bj, bi)
-    proper = (d1 * d2 < -eps * eps) & (d3 * d4 < -eps * eps)
-    touching = (
-        ((np.abs(d1) <= eps) & within(ai, bi, aj))
-        | ((np.abs(d2) <= eps) & within(ai, bi, bj))
-        | ((np.abs(d3) <= eps) & within(aj, bj, ai))
-        | ((np.abs(d4) <= eps) & within(aj, bj, bi))
-    )
-    return bool(np.any(proper | touching))
-
-
-def prism_faces(footprint: Points2, z0: float, z1: float) -> list[Face]:
+def prism_faces(footprint: Shape2, z0: float, z1: float) -> list[Face]:
     """The faces of a footprint extruded along ``z``, each wound CCW about its normal.
 
     The generalization of :func:`box_faces` to any simple cross-section -- a
-    tapered electrode, an arc-shaped gate.  The cap is named ``"+z"`` and the
-    base ``"-z"``, as for a box; wall ``i`` spans footprint vertices ``i`` and
-    ``i + 1`` and is named ``"side-{i}"``.
+    tapered electrode, an arc-shaped gate, a ring.  The cap is named ``"+z"``
+    and the base ``"-z"``, as for a box; wall ``i`` spans footprint vertices
+    ``i`` and ``i + 1`` and is named ``"side-{i}"``.
+
+    A footprint with holes -- ``Region(outline, holes)`` -- has caps with
+    holes, and the walls of hole ``k`` are named ``"hole{k}_side-{i}"``.
+    Hole walls come first, then cap, base and outer walls, so ``faces(...,
+    cull=True)`` paints the far side of a hole under the cap.  That is exact for
+    one convex hole -- a ring, a washer -- and for holes too shallow to show
+    through each other; a non-convex hole can hide its own walls, as a
+    non-convex outline can.  Draw those in a sorted layer.  Pick
+    the cap of a holed solid by name.
 
     Args:
         footprint: Simple polygon in the ``xy`` plane, shape ``(n, 2)``, in
             either winding; it may be non-convex. Collinear vertices are
-            allowed; repeated ones are not.
+            allowed; repeated ones are not. Or a Region whose holes lie inside
+            its exterior, apart from it and each other.
         z0: Height of the base.
         z1: Height of the cap; must exceed ``z0``.
 
     Raises:
         ValueError: If the footprint is not a simple polygon of at least three
             distinct vertices -- self-intersecting or self-touching outlines
-            have no well-defined outside -- or ``z1 <= z0``.
+            have no well-defined outside -- if a hole is not inside it, apart
+            from it and from the other holes, or if ``z1 <= z0``.
 
     Back-face culling selects the walls that face the camera, which for a
     convex footprint is exactly the visible set.  For a non-convex one, a
     facing wall can still be hidden behind another wall of the same solid;
     :meth:`~vecview.scene.Scene.prism_walls` draws such a solid correctly.
     """
-    foot = np.asarray(footprint, dtype=np.float64)
+    foot, *holes = as_rings(footprint, 2)
     if foot.ndim != 2 or foot.shape[1] != 2 or len(foot) < 3:
         raise ValueError(f"footprint must have shape (n, 2) with n >= 3, got {foot.shape}")
     if not z1 > z0:
@@ -170,14 +154,33 @@ def prism_faces(footprint: Points2, z0: float, z1: float) -> list[Face]:
         raise ValueError("footprint encloses no area")
     if _self_intersects(foot):
         raise ValueError("footprint must be a simple polygon: its edges cross or touch")
+    if holes:
+        _check_holes([foot, *holes])
     if area < 0:
         foot = foot[::-1]  # clockwise: reverse so the cap faces +z
-    base = np.column_stack([foot, np.full(len(foot), float(z0))])
-    start, end, *walls = extrude(base, (0.0, 0.0, float(z1) - float(z0)))
-    return [end._replace(name="+z"), start._replace(name="-z"), *walls]
+    up = np.array([0.0, 0.0, float(z1) - float(z0)])
+    base, *bores = [np.column_stack([r, np.full(len(r), float(z0))]) for r in (foot, *holes)]
+    faces = _swept(base, bores, up)  # checked above, as extrude would check it again
+    k = len(faces) - len(foot) - 2  # the hole walls, which come first
+    start, end = faces[k], faces[k + 1]
+    return [*faces[:k], end._replace(name="+z"), start._replace(name="-z"), *faces[k + 2 :]]
 
 
-def extrude(section: Points3, along: Point3) -> list[Face]:
+def _walls(ring: Array, sweep: Array, swap: bool, prefix: str) -> list[Face]:
+    """The walls a ring sweeps, wall ``i`` on the edge from vertex ``i`` to ``i + 1``."""
+    walls: list[Face] = []
+    for i in range(len(ring)):
+        a, b = ring[i], ring[(i + 1) % len(ring)]
+        if swap:
+            a, b = b, a
+        # The wall's plane holds the edge and the sweep, and (edge, along,
+        # outward) is right-handed for an edge with the solid on its left.
+        outward = unit(np.cross(b - a, sweep))
+        walls.append(Face(f"{prefix}{i}", np.array([a, b, b + sweep, a + sweep]), outward))
+    return walls
+
+
+def extrude(section: Shape3, along: Point3) -> list[Face]:
     """A planar cross-section swept along a vector: a prism in any direction.
 
     The generalization of :func:`prism_faces` to a section in any plane and a
@@ -194,18 +197,26 @@ def extrude(section: Points3, along: Point3) -> list[Face]:
     ``n``: ``circle_shape((0, 0, 0), r, (1, 0, 0), n=6)`` swept along ``x``
     is a hexagonal wire.
 
+    A section can have holes: ``extrude(Region(outline, [hole]), along)`` is a tube, a
+    ring, a plate with vias.  The ends are then faces with holes, and each
+    hole sweeps walls of its own, wall ``i`` of hole ``k`` named
+    ``"hole{k}_side-{i}"`` and facing into the hole.  Hole walls come first,
+    then ``"start"``, ``"end"`` and the outer walls, so a culled tube paints
+    its bore under its ends, as :func:`prism_faces` explains.
+
     Args:
         section: Simple polygon lying in one plane, shape ``(n, 3)``, in
             either winding; it may be non-convex. Repeated consecutive
-            vertices are not allowed.
+            vertices are not allowed. Or a Region with holes in the same plane,
+            inside the exterior and apart, in any winding.
         along: The sweep, as a world vector; its length is the prism's length.
 
     Raises:
         ValueError: If the section has fewer than three vertices, is not
-            planar, encloses no area, crosses or touches itself, or if
-            ``along`` lies in its plane.
+            planar, encloses no area, crosses or touches itself, has a hole
+            that is not inside it and apart, or if ``along`` lies in its plane.
     """
-    pts = as_points(section)
+    pts, *holes = (as_points(ring) for ring in as_rings(section, 3))
     if len(pts) < 3:
         raise ValueError(f"a section needs at least three vertices, got {len(pts)}")
     sweep = np.asarray(along, dtype=np.float64)
@@ -219,30 +230,42 @@ def extrude(section: Points3, along: Point3) -> list[Face]:
     if area <= 1e-12 * size * size:
         raise ValueError("section encloses no area")
     normal = vector_area / area
-    if np.abs((pts - pts[0]) @ normal).max() > 1e-9 * size:
+    if any(np.abs((ring - pts[0]) @ normal).max() > 1e-9 * size for ring in (pts, *holes)):
         raise ValueError("section is not planar")
     u, v = basis_for(normal)
-    if _self_intersects(np.column_stack([(pts - pts[0]) @ u, (pts - pts[0]) @ v])):
+    flat = [np.column_stack([(ring - pts[0]) @ u, (ring - pts[0]) @ v]) for ring in (pts, *holes)]
+    if _self_intersects(flat[0]):
         raise ValueError("section must be a simple polygon: its edges cross or touch")
+    if holes:
+        _check_holes(flat)
     reach = float(np.dot(sweep, normal))
     if abs(reach) <= 1e-12 * max(size, float(np.linalg.norm(sweep))):
         raise ValueError("along lies in the section's plane, so the sweep has no volume")
+    return _swept(pts, holes, sweep)
+
+
+def _swept(pts: Array, holes: list[Array], sweep: Array) -> list[Face]:
+    """The faces of a checked section swept along ``sweep``: what :func:`extrude` returns."""
+    vector_area = 0.5 * np.cross(pts, np.roll(pts, -1, axis=0)).sum(axis=0)
+    normal = vector_area / float(np.linalg.norm(vector_area))
+    reach = float(np.dot(sweep, normal))
     # Wind every face counter-clockwise about the sweep's side of the plane,
     # while wall i keeps the edge from vertex i to i + 1 as the caller gave it.
     flip = reach < 0
     if flip:
         normal = -normal
     ccw = pts[::-1] if flip else pts
-    faces = [Face("start", ccw[::-1].copy(), -normal), Face("end", ccw + sweep, normal.copy())]
-    for i in range(len(pts)):
-        a, b = pts[i], pts[(i + 1) % len(pts)]
-        if flip:
-            a, b = b, a
-        # The wall's plane holds the edge and the sweep, and (edge, along,
-        # outward) is right-handed for an edge running counter-clockwise.
-        outward = unit(np.cross(b - a, sweep))
-        faces.append(Face(f"side-{i}", np.array([a, b, b + sweep, a + sweep]), outward))
-    return faces
+    # Holes wind the other way, so the solid lies to the left of every edge.
+    winding = [float(np.cross(h, np.roll(h, -1, axis=0)).sum(axis=0) @ normal) for h in holes]
+    cw = [h[::-1] if w > 0 else h for h, w in zip(holes, winding, strict=True)]
+    walls = [
+        wall
+        for k, (hole, w) in enumerate(zip(holes, winding, strict=True))
+        for wall in _walls(hole, sweep, w > 0, f"hole{k}_side-")
+    ]
+    start = Face("start", ccw[::-1].copy(), -normal, tuple(h[::-1].copy() for h in cw))
+    end = Face("end", ccw + sweep, normal.copy(), tuple(h + sweep for h in cw))
+    return [*walls, start, end, *_walls(pts, sweep, flip, "side-")]
 
 
 def annulus_sector(
@@ -259,26 +282,55 @@ def annulus_sector(
     then the inner arc runs back.  With ``r_in = 0`` the inner arc collapses to
     the centre and the result is a pie wedge.  Angles are measured from ``+x``
     toward ``+y``.  Pair with :func:`prism_faces` for an arc-shaped electrode.
+    A whole ring has a hole, so it is :func:`annulus`, not a sector.
 
     Raises:
         ValueError: Unless ``0 <= r_in < r_out``, ``n >= 1``, and the span
-            ``theta1_deg - theta0_deg`` lies in ``(0, 360)``. A full ring is not a
-            simple polygon.
+            ``theta1_deg - theta0_deg`` lies in ``(0, 360)``.
     """
     if not 0.0 <= r_in < r_out:
         raise ValueError(f"need 0 <= r_in < r_out, got r_in={r_in}, r_out={r_out}")
     span = theta1_deg - theta0_deg
-    if not 0.0 < span < 360.0:
+    if span >= 360.0:
+        raise ValueError(f"a span of {span} degrees closes the ring: use annulus() for a ring")
+    if not span > 0.0:
         raise ValueError(f"theta1_deg - theta0_deg must lie in (0, 360), got {span}")
     if n < 1:
         raise ValueError(f"n must be at least 1, got {n}")
     c = np.asarray(center, dtype=np.float64)
     t = np.radians(np.linspace(theta0_deg, theta1_deg, n + 1))
-    ring = np.column_stack([np.cos(t), np.sin(t)])
-    outer = c + r_out * ring
-    inner = c[None, :] if r_in == 0.0 else c + r_in * ring[::-1]
-    footprint: Array = np.vstack([outer, inner])
+    arc = np.column_stack([np.cos(t), np.sin(t)])
+    inner = c[None, :] if r_in == 0.0 else c + r_in * arc[::-1]
+    footprint: Array = np.vstack([c + r_out * arc, inner])
     return footprint
+
+
+def annulus(
+    center: tuple[float, float] | Array,
+    r_in: float,
+    r_out: float,
+    n: int = 32,
+    *,
+    theta0_deg: float = 0.0,
+) -> Region:
+    """Footprint of a ring: ``Region(outer, [inner])``, each circle of ``n`` vertices.
+
+    The outer circle runs counter-clockwise and the inner one, the hole,
+    clockwise, both from ``theta0_deg`` (measured from ``+x`` toward ``+y``).
+    Pair with :func:`prism_faces` for a washer, a microring, or a loop; a full
+    disk is :func:`~vecview.outlines.regular`.
+
+    Raises:
+        ValueError: Unless ``0 < r_in < r_out`` and ``n >= 3``.
+    """
+    if not 0.0 < r_in < r_out:
+        raise ValueError(f"need 0 < r_in < r_out, got r_in={r_in}, r_out={r_out}")
+    if n < 3:
+        raise ValueError(f"n must be at least 3, got {n}")
+    c = np.asarray(center, dtype=np.float64)
+    t = np.radians(np.arange(n) * (360.0 / n) + theta0_deg)  # as linspace spaces them
+    circle = np.column_stack([np.cos(t), np.sin(t)])
+    return Region(c + r_out * circle, (c + r_in * np.roll(circle[::-1], 1, axis=0),))
 
 
 def arrow_shape(
@@ -559,10 +611,12 @@ def trim_corners(faces: Iterable[Face], radius: float, n: int = 8) -> list[Face]
 
     Raises:
         ValueError: If ``radius`` is not smaller than half of every edge, which
-            would make neighbouring cuts overlap.
+            would make neighbouring cuts overlap, or if a face has holes.
     """
     trimmed: list[Face] = []
     for face in faces:
+        if face.holes:
+            raise ValueError(f"face {face.name!r} has holes, whose corners trim_corners cannot cut")
         ring = np.asarray(face.points, dtype=np.float64)
         edges = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
         if radius <= 0:
@@ -595,21 +649,26 @@ def cut(faces: Iterable[Face], origin: Point3, normal: Point3) -> list[Face]:
     are dropped.  The cut itself is capped by new faces lying in the plane and
     facing along ``normal``, named ``"cut"`` -- or ``"cut-0"``, ``"cut-1"``, ...
     when the plane meets the solid in several places -- so a cap can be drawn
-    in a style of its own.
+    in a style of its own.  A face lying in the plane is dropped, the cap
+    taking its place.  A plane across a hollow solid -- a tube cut square --
+    leaves a cap with a hole in it. Every face is clipped as a planar
+    region; a hole whose side lies along the plane opens into a notch.
+    Should clipping split a face, the pieces are
+    named ``"{name}-0"``, ``"{name}-1"``, ...
 
     The faces must close a solid, each wound counter-clockwise about its
     outward normal, as every function here returns them; non-convex solids
     are fine.  A plane that misses the solid returns it unchanged, or nothing.
 
     Raises:
-        ValueError: If the cut would leave a cap with a hole in it -- a plane
-            across a hollow tube -- which a face cannot hold, or if the faces do
-            not close up along the cut.
+        ValueError: If the faces do not close up along the cut.
     """
     given = list(faces)
     n, o = unit(normal), np.asarray(origin, dtype=np.float64)
     if not n.any():
         raise ValueError("a cut needs a non-zero plane normal")
+    if not given:
+        return []
     everything = np.vstack([face.points for face in given])
     eps = 1e-9 * max(float(np.ptp(everything, axis=0).max()), 1.0)
     kept: list[Face] = []
@@ -621,30 +680,39 @@ def cut(faces: Iterable[Face], origin: Point3, normal: Point3) -> list[Face]:
         if np.all(d > 0):
             continue
         if np.all(d == 0):
-            kept.append(face)  # lying in the plane: the solid already ends there
+            continue  # lying in the plane: the cap, built from its neighbours, replaces it
+        if np.all(d < 0):
+            kept.append(face)
             continue
-        out: list[Array] = []
-        for i in range(len(pts)):
-            j = (i + 1) % len(pts)
-            if d[i] <= 0:
-                out.append(pts[i])
-            if d[i] * d[j] < 0:
-                out.append(pts[i] + (pts[j] - pts[i]) * (d[i] / (d[i] - d[j])))
-        clipped = np.array([p for k, p in enumerate(out) if np.any(np.abs(p - out[k - 1]) > eps)])
-        if (
-            len(clipped) < 3
-            or np.linalg.norm(np.cross(clipped - clipped[0], clipped[1] - clipped[0])) <= eps * eps
-        ):
-            continue
-        kept.append(face._replace(points=clipped))
-        # An edge of the clipped face lying in the plane bounds the cap, which
-        # runs along it the other way, as neighbouring faces of a closed solid do.
-        on = np.abs((clipped - o) @ n) <= eps
-        for i in range(len(clipped)):
-            j = (i + 1) % len(clipped)
-            if on[i] and on[j]:
-                rims.append((clipped[j], clipped[i]))
+        pieces, edges = _clip_rings(face, o, n, eps)
+        kept += pieces
+        rims += edges
     return kept + _caps(rims, n, eps)
+
+
+def _clip_rings(
+    face: Face, o: Array, n: Array, eps: float
+) -> tuple[list[Face], list[tuple[Array, Array]]]:
+    """Clip every face through the same planar-region operation, including splits."""
+    regions = _clip_region(face.region, np.asarray(face.normal), o, n, eps)
+    pieces = [
+        Face(
+            face.name if len(regions) == 1 else f"{face.name}-{k}",
+            region.exterior,
+            face.normal,
+            region.holes,
+        )
+        for k, region in enumerate(regions)
+    ]
+    rims: list[tuple[Array, Array]] = []
+    for region in regions:
+        for loop in region.rings:
+            on = np.abs((loop - o) @ n) <= eps
+            for i in range(len(loop)):
+                j = (i + 1) % len(loop)
+                if on[i] and on[j]:
+                    rims.append((loop[j], loop[i]))
+    return pieces, rims
 
 
 def _caps(rims: list[tuple[Array, Array]], normal: Array, eps: float) -> list[Face]:
@@ -670,14 +738,11 @@ def _caps(rims: list[tuple[Array, Array]], normal: Array, eps: float) -> list[Fa
         if at != start:
             raise ValueError("the faces do not close up along the cut")
         loops.append(np.array(loop))
-    caps: list[Face] = []
-    for k, loop in enumerate(loops):
-        winding = np.cross(loop, np.roll(loop, -1, axis=0)).sum(axis=0) @ normal
-        if winding < 0:
-            raise ValueError("the cut leaves a cap with a hole in it, which a face cannot hold")
-        name = "cut" if len(loops) == 1 else f"cut-{k}"
-        caps.append(Face(name, loop, normal.copy()))
-    return caps
+    regions = _regions(loops, normal)
+    return [
+        Face("cut" if len(regions) == 1 else f"cut-{k}", loop, normal.copy(), tuple(holes))
+        for k, (loop, holes) in enumerate(regions)
+    ]
 
 
 def sine_ribbon(
@@ -705,6 +770,7 @@ def sine_ribbon(
 __all__ = [
     "Face",
     "FaceName",
+    "annulus",
     "annulus_sector",
     "arc_shape",
     "arrow_shape",

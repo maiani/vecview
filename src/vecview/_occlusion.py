@@ -62,6 +62,8 @@ class Piece:
     width: float = 0.0
     """When positive, ``outline`` is a centre line and the piece covers the band
     this far either side of it -- a tube, drawn as a wide stroke."""
+    holes: list[Array] = field(default_factory=list)
+    """Screen rings cut out of ``outline``: what is seen through them is not covered."""
 
 
 @dataclass
@@ -232,7 +234,7 @@ def _cover(shapely: Any, piece: Piece) -> Any:
     """The screen region a piece covers, as a shapely geometry."""
     if piece.width > 0:
         return shapely.LineString(piece.outline).buffer(piece.width, quad_segs=8, cap_style="flat")
-    return shapely.make_valid(shapely.Polygon(piece.outline))
+    return shapely.make_valid(shapely.Polygon(piece.outline, piece.holes or None))
 
 
 def _core(shapely: Any, surface: Surface) -> Any:
@@ -250,7 +252,7 @@ def _redrawable(shapely: Any, surface: Surface) -> bool:
     if not surface.redraw or surface.pad > 0 or len(surface.pieces) != 1:
         return False
     piece = surface.pieces[0]
-    return piece.width == 0 and bool(shapely.Polygon(piece.outline).is_valid)
+    return piece.width == 0 and bool(shapely.Polygon(piece.outline, piece.holes or None).is_valid)
 
 
 def _depth_span(shapes: Sequence[Shape]) -> float:
