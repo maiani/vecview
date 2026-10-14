@@ -64,7 +64,10 @@ passed to `sort_by_depth` has its visibility decided by depth instead, point by
 point rather than element by element. Every surface keeps its native SVG element
 — a `<circle>` stays a circle — clipped to the part of it that no opaque surface
 hides, so a bond can run into an atom's centre, two planes can cut through each
-other, and a coil can wrap its core. A surface hidden entirely is dropped. Every
+other, and a coil can wrap its core. A surface hidden entirely is dropped. An
+unstroked flat polygon — a face, a quad, a flat arrow — is instead redrawn as
+just its visible part: one `<path>` with the same id, classes, and style, and
+the same pixels, without a clip path. Every
 line is cut where an opaque surface hides it, and the hidden part is dropped, or
 drawn in the `back` style that `polyline`, `edges`, and `sphere_curve` take — a
 ray dashed where it passes behind an atom:
@@ -96,12 +99,18 @@ How exact it is:
 - Opaque surfaces are painted so that whatever hides another comes after it, and
   each hidden one runs on a little under the edge in front of it, so their
   anti-aliased edges never leave a hairline of background between them.
+- A **stroke** reaches half its width past the fill. A surface whose fill shows
+  whole keeps its whole stroke, even where that overhang runs under a nearer
+  surface, as it does all along the seams of a stroked mesh: a visible edge is
+  drawn at its full width. Where surfaces cross, that can leave half a stroke's
+  width over the nearer one along the edge they meet at.
 
-It costs something: every partly hidden element gains a `<clipPath>`, named
-`{id}-visible` after the element (or `visible-{n}` for one without an id), and
-the hidden part of a line with an id becomes a second path, `{id}-hidden`. A
-layer of a few hundred solids takes a second or two to render, where a layer
-drawn in order takes milliseconds, and its SVG can be twice the size.
+It costs something: every other partly hidden element gains a `<clipPath>`,
+named `{id}-visible` after the element (or `visible-{n}` for one without an id),
+and the hidden part of a line with an id becomes a second path, `{id}-hidden`.
+A layer of a few hundred solids takes a second or two to render, where a layer
+drawn in order takes milliseconds, and its SVG can be twice the size. A mesh
+seen from where it does not fold over itself gains no clip paths at all.
 `shapely` and `contourpy`, which do the clipping, load only when a sorted layer
 first renders.
 

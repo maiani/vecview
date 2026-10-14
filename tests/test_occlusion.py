@@ -14,7 +14,7 @@ import shapely
 import svg
 
 import vecview
-from vecview import OrthographicCamera, Scene
+from vecview import OrthographicCamera, Scene, surface_faces
 
 pytest.importorskip("contourpy")
 
@@ -34,6 +34,20 @@ def clip_region(document: svg.SVG, clip_id: str) -> shapely.Geometry:
     defs = next(el for el in document.elements or [] if isinstance(el, svg.Defs))
     clip = next(el for el in defs.elements or [] if el.id == clip_id)
     (path,) = clip.elements or []
+    return path_region(path)
+
+
+def shown_region(document: svg.SVG, name: str) -> shapely.Geometry:
+    """Where an element shows: its clip path, or the path it was redrawn as."""
+    element = by_id(document)[name]
+    if element.clip_path is not None:
+        return clip_region(document, f"{name}-visible")
+    assert isinstance(element, svg.Path)
+    return path_region(element)
+
+
+def path_region(path: svg.Path) -> shapely.Geometry:
+    """The region a ``<path>`` of straight closed subpaths fills, with even-odd holes."""
     rings, ring = [], []
     for cmd in path.d or []:
         if isinstance(cmd, svg.M) and ring:
@@ -73,7 +87,7 @@ class TestSurfaces:
         s.polygon(0, a, fill="#f4d03f", id="a")
         s.polygon(0, b, fill="#58d68d", id="b")
         document = s.render()
-        regions = {k: clip_region(document, f"{k}-visible") for k in "ab"}
+        regions = {k: shown_region(document, k) for k in "ab"}
         for k in "ab":
             # Halfway out along each of the plane's two in-plane wings, one wing
             # is in front of the other plane and one behind it.
@@ -238,3 +252,41 @@ def test_every_clip_is_a_valid_polygon_at_its_written_precision() -> None:
         rings.append(ring)
         for r in rings:
             assert shapely.Polygon(r).is_valid, clip.id
+
+
+class TestFewerClipPaths:
+    """A clip path only where clipping changes what shows."""
+
+    def test_an_unstroked_polygon_is_redrawn_as_its_visible_part(self) -> None:
+        s = scene()
+        s.polygon(0, [(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)], fill="#f4d03f", id="a")
+        s.polygon(0, [(0, -1, -1), (0, 1, -1), (0, 1, 1), (0, -1, 1)], fill="#58d68d", id="b")
+        document = s.render()
+        assert not any(isinstance(el, svg.Defs) for el in document.elements or [])
+        a = by_id(document)["a"]
+        assert isinstance(a, svg.Path) and a.fill == "#f4d03f" and a.clip_path is None
+        full = shapely.Polygon(CAM.project([(-1, 0, -1), (1, 0, -1), (1, 0, 1), (-1, 0, 1)]))
+        assert 0.3 * full.area < path_region(a).area < 0.7 * full.area
+
+    def test_a_stroked_mesh_that_does_not_fold_needs_no_clip(self) -> None:
+        s = scene()
+        x, y = np.meshgrid(np.linspace(-1, 1, 12), np.linspace(-1, 1, 12), indexing="ij")
+        for face in surface_faces(x, y, 0.2 * np.sin(2 * x) * np.cos(2 * y)):
+            s.polygon(0, face.points, fill="#88f", stroke="#88f", stroke_width=0.6, id=face.name)
+        document = s.render()
+        assert not any(isinstance(el, svg.Defs) for el in document.elements or [])
+        assert len(by_id(document)) == 121
+
+    def test_a_stroked_face_partly_hidden_keeps_its_clip(self) -> None:
+        s = scene()
+        near = 2.0 * CAM.view
+        s.sphere(0, near, 0.5, fill="#c33", id="ball")
+        s.polygon(
+            0,
+            [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)],
+            fill="#ccc",
+            stroke="#000",
+            id="floor",
+        )
+        floor = by_id(s.render())["floor"]
+        assert isinstance(floor, svg.Polygon) and floor.clip_path == "url(#floor-visible)"

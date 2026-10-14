@@ -5,10 +5,12 @@ elements each hide part of the other.  Here every element of the layer is
 described by where it covers the screen and how deep its nearest surface is at
 each screen point, and visibility is decided point by point:
 
-* a **surface** keeps its native SVG element, clipped to the region where no
-  opaque surface is nearer.  Between two planar surfaces that region is bounded
-  by a straight line, found exactly; anywhere else it is the zero contour of
-  the depth difference, traced at sub-pixel resolution;
+* a **surface** is limited to the region where no opaque surface is nearer:
+  its native SVG element clipped to it, or, for an unstroked flat polygon,
+  the region itself drawn in the element's place.  Between two planar
+  surfaces that region is bounded by a straight line, found exactly; anywhere
+  else it is the zero contour of the depth difference, traced at sub-pixel
+  resolution;
 * a **line** is cut where it passes behind an opaque surface, into visible
   runs and hidden runs, which the caller can draw in another style.
 
@@ -74,6 +76,9 @@ class Surface:
     """``(chain id, position)`` for consecutive pieces of one tube, which overlap
     by construction and are one surface: neighbours in a chain never hide each
     other."""
+    redraw: bool = False
+    """Whether the element fills exactly its one piece's outline, unstroked, so
+    that its visible region can be drawn in its place instead of clipping it."""
 
 
 @dataclass
@@ -109,6 +114,13 @@ class Visibility:
     hidden_by: list[int] = field(default_factory=list)
     """The shapes, by index, that hide some of this one, and so must be
     painted after it: where two edges meet, the one in front belongs on top."""
+    redraw: bool = False
+    """Whether ``rings`` is exactly what the surface's element shows, so they can
+    be drawn in its place: set for a :attr:`Surface.redraw` whose outline is a
+    simple polygon."""
+    whole_fill: bool = False
+    """Whether only the stroke's overhang past the fill is hidden.  The fill is
+    then wholly visible, and so are its edges, whose stroke is drawn whole."""
 
 
 def plane_through(screen: Array, depth: Array) -> Plane | None:
@@ -161,7 +173,8 @@ def resolve(
     surfaces: list[tuple[int, Surface]] = [
         (k, s) for k, s in enumerate(shapes) if isinstance(s, Surface)
     ]
-    regions = {k: _region(shapely, s) for k, s in surfaces}
+    cores = {k: _core(shapely, s) for k, s in surfaces}
+    regions = {k: _padded(cores[k], s) for k, s in surfaces}
     occluders = [k for k, s in surfaces if s.opaque and not regions[k].is_empty]
     solid = dict(surfaces)
     # What a surface hides stops a little inside its own outline, so whatever is
@@ -189,15 +202,18 @@ def resolve(
             result[k].hidden_by.append(other)
     if hidden:
         keys = list(hidden)
-        visible = shapely.difference(
-            _array([regions[k] for k in keys]),
-            _array([shapely.union_all(hidden[k]) for k in keys]),
-        )
+        unions = _array([shapely.union_all(hidden[k]) for k in keys])
+        visible = shapely.difference(_array([regions[k] for k in keys]), unions)
         shown = shapely.area(visible) > 1e-3
         # A clip path a twentieth of a screen unit off is invisible, and far smaller.
         visible[shown] = shapely.simplify(visible[shown], 0.05)
-        for k, keep, region in zip(keys, shown, visible, strict=True):
+        # A stroke reaches past the fill; what hides only that overhang -- the
+        # neighbouring quads of a mesh, say -- leaves the fill whole.
+        on_fill = shapely.area(shapely.intersection(_array([cores[k] for k in keys]), unions))
+        for k, keep, region, area in zip(keys, shown, visible, on_fill.tolist(), strict=True):
             result[k].rings = (_rings(shapely, region) or None) if keep else []
+            result[k].whole_fill = solid[k].pad > 0 and area <= 1e-3
+            result[k].redraw = _redrawable(shapely, solid[k])
 
     for k, shape in enumerate(shapes):
         if isinstance(shape, Line):
@@ -219,12 +235,22 @@ def _cover(shapely: Any, piece: Piece) -> Any:
     return shapely.make_valid(shapely.Polygon(piece.outline))
 
 
-def _region(shapely: Any, surface: Surface) -> Any:
-    polygons = [_cover(shapely, piece) for piece in surface.pieces]
-    region = shapely.union_all(polygons)
-    if surface.pad > 0:
-        region = region.buffer(surface.pad, quad_segs=4)
-    return region
+def _core(shapely: Any, surface: Surface) -> Any:
+    """What a surface fills, without its stroke."""
+    return shapely.union_all([_cover(shapely, piece) for piece in surface.pieces])
+
+
+def _padded(core: Any, surface: Surface) -> Any:
+    """What a surface covers: its fill, and its stroke's overhang."""
+    return core.buffer(surface.pad, quad_segs=4) if surface.pad > 0 else core
+
+
+def _redrawable(shapely: Any, surface: Surface) -> bool:
+    """Whether a surface's visible region is exactly what its element would show."""
+    if not surface.redraw or surface.pad > 0 or len(surface.pieces) != 1:
+        return False
+    piece = surface.pieces[0]
+    return piece.width == 0 and bool(shapely.Polygon(piece.outline).is_valid)
 
 
 def _depth_span(shapes: Sequence[Shape]) -> float:

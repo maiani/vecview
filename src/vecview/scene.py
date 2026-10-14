@@ -268,9 +268,15 @@ class Scene(_Drawing):
         are painted back to front over the opaque ones.  Screen-space elements
         go on top in insertion order.  Other layers are untouched.
 
+        An unstroked flat polygon is redrawn as just its visible part, one
+        ``<path>`` with the same id, classes, and style, instead of clipped.  A
+        surface whose fill shows whole keeps its whole stroke, even where the
+        stroke's overhang runs under a nearer surface -- along the seams of a
+        stroked mesh -- so it is not clipped either.
+
         It costs more than drawing in order -- up to a few seconds for a layer
-        of hundreds of solids -- and adds one ``<clipPath>`` per partly hidden
-        element.
+        of hundreds of solids -- and adds one ``<clipPath>`` per other partly
+        hidden element.
 
         A beam inside a translucent slab still belongs on separate layers: a
         translucent face hides nothing, so no rule of visibility orders it.

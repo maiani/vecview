@@ -144,7 +144,7 @@ as yours: `slab-pz` per face, `{id}-profile` for a Gaussian's gradient,
 - A sphere's highlight gradient is named after its colours,
   `ball-{fill}-{highlight}`. Every scene defines it identically, so a collision
   is harmless.
-- An element with no id that a sorted layer clips gets `visible-{n}`, numbered
+- An element with no id that a sorted layer clips gets `visible-{n}` for its clip path, numbered
   within its own scene, so two such scenes on one page can collide. Give the
   elements of a sorted layer ids when the scene will share a page.
 

@@ -96,7 +96,8 @@ right.
 
 A lattice of hundreds of atoms is the opposite case. `scene.sort_by_depth(layer)`
 has one layer decide visibility by depth, point by point: each element keeps its
-native shape, clipped to what shows of it, so planes can cross, a coil can wrap
+native shape, clipped to what shows of it (an unstroked flat polygon is simply
+redrawn as its visible part), so planes can cross, a coil can wrap
 its core, and a bond can run into an atom, and lines are dropped or dashed
 exactly where they pass behind something. Every other layer is untouched.
 `Camera.visible()` and `faces(..., cull=True)` cover the one unambiguous case,

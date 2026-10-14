@@ -5,6 +5,18 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Changed
+
+- A depth-sorted layer emits far fewer clip paths.  An unstroked flat polygon
+  that is partly hidden is redrawn as its visible part -- one `<path>` with the
+  same id, classes, and style -- instead of a `<polygon>` with a
+  `{id}-visible` clip path.  A surface whose fill shows whole is no longer
+  clipped where only its stroke's overhang runs under a nearer surface, so a
+  stroked mesh seen from where it does not fold over itself gains no clip paths
+  at all: a 45 x 45 stroked height field goes from 1774 clip paths and 1.09 MB
+  to none and 0.26 MB.  Where surfaces cross, half a stroke's width may now lie
+  over the nearer one along the edge they meet at.
+
 ### Fixed
 
 - `cylinder(..., ends=False)` and `cone(..., end=False)` no longer stroke the

@@ -115,6 +115,22 @@ def _ball_axes(cam: ParallelCamera, radius: float) -> Array:
     return axes
 
 
+def _visible_part(element: svg.Polygon, rings: list[Array]) -> svg.Path:
+    """An unstroked polygon redrawn as just its visible region: one ``<path>``.
+
+    The same pixels as clipping the polygon to ``rings``, without the clip path
+    or the hidden geometry; the id, classes, and style carry over.
+    """
+    attrs = {
+        f.name: getattr(element, f.name)
+        for f in dataclasses.fields(element)
+        if f.name != "points" and getattr(element, f.name) is not None
+    }
+    if len(rings) > 1:
+        attrs["fill_rule"] = "evenodd"
+    return svg.Path(d=_path(rings, closed=True), **attrs)
+
+
 class _Canvas:
     """One projection of a scene: its recorded calls replayed against a camera.
 
@@ -376,8 +392,10 @@ class _Canvas:
                 if shape.opaque:
                     self._opaque.add(seq)
                 rings = seen.rings
-                if rings is None:
+                if rings is None or seen.whole_fill:
                     items.append((layer, seq, element))
+                elif rings and seen.redraw and isinstance(element, svg.Polygon):
+                    items.append((layer, seq, _visible_part(element, rings)))
                 elif rings:
                     name = getattr(element, "id", None)
                     clip = f"{name}-visible" if name else f"visible-{seq}"
@@ -415,7 +433,7 @@ class _Canvas:
 
             def surface() -> Surface | None:
                 piece = self._planar_piece(pts)
-                return None if piece is None else Surface([piece], opaque, pad)
+                return None if piece is None else Surface([piece], opaque, pad, redraw=True)
 
             self._shape(surface)
 
