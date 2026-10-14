@@ -179,6 +179,22 @@ class TestOpenCylinder:
             assert not any(isinstance(c, svg.Arc) for c in edge.d)
 
 
+class TestCornerStyles:
+    """A join or cap given for a whole solid applies where the solid has corners."""
+
+    def test_cylinder_keeps_the_join_on_its_body(self) -> None:
+        scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
+        scene.cylinder(0, (0, 0, 0), (0, 0, 2), 0.5, stroke="#000", stroke_linejoin="round", id="c")
+        (group,) = scene.render().elements or []
+        body, disk = group.elements
+        assert body.stroke_linejoin == "round" and disk.id == "c-end1"
+
+    def test_sphere_accepts_a_join(self) -> None:
+        scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))
+        scene.sphere(0, (0, 0, 0), 1.0, stroke="#000", stroke_linejoin="round", id="s")
+        assert 'id="s"' in str(scene.render())
+
+
 class TestSlicedCylinder:
     def build(self, **style: object) -> Scene:
         scene = Scene(OrthographicCamera(-66.0, 14.0, 10.0))

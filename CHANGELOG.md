@@ -12,6 +12,10 @@ All notable changes to this project are documented here, following
   body `{id}-body` and its two sides as a separate `{id}-edge` path, so a beam
   of light is outlined along its length only.  A sliced open cylinder strokes
   no end arc either.
+- `sphere`, `cylinder`, `cone`, and `arrow3d` accept `stroke_linejoin`,
+  `stroke_linecap`, and `stroke_miterlimit` instead of raising `TypeError`.
+  They apply to the outline paths; circles and ellipses -- spheres and end
+  disks -- have no corners or ends, so they are left off there.
 
 ## [0.3.0] - 2026-10-08
 

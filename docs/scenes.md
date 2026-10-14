@@ -257,7 +257,9 @@ so curved solids have **exact, closed-form outlines**, and each is drawn as one:
   inside two atoms, or a beam of light, wants. An open tube's rims are not edges,
   so its `stroke` outlines the two sides only: the body `{id}-body` is filled
   unstroked and the sides are a separate `{id}-edge` path over it.
-  `end_style` restyles the disks, typically a lighter `fill`.
+  `end_style` restyles the disks, typically a lighter `fill`. A `stroke_linejoin`
+  or `stroke_linecap` applies to the outline paths and is left off the disks,
+  which have no corners.
 - `cone` is `cylinder` with `r1=0`: two tangents from the apex and one arc.
 - `arrow3d` is a cylindrical shaft and a conical head in one `<g>`, ordered within
   the group by which end is nearer, so it reads as a solid from every side. The

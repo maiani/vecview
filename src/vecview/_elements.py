@@ -92,13 +92,22 @@ def _ellipse_axes(axes: Array) -> tuple[float, float, float, Array]:
     return float(s[0]), float(s[1]), angle, major
 
 
+_CORNERS = frozenset({"stroke_linejoin", "stroke_linecap", "stroke_miterlimit"})
+"""Stroke attributes that only shape corners and open ends."""
+
+
 def _ellipse_element(center: Array, axes: Array, **style: Style) -> svg.Element:
     """The ellipse ``center + axes @ (cos t, sin t)`` as a native SVG shape.
 
     A ``<circle>`` when the semi-axes agree -- a sphere, or a face-on disk,
     under an orthographic camera -- and a rotated ``<ellipse>`` otherwise, so
     the result stays a shape Inkscape edits as one rather than a path.
+
+    A smooth closed curve has no corners or ends, so the join and cap of a
+    style shared with the rest of a solid are left off: they would do nothing,
+    and svg.py has no such attributes for these shapes.
     """
+    style = {k: v for k, v in style.items() if k not in _CORNERS}
     rx, ry, angle, _ = _ellipse_axes(axes)
     cx, cy = _num(center[0]), _num(center[1])
     if abs(rx - ry) <= 1e-9 * max(rx, 1.0):
