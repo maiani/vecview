@@ -143,6 +143,42 @@ class TestFrustumOutline:
             Scene(OrthographicCamera(35.0, 24.0, 10.0)).cylinder(0, (1, 1, 1), (1, 1, 1), 0.2)
 
 
+class TestOpenCylinder:
+    """An open tube -- a beam of light, a bond -- has no rims to stroke."""
+
+    def elements(self, **kwargs: object) -> list[svg.Element]:
+        scene = Scene(OrthographicCamera(-30.0, 25.0, 40.0))
+        scene.cylinder(
+            0, (0, 0, 0), (3, 0, 0), 0.5, fill="#ffd", stroke="#a80", id="band", **kwargs
+        )
+        (group,) = scene.render().elements or []
+        return list(group.elements)
+
+    def test_strokes_only_the_two_sides(self) -> None:
+        body, edge = self.elements(ends=False)
+        assert (body.id, edge.id) == ("band-body", "band-edge")
+        assert body.stroke is None and edge.fill == "none"
+        assert not any(isinstance(c, svg.Arc) for c in edge.d)
+        assert sum(isinstance(c, svg.L) for c in edge.d) == 2
+
+    def test_closed_ends_keep_the_stroked_outline(self) -> None:
+        body, *_ = self.elements()
+        assert body.stroke == "#a80" and sum(isinstance(c, svg.Arc) for c in body.d) == 2
+
+    def test_unstroked_open_tube_is_one_path(self) -> None:
+        scene = Scene(OrthographicCamera(-30.0, 25.0, 40.0))
+        scene.cylinder(0, (0, 0, 0), (3, 0, 0), 0.5, ends=False, fill="#ffd", id="band")
+        (group,) = scene.render().elements or []
+        assert [el.id for el in group.elements] == ["band-body"]
+
+    def test_sliced_strokes_no_end_arc(self) -> None:
+        scene = Scene(OrthographicCamera(-66.0, 14.0, 10.0))
+        scene.cylinder(0, (-2, 0, 0), (2, 0, 0), 0.5, slices=3, ends=False, stroke="#000")
+        for group in scene.render().elements or []:
+            edge = group.elements[1]
+            assert not any(isinstance(c, svg.Arc) for c in edge.d)
+
+
 class TestSlicedCylinder:
     def build(self, **style: object) -> Scene:
         scene = Scene(OrthographicCamera(-66.0, 14.0, 10.0))

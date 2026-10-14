@@ -606,7 +606,10 @@ class _Drawing:
             r1: Radius at ``p1``; defaults to ``radius``. ``0`` is a cone, for
                 which :meth:`cone` reads better.
             ends: Whether to draw the end disks.  ``False`` leaves an open tube,
-                which is what a bond hidden inside two atoms wants.
+                which is what a bond hidden inside two atoms, or a beam of
+                light, wants: its rims are not edges, so a ``stroke`` outlines
+                only the two sides, as a separate ``{id}-edge`` path over the
+                unstroked ``{id}-body``.
             end_style: Presentation attributes for the end disks, over
                 ``style`` -- a lighter ``fill`` for a flat-shaded cap, say.
             highlight: A lighter colour shading the body across its width,
@@ -663,7 +666,8 @@ class _Drawing:
 
         :meth:`cylinder` with ``r1=0``, and the same exact outline: the two
         tangents from the apex and one elliptical arc.  ``end`` draws the base
-        disk when it faces the camera.
+        disk when it faces the camera; without it the cone is open, and a
+        ``stroke`` outlines only the two tangents.
         """
         _check_axis(base, apex, radius, 0.0)
         _check_highlight(style, highlight, needs_id=True)

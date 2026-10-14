@@ -254,8 +254,10 @@ so curved solids have **exact, closed-form outlines**, and each is drawn as one:
   outer common tangents of the projected end circles, which have a closed form.
   The end disk that faces the camera, if any, is drawn over the body as a native
   ellipse. `r1` makes a frustum and `ends=False` an open tube — what a bond hidden
-  inside two atoms wants. `end_style` restyles the disks, typically a lighter
-  `fill`.
+  inside two atoms, or a beam of light, wants. An open tube's rims are not edges,
+  so its `stroke` outlines the two sides only: the body `{id}-body` is filled
+  unstroked and the sides are a separate `{id}-edge` path over it.
+  `end_style` restyles the disks, typically a lighter `fill`.
 - `cone` is `cylinder` with `r1=0`: two tangents from the apex and one arc.
 - `arrow3d` is a cylindrical shaft and a conical head in one `<g>`, ordered within
   the group by which end is nearer, so it reads as a solid from every side. The
@@ -280,7 +282,7 @@ An `id` goes on the sphere or the group, and the parts are named from it:
 
 | Call | Parts |
 | --- | --- |
-| `cylinder`, `cone` | `{id}-body`, and the end disk `{id}-end0` at `p0` or `base`, or `{id}-end1` at `p1` |
+| `cylinder`, `cone` | `{id}-body`, and the end disk `{id}-end0` at `p0` or `base`, or `{id}-end1` at `p1`; open and stroked, `{id}-edge` for the sides |
 | `arrow3d` | `{id}-shaft` and `{id}-head`, with their disks `{id}-shaft-end0` and `{id}-head-end0` |
 | `tube` | one group per piece: `{id}-0`, `{id}-1`, … |
 

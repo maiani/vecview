@@ -214,9 +214,19 @@ class _SolidCanvas(_Canvas):
                 self._shade_across(f"{parts}-shade", c0, c1, axes, r0, fill, highlight)
             )
         label: dict[str, Style] = {} if name is None else {"id": name}
-        elements: list[svg.Element] = [
-            svg.Path(d=_frustum_outline(c0, c1, axes, r0, r1), **label, **body)
-        ]
+        outline = _frustum_outline(c0, c1, axes, r0, r1)
+        elements: list[svg.Element]
+        if any(ends) or not body.get("stroke") or body.get("stroke") == "none":
+            elements = [svg.Path(d=outline, **label, **body)]
+        else:
+            # Open at both ends: the rims are not edges, so only the sides are stroked.
+            fill = {k: v for k, v in body.items() if not k.startswith("stroke")}
+            edge = {k: v for k, v in body.items() if k.startswith("stroke")}
+            sides = _frustum_outline(c0, c1, axes, r0, r1, closed=False, arcs=(False, False))
+            elements = [
+                svg.Path(d=outline, **label, **fill),
+                svg.Path(d=sides, fill="none", **_named(parts, "edge"), **edge),
+            ]
         disk: dict[str, Style] = {**style, **(end_style or {})}
         toward = float(np.dot(unit(axis), cam.view))
         for k, (c, r, faces) in enumerate(((c0, r0, toward < 0), (c1, r1, toward > 0))):
@@ -288,7 +298,9 @@ class _SolidCanvas(_Canvas):
             if edge.get("stroke"):
                 parts.append(
                     svg.Path(
-                        d=_frustum_outline(qa, qb, axes, ra, rb, closed=False, arcs=(first, last)),
+                        d=_frustum_outline(
+                            qa, qb, axes, ra, rb, closed=False, arcs=(first and ends, last and ends)
+                        ),
                         fill="none",
                         **_named(base, f"{k}-edge"),
                         **edge,

@@ -5,6 +5,14 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Fixed
+
+- `cylinder(..., ends=False)` and `cone(..., end=False)` no longer stroke the
+  elliptical rims of the open ends.  A stroked open tube is now the unstroked
+  body `{id}-body` and its two sides as a separate `{id}-edge` path, so a beam
+  of light is outlined along its length only.  A sliced open cylinder strokes
+  no end arc either.
+
 ## [0.3.0] - 2026-10-08
 
 Animation is new in this release, and its API may still change before 1.0.
