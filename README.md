@@ -156,6 +156,7 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | `annulus(center, r_in, r_out)` | a ring footprint with its hole, for a washer or a microring |
 | `rect_shape`, `circle_shape`, `ellipse_shape` | flat outlines in any plane |
 | `arrow_shape`, `double_arrow_shape` | flat arrows with a shaft and head |
+| `path_arrow_shape(path, normal, ...)` | a flat arrow that follows a curve in a plane |
 | `sine_ribbon` | a transverse wave along an axis, for `polyline`; the amplitude may be an envelope |
 | `arc_shape`, `helix` | an arc between two directions; a coil or spin spiral |
 | `surface_faces(x, y, z)` | the quads of a sampled surface, such as a band structure |

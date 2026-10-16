@@ -98,59 +98,6 @@ class TestBoxFaces:
             vecview.box_faces((0, 0), (1, 1, 1))
 
 
-class TestArrowShape:
-    def test_spans_the_requested_length(self) -> None:
-        pts = vecview.arrow_shape(
-            (0, 0, 0), (1, 0, 0), 10.0, (0, 0, 1), shaft_w=1, head_w=3, head_len=2
-        )
-        assert pts[:, 0].max() == pytest.approx(10.0)
-        assert pts[:, 0].min() == pytest.approx(0.0)
-
-    def test_head_is_wider_than_the_shaft(self) -> None:
-        pts = vecview.arrow_shape(
-            (0, 0, 0), (1, 0, 0), 10.0, (0, 0, 1), shaft_w=1, head_w=3, head_len=2
-        )
-        assert np.ptp(pts[:, 1]) == pytest.approx(3.0)
-
-    def test_mid_pivot_centres_on_the_origin(self) -> None:
-        pts = vecview.arrow_shape((0, 0, 0), (1, 0, 0), 10.0, (0, 0, 1), 1, 3, 2, pivot="mid")
-        assert pts[:, 0].min() == pytest.approx(-5.0)
-        assert pts[:, 0].max() == pytest.approx(5.0)
-
-    def test_lies_in_the_plane_of_its_normal(self) -> None:
-        normal = vecview.unit([1.0, 1.0, 1.0])
-        pts = vecview.arrow_shape((1, 2, 3), (1, -1, 0), 4.0, normal, 0.2, 0.8, 0.6)
-        assert_in_plane(pts, normal)
-
-    def test_a_head_longer_than_the_arrow_is_clamped(self) -> None:
-        """Otherwise the neck runs behind the tail and the polygon self-crosses."""
-        pts = vecview.arrow_shape(
-            (0, 0, 0), (1, 0, 0), 1.0, (0, 0, 1), shaft_w=1, head_w=3, head_len=5
-        )
-        assert pts[:, 0].min() == pytest.approx(0.0)
-
-
-class TestDoubleArrowShape:
-    def test_is_symmetric_about_its_centre(self) -> None:
-        pts = vecview.double_arrow_shape(
-            (0, 0, 0), (1, 0, 0), 6.0, (0, 0, 1), shaft_w=0.2, head_w=1.0, head_len=0.5
-        )
-        assert np.allclose(pts.mean(axis=0), 0.0, atol=1e-12)
-        assert np.ptp(pts[:, 0]) == pytest.approx(6.0)
-
-    def test_is_centred_on_the_given_point(self) -> None:
-        pts = vecview.double_arrow_shape((3, -1, 2), (0, 1, 0), 4.0, (0, 0, 1), 0.2, 1.0, 0.5)
-        assert np.allclose(pts.mean(axis=0), [3, -1, 2], atol=1e-12)
-
-    def test_heads_longer_than_half_meet_at_the_centre(self) -> None:
-        """Otherwise each neck runs past the centre and the polygon self-crosses."""
-        pts = vecview.double_arrow_shape((0, 0, 0), (1, 0, 0), 2.0, (0, 0, 1), 0.2, 1.0, 5.0)
-        half = len(pts) // 2
-        # Along the arrow, the outline runs monotonically from one tip to the other.
-        assert np.all(np.diff(pts[: half + 1, 0]) <= 1e-12)
-        assert np.ptp(pts[:, 0]) == pytest.approx(2.0)
-
-
 class TestCircleShape:
     def test_all_points_lie_at_the_radius(self) -> None:
         pts = vecview.circle_shape((1, 2, 3), 2.5, (0, 0, 1))

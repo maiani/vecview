@@ -237,9 +237,10 @@ one. Draw it with [`Scene.tube`](scenes.md#curved-solids) for a coil, or
 ```python
 vecview.arrow_shape(origin, direction, length, normal, shaft_w, head_w, head_len, pivot="tail")
 vecview.double_arrow_shape(center, direction, length, normal, shaft_w, head_w, head_len)
+vecview.path_arrow_shape(path, normal, shaft_w, head_w, head_len)
 ```
 
-Both are **flat polygons**, not strokes — they lie in the plane through their
+All three are **flat polygons**, not strokes — they lie in the plane through their
 anchor point with the given `normal`, and so foreshorten with the geometry they
 label. That is the reason to prefer them over a stroked line with a marker: an
 in-plane arrow on a slab face should compress as the slab does.
@@ -271,6 +272,29 @@ about `center`, no direction implied.
 A `head_len` too long for the arrow is clamped rather than producing a
 self-crossing polygon: to the whole arrow in `arrow_shape`, and to half of it in
 `double_arrow_shape`, where the two heads then meet at the centre.
+
+### Curved arrows
+
+`path_arrow_shape` bends an arrow along a path: a flow routed round an obstacle,
+a circulation, a current turning a corner. The shaft is the path widened to
+`shaft_w` in the plane of `normal`, mitred at every vertex, and the head takes
+the last `head_len` of the path's length, pointing from there to its end. Pass a
+finely sampled curve, such as an `arc_shape`:
+
+```python
+loop = vecview.arc_shape((0, 0, 0.01), (1, 0, 0), (0, 1, 0), 1.2, 200, 340, n=64)
+scene.polygon(
+    15,
+    vecview.path_arrow_shape(loop, (0, 0, 1), shaft_w=0.08, head_w=0.25, head_len=0.25),
+    fill="#2f6fb0",
+    id="circulation",
+)
+```
+
+A two-point path gives exactly `arrow_shape`, and a `head_len` longer than the
+path is clamped the same way. Every point of the path must lie in the plane of
+`normal`. A path that bends tighter than half the shaft's width, or turns back on
+itself, raises `ValueError` rather than drawing a shaft that folds over.
 
 ## Surfaces
 

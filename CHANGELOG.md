@@ -7,6 +7,11 @@ All notable changes to this project are documented here, following
 
 ### Added
 
+- `path_arrow_shape(path, normal, shaft_w, head_w, head_len)`: a flat arrow
+  that follows a path in a plane, its shaft mitred at every vertex and its head
+  on the last `head_len` of the path. A two-point path gives exactly
+  `arrow_shape`; a path that leaves its plane, folds the shaft, or turns back
+  raises `ValueError`.
 - `annulus(center, r_in, r_out, n, *, theta0_deg=0)`: a ring footprint,
   `Region(outer, [inner])`, for washers, microrings, and loops. `annulus_sector`
   keeps returning one outline, and a full turn raises, pointing to `annulus`.

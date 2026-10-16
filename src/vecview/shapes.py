@@ -9,7 +9,7 @@ same polygon can be drawn twice with different fills, or reused as a clip path.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from itertools import combinations
+from itertools import combinations, pairwise
 from typing import Literal, NamedTuple
 
 import numpy as np
@@ -371,6 +371,79 @@ def arrow_shape(
             base - s * shaft_w / 2,
         ]
     )
+
+
+def path_arrow_shape(
+    path: Points3,
+    normal: Point3,
+    shaft_w: float,
+    head_w: float,
+    head_len: float,
+) -> Array:
+    """Flat arrow following ``path`` in the plane with the given normal.
+
+    The shaft is the path widened to ``shaft_w`` in that plane, mitred at each
+    vertex; the head takes the last ``head_len`` of the path's length and points
+    from there to its end.  A two-point path gives exactly :func:`arrow_shape`.
+    Pass a finely sampled curve -- an arc, a Bézier, a route around an
+    obstacle -- for a smooth arrow.
+
+    Args:
+        path: Points from tail to tip, all in one plane perpendicular to ``normal``.
+        normal: Normal of that plane.
+        shaft_w: Width of the shaft.
+        head_w: Width of the head at its widest.
+        head_len: Length of the head, measured back along the path from the tip.
+
+    Raises:
+        ValueError: If the path has fewer than two distinct points, leaves the
+            plane, or bends tighter than half the shaft's width, where the
+            widened shaft would fold over itself.
+    """
+    pts = as_points(path)
+    pts = pts[np.r_[True, np.any(np.diff(pts, axis=0) != 0, axis=1)]]
+    if len(pts) < 2:
+        raise ValueError("path_arrow_shape needs at least two distinct points")
+    n = unit(normal)
+    size = float(np.ptp(pts, axis=0).max())
+    if np.abs((pts - pts[0]) @ n).max() > 1e-9 * max(size, 1.0):
+        raise ValueError("path_arrow_shape: the path must lie in a plane perpendicular to normal")
+
+    # Cut the path where the head begins, head_len back from the tip.
+    steps = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    run = np.r_[0.0, np.cumsum(steps)]
+    at = run[-1] - head_len
+    tip = pts[-1]
+    if at <= 0.0:  # all head, as arrow_shape clamps it
+        neck, shaft = pts[0], pts[[0, 0]]
+    else:
+        k = min(int(np.searchsorted(run, at, side="right")), len(pts) - 1)
+        neck = pts[k - 1] + (pts[k] - pts[k - 1]) * (at - run[k - 1]) / steps[k - 1]
+        # A neck in the first half of an edge takes the place of the vertex
+        # before it, so the shaft never ends on a sliver of an edge, whose
+        # mitred outline would fold over.
+        drop = k > 1 and at - run[k - 1] < steps[k - 1] / 2
+        shaft = np.vstack([pts[: k - 1 if drop else k], neck])
+    s = unit(np.cross(n, tip - neck))  # across the head
+    # The shaft ends square to the path, not to the head's chord, which on a
+    # curve turns away from it.
+    onward = unit(np.cross(n, pts[k] - neck)) if at > 0.0 and np.any(pts[k] != neck) else s
+
+    # Each vertex is offset to where the offsets of its two edges meet: a miter.
+    across = [unit(np.cross(n, b - a)) if np.any(b != a) else s for a, b in pairwise(shaft)]
+    before, after = [across[0], *across], [*across, onward]
+    offsets = []
+    for u, v in zip(before, after, strict=True):
+        cos = float(u @ v)
+        if cos < -0.9:
+            raise ValueError("path_arrow_shape: the path turns back on itself")
+        offsets.append((u + v) / (1.0 + cos) * shaft_w / 2)
+    left, right = shaft + offsets, shaft - offsets
+    edges = np.diff(shaft, axis=0)
+    for side in (left, right):
+        if np.any(np.einsum("ij,ij->i", np.diff(side, axis=0), edges) < 0):
+            raise ValueError("path_arrow_shape: the path bends tighter than half the shaft width")
+    return np.vstack([left, neck + s * head_w / 2, tip, neck - s * head_w / 2, right[::-1]])
 
 
 def double_arrow_shape(
@@ -782,6 +855,7 @@ __all__ = [
     "ellipse_shape",
     "helix",
     "in_plane_dir",
+    "path_arrow_shape",
     "prism_faces",
     "rect_shape",
     "sine_ribbon",
