@@ -5,6 +5,8 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-16
+
 ### Added
 
 - `path_arrow_shape(path, normal, shaft_w, head_w, head_len)`: a flat arrow
