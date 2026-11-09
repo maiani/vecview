@@ -38,8 +38,10 @@ on its own side.
     `_animation_svg.py` and `_animation_refs.py`. `_drawing.py` imports it only
     to check what `slot` is given, and `_occlusion.py` only for a type.
     `shapes.py`, `camera.py`, `projections.py`, `_place.py`,
-    `_solid_drawing.py`, `_planar.py`, `_tracks.py`, and `_transforms.py` never
-    do.
+    `_solid_drawing.py`, `_planar.py`, `_tracks.py`, `_transforms.py`, `_face.py`,
+    and `_cut.py` never do.
+  - `shapes.py` re-exports `Face` from `_face.py`, which `_cut.py` (cutting a
+    solid open) shares, and `cut` from `_cut.py`.
 - `animation.py` samples a pure time-to-scene callback through the static
   renderer and writes once what every frame draws alike. A scene holding tracks
   is that callback underneath: a drawing call given a `Track` anywhere in its

@@ -54,8 +54,9 @@ dimetric, and trimetric cases.
   Rasterizing, PDF, and TeX belong to a consumer, not here. A test enforces
   this. `shapely` clips polygons and `contourpy` traces depth contours; both
   load only when they are first needed.
-- **Keep the three-way split**: `shapes` knows only numbers, `camera` and
-  `projections` know projection, and `scene` and `animation`, with their
+- **Keep the three-way split**: `shapes` knows only numbers, and so do its
+  private helpers `_face` (the `Face` record) and `_cut`; `camera`
+  and `projections` know projection; and `scene` and `animation`, with their
   private rendering modules (`_elements`, `_canvas`, `_solids`,
   `_animation_svg`, `_animation_refs`), are the only code that touches
   `svg.py`. Geometry that needs a camera to be computed does not belong in
