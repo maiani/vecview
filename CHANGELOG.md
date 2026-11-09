@@ -5,6 +5,11 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- Python 3.15 is supported and tested in CI, beside 3.12 to 3.14. The
+  development lock takes shapely 2.2, the first release with 3.15 wheels.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added

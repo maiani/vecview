@@ -21,7 +21,7 @@ VecView is alpha: the API may change before 1.0.
 
 ## Install
 
-Install VecView with pip (Python 3.12 or newer; tested on 3.12–3.14):
+Install VecView with pip (Python 3.12 or newer; tested on 3.12–3.15):
 
 ```bash
 python -m pip install vecview

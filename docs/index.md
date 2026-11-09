@@ -12,7 +12,7 @@ camera, world-space glyph geometry, and an explicit layer stack.
 python -m pip install vecview
 ```
 
-Python 3.12 or newer is required; 3.12–3.14 are tested. VecView is alpha and its
+Python 3.12 or newer is required; 3.12–3.15 are tested. VecView is alpha and its
 API may change before 1.0.
 
 ## The shape of the package

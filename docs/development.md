@@ -134,8 +134,8 @@ uv run zensical build
 `.github/workflows/publish.yml` publishes tags named `v<version>`. It checks
 that the tag matches `pyproject.toml`, runs the CI matrix against that tag,
 builds both distributions (the wheel from the sdist), and runs
-`twine check --strict` before publishing the same artifacts. Python 3.15 is
-experimental; its job may fail while the supported 3.12–3.14 jobs must pass.
+`twine check --strict` before publishing the same artifacts. Every job, Python
+3.12 to 3.15, must pass.
 
 Publishing goes through a
 [Trusted Publisher on PyPI](https://docs.pypi.org/trusted-publishers/), configured
