@@ -477,6 +477,72 @@ class _Drawing:
         )
 
     @_trackable
+    def line_art(
+        self,
+        layer: int,
+        faces: Iterable[Face],
+        *,
+        crease_deg: float = 30.0,
+        back: Mapping[str, Style] | None = None,
+        **style: Style,
+    ) -> None:
+        """Ink a solid as a technical drawing: its silhouette, creases, and boundaries.
+
+        For any solid given as faces -- curved ones built of facets, such as
+        :func:`~vecview.shapes.revolve` returns, and non-convex ones -- this
+        draws the lines a draughtsman would and leaves out the seams between
+        facets of one smooth surface.  An edge is drawn where one face at it
+        faces the camera and another does not (the silhouette, which each
+        camera recomputes), where its faces meet at more than ``crease_deg``
+        (a rim, a corner, the edge of a cut), and where it bounds one face only
+        (the rim of an open surface).  Runs of drawn edges are joined into
+        continuous lines, so a rim is one stroke, not a row of segments.
+
+        On a closed solid, a line whose faces all face away lies on the far
+        side.  It is dropped, or drawn in the ``back`` style -- the dashed
+        hidden lines of a technical drawing.  What else hides a line, another
+        solid or a fold of this one, is found in a layer passed to
+        :meth:`~vecview.scene.Scene.sort_by_depth`, where the solid's own faces,
+        drawn unstroked with :meth:`faces` in the same layer, hide what is
+        behind them::
+
+            body = vecview.revolve(profile, sweep_deg=(45, 315))
+            scene.faces(20, body, fill="white")
+            scene.line_art(20, body, stroke="black", back={"stroke_dasharray": "3 2"})
+            scene.sort_by_depth(20)
+
+        There a near-side line hidden by a surface takes the ``back`` style,
+        and a far-side one disappears.
+
+        Args:
+            layer: Draw order.
+            faces: Faces of the solid, sharing vertices exactly where they meet.
+            crease_deg: The angle between the normals of two faces beyond which
+                the edge between them is a crease, in degrees.  Raise it for a
+                coarsely faceted surface whose seams would otherwise show.
+            back: Style overrides for lines on the far side, or ``None`` to
+                omit them.
+            **style: SVG presentation attributes; ``fill`` defaults to none. An
+                ``id`` becomes ``{id}-front`` and ``{id}-back``.
+
+        Raises:
+            ValueError: Unless ``crease_deg`` lies in ``[0, 180]``.
+        """
+        if not 0.0 <= crease_deg <= 180.0:
+            raise ValueError(f"crease_deg must lie in [0, 180], got {crease_deg}")
+        given = list(faces)
+        base = style.pop("id", None)
+        self._add(
+            "line_art",
+            layer,
+            given,
+            crease_deg=crease_deg,
+            back=back,
+            **({} if base is None else {"id": base}),
+            **style,
+        )
+
+    @_trackable
     def edges(
         self,
         layer: int,

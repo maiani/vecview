@@ -130,6 +130,8 @@ native element or group:
 - `highlight="#fff"` shades any of them with a gradient: a fill style, fixed on
   screen, not a lighting model.
 
+`line_art(layer, faces)` inks any faceted solid as a technical drawing --
+silhouette, creases, and rims, without the seams between facets -- and
 `edges(layer, faces, back={...})` draws a convex solid's edges and dashes the
 hidden ones, and `sphere_curve` splits a curve on a sphere where it passes behind.
 Labels can be `svg.TSpan` runs, for subscripts.
@@ -162,6 +164,7 @@ cameras, styles, or SVG, which keeps them testable as numbers:
 | `surface_faces(x, y, z)` | the quads of a sampled surface, such as a band structure |
 | `convex_polyhedron(vertices)` | a Brillouin zone or coordination polyhedron from its corners |
 | `trim_corners(faces, r)` | faces cut back from atoms sitting on their corners |
+| `revolve(profile, sweep_deg=...)` | an `(r, z)` profile turned about an axis, whole or part-way with its section capped: a lathe |
 | `cut(faces, origin, normal)` | a solid cut open by a plane, the cut capped: a cutaway |
 | `in_plane_dir(angle_deg, u, v)` | a unit direction at an angle within a plane |
 

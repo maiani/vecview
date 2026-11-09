@@ -29,6 +29,7 @@ from vecview._elements import (
     _text_content,
     _text_length,
 )
+from vecview._line_art import feature_lines
 from vecview._occlusion import (
     Line,
     Piece,
@@ -685,6 +686,35 @@ class _Canvas:
                 # a hidden one disappears.
                 hide = back if visible else None
                 self._shape(functools.partial(self._line, group, attrs, hide))
+
+    def line_art(
+        self,
+        layer: int,
+        faces: Iterable[Face],
+        *,
+        crease_deg: float = 30.0,
+        back: Mapping[str, Style] | None = None,
+        **style: Style,
+    ) -> None:
+        """A faceted solid's silhouette, creases, and boundaries, as one path."""
+        given = list(faces)
+        base = style.pop("id", None)
+        style.setdefault("fill", "none")
+        facing = {id(face) for face in self.cam.visible(given)}
+        near, far = feature_lines(given, [id(face) in facing for face in given], crease_deg)
+        for runs, extra, suffix, hide in ((near, {}, "front", back), (far, back, "back", None)):
+            if extra is None or not runs:
+                continue
+            projected = [self.cam.project(run) for run in runs]
+            for run in projected:
+                self._grow(run)
+            attrs: dict[str, Style] = {**style, **extra}
+            if base is not None:
+                attrs["id"] = f"{base}-{suffix}"
+            self._emit(layer, svg.Path(d=_path(projected), **attrs), self._depth(np.vstack(runs)))
+            # Behind another surface, a near-side line takes the back style and
+            # a far-side one disappears, as for edges.
+            self._shape(functools.partial(self._line, runs, attrs, hide))
 
     def text(
         self,

@@ -5,6 +5,25 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+### Added
+
+- `revolve(profile, *, sweep_deg=(0, 360), axis=(0, 0, 1), origin=(0, 0, 0), n=96)`:
+  an `(r, z)` profile, with holes if it has them, turned about an axis into a
+  closed solid of faceted walls. A partial turn is capped by the profile as
+  faces `"start"` and `"end"`, the section of a cutaway. Facets are named
+  `"side-{i}-{j}"` by profile edge and step; facets beside the axis are
+  triangles.
+- `Scene.line_art(layer, faces, *, crease_deg=30.0, back=None, **style)`: a
+  solid's silhouette, creases, and open rims as continuous lines, without the
+  seams between facets, so a faceted solid reads as curved and any solid can
+  be drawn as a technical drawing. On a closed solid the far side takes the
+  `back` style; in a sorted layer, anything in front hides lines exactly.
+
+### Fixed
+
+- `vecview.shapes.__all__` lists `extrude`, which `from vecview.shapes import *`
+  missed.
+
 ## [0.4.0] - 2026-10-16
 
 ### Added

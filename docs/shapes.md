@@ -347,6 +347,42 @@ scene.faces(10, vecview.trim_corners(octahedron, r_o), fill="#6f9fd8", fill_opac
 scene.edges(10, octahedron, trim=r_o, stroke="#2d5c94")
 ```
 
+## Turned solids
+
+```python
+vecview.revolve(profile, *, sweep_deg=(0, 360), axis=(0, 0, 1), origin=(0, 0, 0), n=96)  ->  list[Face]
+```
+
+The solid a lathe makes: a profile turned about an axis.  The profile is drawn
+in a half-plane through the axis as `(r, z)` pairs — `r >= 0` the distance from
+the axis, `z` the height along it from `origin` — so a rectangle away from the
+axis turns into a thick tube, one against it into a cylinder, and a stepped or
+curved outline into a bobbin, a flask, or the electrodes of a vacuum tube.  A
+`Region` with holes leaves hollow rings inside.
+
+The turn runs over `sweep_deg`, counter-clockwise about `axis` from `+x` (from
+`+y` for an axis along `x`), as `annulus_sector` measures.  Anything short of a
+full turn leaves the solid open, capped by the profile itself as faces
+`"start"` and `"end"`: the section of a cutaway, in a style of its own.
+
+```python
+shell = vecview.revolve(vecview.outlines.rect((2.6, 0), (3.0, 5)), sweep_deg=(30, 300))
+walls = [f for f in shell if f.name not in ("start", "end")]
+section = [f for f in shell if f.name in ("start", "end")]
+scene.faces(20, walls, fill="white", id="shell")
+scene.faces(20, section, fill="url(#hatch)", id="shell-section")
+scene.line_art(20, shell, stroke="#222", id="shell-lines")
+scene.sort_by_depth(20)
+```
+
+The walls are flat facets, `n` per full turn; facet `j` of the profile edge from
+vertex `i` to `i + 1`, as given, is `"side-{i}-{j}"`, and of hole `k`,
+`"hole{k}_side-{i}-{j}"`.  Facets beside the axis are triangles, and an edge
+along it has none.  Drawn with `faces`, the facets fill the solid without
+seams in one colour; [`line_art`](scenes.md#hidden-lines) draws its outline
+— silhouette, rims, and cut — and leaves the seams out, so the solid reads as
+curved.  The faces close a solid, so `cut` opens it further.
+
 ## Cutaways
 
 ```python
@@ -373,7 +409,7 @@ scene.faces(10, section, cull=True, fill="#cfe6d5", id="wire-section")
 The faces must close a solid, each wound counter-clockwise about its outward
 normal — as `box_faces`, `prism_faces`, `extrude`, and `convex_polyhedron` return
 them — and the solid may be non-convex. Curved solids drawn by the scene (spheres,
-cylinders) are not faces and cannot be cut. A plane across a hollow solid — a
+cylinders) are not faces and cannot be cut; a turned one from `revolve` is. A plane across a hollow solid — a
 tube cut square — leaves a cap with a hole in it. Every face is clipped as a planar region, including concave faces without holes; where the plane runs through a hole,
 or along one of its sides, the hole opens into a notch in the outline. Should
 clipping split such a face, its pieces are named `"{name}-0"`, `"{name}-1"`, ….

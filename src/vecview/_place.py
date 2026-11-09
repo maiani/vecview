@@ -123,6 +123,7 @@ _MOVES: dict[str, tuple[tuple[_Move, ...], dict[str, _Move]]] = {
     ),
     "tube": ((_POINTS, _length), {}),
     "edges": ((_FACES,), {"trim": _length}),
+    "line_art": ((_FACES,), {}),
     "sphere_curve": ((_POINT, _POINTS), {}),
     "text": ((_POINT, None, None, None, None), {}),
 }

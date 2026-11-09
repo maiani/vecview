@@ -343,11 +343,35 @@ consumer selects.
 ## Hidden lines
 
 ```python
+scene.line_art(layer, faces, *, crease_deg=30.0, back=None, **style)
 scene.edges(layer, faces, back=None, back_layer=None, separate=False, trim=0.0, **style)
 scene.sphere_curve(layer, center, points3, closed=False, back=None, back_layer=None, **style)
 ```
 
-`edges` draws the edges of a convex solid, visible ones with `style`. An edge is
+`line_art` inks any solid given as faces the way a technical drawing would:
+its silhouette, where a face toward the camera meets one away from it; its
+creases, where faces meet at more than `crease_deg`; and the rim of an open
+surface.  The seams between facets of one smooth surface are left out, so a
+solid from [`revolve`](shapes.md#turned-solids) or `surface_faces` reads as
+curved, and the drawn edges are joined into continuous lines.  On a closed
+solid, lines whose faces all face away are on the far side: dropped, or drawn
+with `{**style, **back}`.  What else hides a line — another solid, or a fold of
+this one — is found exactly in a [sorted layer](#sorting-by-depth), where the
+solid's own faces, drawn unstroked in the same layer, hide what is behind them;
+there a near-side line takes the `back` style where a surface hides it:
+
+```python
+body = vecview.revolve(profile, sweep_deg=(45, 315))
+scene.faces(20, body, fill="white")
+scene.line_art(20, body, stroke="#222", back={"stroke_dasharray": "3 2"}, id="body")
+scene.sort_by_depth(20)
+```
+
+The silhouette changes with the view, so each camera recomputes it.  Raise
+`crease_deg` for a coarsely faceted surface whose seams would otherwise count as
+creases.
+
+`edges` draws every edge of a convex solid, visible ones with `style`. An edge is
 visible when either face it bounds faces the camera, which is exact for a convex
 solid. Hidden edges are dropped unless `back` is given, in which case they get
 `{**style, **back}` — the crystallographer's dashed back edges — on `back_layer`,
@@ -380,7 +404,7 @@ dashed = {"stroke_dasharray": "3 3"}
 scene.sphere_curve(20, (0, 0, 0), equator, closed=True, back=dashed, back_layer=5, stroke="#333")
 ```
 
-An `id` becomes `{id}-front` and `{id}-back` for both calls, suffixed `-0`, `-1`,
+An `id` becomes `{id}-front` and `{id}-back` for all three calls, suffixed `-0`, `-1`,
 … per edge when `separate`. Both re-split for
 [each camera](#rendering-one-scene-several-ways).
 

@@ -247,6 +247,145 @@ def _swept(pts: Array, holes: list[Array], sweep: Array) -> list[Face]:
     return [*walls, start, end, *_walls(pts, sweep, flip, "side-")]
 
 
+def revolve(
+    profile: Shape2,
+    *,
+    sweep_deg: tuple[float, float] = (0.0, 360.0),
+    axis: Point3 = (0.0, 0.0, 1.0),
+    origin: Point3 = (0.0, 0.0, 0.0),
+    n: int = 96,
+) -> list[Face]:
+    """A profile turned about an axis: the solid a lathe makes.
+
+    ``profile`` is drawn in a half-plane through the axis, as ``(r, z)``
+    pairs: ``r >= 0`` is the distance from the axis and ``z`` the height along
+    it from ``origin``.  A rectangle away from the axis turns into a thick
+    tube, one against it into a cylinder, a profile with a hole into a solid
+    with a hollow ring inside.  Vertices on the axis close the solid there.
+
+    The turn runs over ``sweep_deg``, counter-clockwise about ``axis`` by the
+    right-hand rule, from the direction of ``+x`` -- of ``+y`` for an axis
+    along ``x``.  For the default axis that is from ``+x`` toward ``+y``, as
+    :func:`annulus_sector` measures.  A full turn closes on itself; a shorter
+    one leaves the solid open along two half-planes through the axis, capped
+    by the profile as faces ``"start"`` and ``"end"`` -- the section of a
+    cutaway, to draw in a style of its own.
+
+    The walls are flat facets.  Facet ``j`` of profile edge ``i``, the edge
+    from vertex ``i`` to ``i + 1`` as given, is named ``"side-{i}-{j}"``; of
+    an edge of hole ``k``, ``"hole{k}_side-{i}-{j}"``.  A full turn has ``n``
+    per edge and a part of one proportionally fewer, at least one.  A facet
+    beside the axis is a triangle, and an edge along the axis has none.  Hole
+    walls come first, then ``"start"``, ``"end"`` and the outer walls, as
+    :func:`extrude` orders them.  Every face is wound counter-clockwise about
+    its outward normal.  :meth:`~vecview.scene.Scene.line_art` draws the
+    outline of the result without the seams between facets.
+
+    Args:
+        profile: Simple polygon of ``(r, z)`` pairs, shape ``(m, 2)``, in
+            either winding, with every ``r >= 0``; or a Region with holes.
+        sweep_deg: Start and end of the turn in degrees; the end lies in
+            ``(start, start + 360]``.
+        axis: Direction of the axis of revolution.
+        origin: The point on the axis where ``z = 0``.
+        n: Facets per full turn, at least three.
+
+    Raises:
+        ValueError: If the profile is not a simple polygon enclosing area, a
+            hole is not inside it and apart, a vertex has ``r < 0``, the sweep
+            is empty or longer than a turn, the axis is zero, or ``n < 3``.
+    """
+    rings = as_rings(profile, 2)
+    if len(rings[0]) < 3:
+        raise ValueError(f"a profile needs at least three vertices, got {len(rings[0])}")
+    if n < 3:
+        raise ValueError(f"n must be at least 3, got {n}")
+    a = unit(axis)
+    if not a.any():
+        raise ValueError("revolve needs a non-zero axis")
+    start_deg, end_deg = (float(v) for v in sweep_deg)
+    span = end_deg - start_deg
+    if not 0.0 < span <= 360.0 + 1e-9:
+        raise ValueError(f"the sweep must turn through (0, 360] degrees, got {span:g}")
+    size = float(np.ptp(np.vstack(rings), axis=0).max())
+    if any(np.any(ring[:, 0] < -1e-12 * size) for ring in rings):
+        raise ValueError("the profile must lie at r >= 0, on one side of the axis")
+    # Vertices on the axis are put exactly on it, so every facet there meets in one point.
+    rings = [
+        np.column_stack([np.where(r[:, 0] <= 1e-12 * size, 0.0, r[:, 0]), r[:, 1]]) for r in rings
+    ]
+    for ring in rings:
+        lengths = np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1)
+        if np.any(lengths <= 1e-12 * size):
+            raise ValueError("profile has repeated consecutive vertices")
+    if abs(_signed_area(rings[0])) <= 1e-12 * size * size:
+        raise ValueError("profile encloses no area")
+    if _self_intersects(rings[0]):
+        raise ValueError("profile must be a simple polygon: its edges cross or touch")
+    if len(rings) > 1:
+        _check_holes(rings)
+
+    full = span >= 360.0 - 1e-9
+    steps = n if full else max(1, int(np.ceil(n * span / 360.0 - 1e-9)))
+    theta = np.radians(start_deg + (360.0 if full else span) * np.arange(steps + 1) / steps)
+    ref = np.array([0.0, 1.0, 0.0] if abs(float(a[0])) >= 0.9 else [1.0, 0.0, 0.0])
+    e1 = unit(ref - float(ref @ a) * a)
+    e2 = np.cross(a, e1)
+    radial = np.cos(theta)[:, None] * e1 + np.sin(theta)[:, None] * e2
+    o = np.asarray(origin, dtype=np.float64)
+
+    def turned(ring: Array) -> Array:
+        """The ring at every angle: shape ``(steps + 1, m, 3)``."""
+        return o + ring[None, :, :1] * radial[:, None, :] + ring[None, :, 1:] * a
+
+    hole_walls: list[Face] = []
+    outer_walls: list[Face] = []
+    oriented: list[Array] = []
+    for k, ring in enumerate(rings):
+        # The solid lies left of every edge, walking the exterior
+        # counter-clockwise and each hole clockwise in the (r, z) plane.
+        flip = (_signed_area(ring) > 0) != (k == 0)
+        oriented.append(ring[::-1] if flip else ring)
+        at = turned(ring)
+        prefix = "side-" if k == 0 else f"hole{k - 1}_side-"
+        for i in range(len(ring)):
+            lo, hi = i, (i + 1) % len(ring)
+            if flip:
+                lo, hi = hi, lo
+            on_lo, on_hi = ring[lo, 0] == 0.0, ring[hi, 0] == 0.0
+            if on_lo and on_hi:
+                continue  # along the axis: no wall
+            for j in range(steps):
+                ahead = (j + 1) % steps if full else j + 1
+                facet = [at[j, lo]]
+                facet += [] if on_lo else [at[ahead, lo]]
+                facet += [] if on_hi else [at[ahead, hi]]
+                facet.append(at[j, hi])
+                pts = np.array(facet)
+                normal = unit(np.cross(pts, np.roll(pts, -1, axis=0)).sum(axis=0))
+                (outer_walls if k == 0 else hole_walls).append(
+                    Face(f"{prefix}{i}-{j}", pts, normal)
+                )
+    if full:
+        return [*hole_walls, *outer_walls]
+
+    # The profile, counter-clockwise, faces back along the turn at its start.
+    def cap(name: str, j: int, sign: float) -> Face:
+        rims = [turned(ring)[j] for ring in oriented]
+        if sign > 0:
+            rims = [rim[::-1] for rim in rims]
+        tangent = sign * (np.cos(theta[j]) * e2 - np.sin(theta[j]) * e1)
+        return Face(name, rims[0], tangent, tuple(rims[1:]))
+
+    return [*hole_walls, cap("start", 0, -1.0), cap("end", steps, 1.0), *outer_walls]
+
+
+def _signed_area(ring: Array) -> float:
+    """Signed area of a 2D ring, positive when it winds counter-clockwise."""
+    x, y = ring[:, 0], ring[:, 1]
+    return 0.5 * float(np.dot(x, np.roll(y, -1)) - np.dot(np.roll(x, -1), y))
+
+
 def annulus_sector(
     center: tuple[float, float] | Array,
     r_in: float,
@@ -726,11 +865,13 @@ __all__ = [
     "cut",
     "double_arrow_shape",
     "ellipse_shape",
+    "extrude",
     "helix",
     "in_plane_dir",
     "path_arrow_shape",
     "prism_faces",
     "rect_shape",
+    "revolve",
     "sine_ribbon",
     "surface_faces",
     "trim_corners",

@@ -866,3 +866,105 @@ class TestCut:
         assert cap.name == "cut" and len(cap.holes) == 1
         assert np.dot(self.newell(cap.holes[0]), cap.normal) < 0  # wound the other way
         assert area(cap) == pytest.approx(16.0 - 4.0)
+
+
+def moment(ring: np.ndarray) -> float:
+    """The integral of ``r`` over a ring's (r, z) polygon, signed by its winding."""
+    r, z = ring[:, 0], ring[:, 1]
+    r1, z1 = np.roll(r, -1), np.roll(z, -1)
+    return float(((r + r1) * (r * z1 - r1 * z)).sum() / 6)
+
+
+class TestRevolve:
+    TUBE = vecview.outlines.rect((1.0, 0.0), (2.0, 3.0))
+
+    def test_a_full_turn_closes_up_with_n_facets_per_edge(self) -> None:
+        faces = vecview.revolve(self.TUBE, n=24)
+        assert len(faces) == 4 * 24
+        assert len({f.name for f in faces}) == len(faces)
+        assert closed_up(faces)
+
+    def test_declared_normals_match_the_winding(self) -> None:
+        for f in vecview.revolve(self.TUBE, sweep_deg=(20, 250), n=24):
+            newell = np.cross(f.points, np.roll(f.points, -1, axis=0)).sum(axis=0)
+            assert np.allclose(vecview.unit(newell), f.normal, atol=1e-12), f.name
+
+    def test_outer_walls_face_away_from_the_axis_and_inner_ones_toward_it(self) -> None:
+        for f in vecview.revolve(self.TUBE, n=24):
+            centre = f.points.mean(axis=0)
+            radial = float(np.hypot(*centre[:2]))
+            outward = float(f.normal[:2] @ centre[:2]) / radial
+            if np.allclose(np.hypot(f.points[:, 0], f.points[:, 1]).min(), 1.0, atol=0.02):
+                if abs(f.normal[2]) < 1e-9:
+                    assert outward < 0, f.name  # the bore
+            elif abs(f.normal[2]) < 1e-9:
+                assert outward > 0, f.name
+
+    @pytest.mark.parametrize("sweep", [(0.0, 360.0), (45.0, 315.0), (-30.0, 10.0)])
+    def test_encloses_the_volume_of_its_facets(self, sweep: tuple[float, float]) -> None:
+        """Each facet is a chord, so V = steps * sin(dtheta) * integral of r dA, exactly."""
+        hole = np.array([[1.3, 0.5], [1.7, 0.5], [1.7, 2.5], [1.3, 2.5]])
+        profile = vecview.Region(self.TUBE, (hole[::-1],))
+        faces = vecview.revolve(profile, sweep_deg=sweep, n=36)
+        span = sweep[1] - sweep[0]
+        steps = 36 if span == 360 else int(np.ceil(36 * span / 360 - 1e-9))
+        r_da = moment(np.asarray(self.TUBE, dtype=float)) - abs(moment(hole))
+        expected = steps * np.sin(np.radians(span / steps)) * r_da
+        assert closed_up(faces)
+        assert enclosed(faces) == pytest.approx(expected, rel=1e-12)
+
+    def test_a_partial_turn_is_capped_by_the_profile(self) -> None:
+        faces = {f.name: f for f in vecview.revolve(self.TUBE, sweep_deg=(45, 315))}
+        s45 = np.sqrt(0.5)
+        assert np.allclose(faces["start"].normal, (s45, -s45, 0), atol=1e-12)
+        assert np.allclose(faces["end"].normal, (s45, s45, 0), atol=1e-12)
+        assert area(faces["start"]) == pytest.approx(3.0)
+        assert area(faces["end"]) == pytest.approx(3.0)
+
+    def test_the_turn_starts_at_x_about_z_and_at_y_about_x(self) -> None:
+        start = {f.name: f for f in vecview.revolve(self.TUBE, sweep_deg=(0, 90))}["start"]
+        assert np.allclose(start.points[:, 1], 0.0) and (start.points[:, 0] > 0).all()
+        start = {f.name: f for f in vecview.revolve(self.TUBE, sweep_deg=(0, 90), axis=(1, 0, 0))}[
+            "start"
+        ]
+        assert np.allclose(start.points[:, 2], 0.0) and (start.points[:, 1] > 0).all()
+        assert np.allclose(start.points[:, 0], [0, 0, 3, 3])  # z runs along the axis
+
+    def test_a_profile_against_the_axis_closes_with_triangles(self) -> None:
+        faces = vecview.revolve(vecview.outlines.rect((0.0, 0.0), (1.0, 2.0)), n=16)
+        assert closed_up(faces)
+        assert {len(f.points) for f in faces} == {3, 4}
+        assert not [f for f in faces if f.name.startswith("side-3-")], "no wall along the axis"
+        assert enclosed(faces) == pytest.approx(16 * np.sin(2 * np.pi / 16) * 1.0, rel=1e-12)
+
+    def test_facets_are_named_by_the_edge_as_given(self) -> None:
+        given = np.asarray(self.TUBE, dtype=float)[::-1]  # clockwise
+        faces = {f.name: f for f in vecview.revolve(given, n=8)}
+        assert closed_up(list(faces.values()))
+        edge = faces["side-0-0"].points
+        radii = np.hypot(edge[:, 0], edge[:, 1])
+        assert set(np.round(edge[:, 2], 9)) <= {given[0, 1], given[1, 1]}
+        assert set(np.round(radii, 9)) <= {given[0, 0], given[1, 0]}
+
+    def test_origin_and_axis_place_the_solid(self) -> None:
+        faces = vecview.revolve(self.TUBE, axis=(0, 0, 2), origin=(1, 2, 3), n=8)
+        pts = np.vstack([f.points for f in faces])
+        assert pts[:, 2].min() == pytest.approx(3.0) and pts[:, 2].max() == pytest.approx(6.0)
+        assert np.hypot(pts[:, 0] - 1, pts[:, 1] - 2).max() == pytest.approx(2.0)
+
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            ({"profile": [(-0.5, 0), (1, 0), (1, 1)]}, "r >= 0"),
+            ({"sweep_deg": (10, 10)}, "sweep"),
+            ({"sweep_deg": (0, 400)}, "sweep"),
+            ({"n": 2}, "n must be"),
+            ({"axis": (0, 0, 0)}, "axis"),
+            ({"profile": [(1, 0), (4, 0), (4, 3), (2, -1), (1, 3)]}, "simple polygon"),
+            ({"profile": [(1, 0), (2, 0)]}, "three vertices"),
+        ],
+    )
+    def test_refuses(self, kwargs: dict, message: str) -> None:
+        kwargs = {"profile": self.TUBE, **kwargs}
+        with pytest.raises(ValueError, match=message):
+            vecview.revolve(kwargs.pop("profile"), **kwargs)

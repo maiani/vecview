@@ -55,7 +55,8 @@ dimetric, and trimetric cases.
   this. `shapely` clips polygons and `contourpy` traces depth contours; both
   load only when they are first needed.
 - **Keep the three-way split**: `shapes` knows only numbers, and so do its
-  private helpers `_face` (the `Face` record) and `_cut`; `camera`
+  private helpers `_face` (the `Face` record), `_cut`, and `_line_art` (which
+  edges of a faceted solid to ink, given which faces face the camera); `camera`
   and `projections` know projection; and `scene` and `animation`, with their
   private rendering modules (`_elements`, `_canvas`, `_solids`,
   `_animation_svg`, `_animation_refs`), are the only code that touches

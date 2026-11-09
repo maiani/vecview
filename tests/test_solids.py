@@ -315,6 +315,77 @@ class TestEdges:
         assert ids(scene) == ["e-back", "veil", "e-front"]
 
 
+class TestLineArt:
+    CAM = OrthographicCamera(35.0, 24.0, 10.0)
+    CYLINDER = vecview.revolve(vecview.outlines.rect((0.0, 0.0), (1.0, 2.0)), n=48)
+
+    def split(self, faces: list, crease_deg: float = 30.0) -> tuple[list, list]:
+        from vecview._line_art import feature_lines
+
+        facing = {id(f) for f in self.CAM.visible(faces)}
+        return feature_lines(faces, [id(f) in facing for f in faces], crease_deg)
+
+    def test_a_turned_cylinder_shows_rims_and_silhouette_but_no_seams(self) -> None:
+        near, far = self.split(self.CYLINDER)
+        segments = lambda runs: sum(len(run) - 1 for run in runs)  # noqa: E731
+        # Both rims whole (48 + 48) and two silhouette lines, one facet tall each.
+        assert segments(near) + segments(far) == 48 + 48 + 2
+        vertical = [
+            run for run in near + far if np.ptp(run[:, 2]) > 1.9 and np.ptp(run[:, 0]) < 1e-9
+        ]
+        assert len(vertical) <= 2
+        # Seen from above, the far half of the bottom rim is behind the solid.
+        assert far and all(np.allclose(run[:, 2], 0.0) for run in far)
+
+    def test_a_rim_seen_whole_is_one_closed_run(self) -> None:
+        near, _ = self.split(self.CYLINDER)
+        (top,) = [run for run in near if np.allclose(run[:, 2], 2.0)]
+        assert np.allclose(top[0], top[-1]) and len(top) == 49
+
+    def test_a_wide_crease_angle_drops_the_rims(self) -> None:
+        near, far = self.split(self.CYLINDER, crease_deg=95.0)
+        assert not far
+        assert all(np.ptp(run[:, 2]) > 1.9 for run in near), "only the silhouette"
+
+    def test_an_open_surface_has_no_far_side(self) -> None:
+        x, y = np.meshgrid(np.linspace(-1, 1, 5), np.linspace(-1, 1, 5))
+        sheet = vecview.surface_faces(x, y, 0.2 * x * x)
+        near, far = self.split(sheet)
+        assert not far
+        assert sum(len(run) - 1 for run in near) >= 16, "the whole rim"
+
+    def test_front_and_back_paths(self) -> None:
+        scene = Scene(self.CAM)
+        scene.line_art(1, self.CYLINDER, back={"stroke_dasharray": "2"}, stroke="#000", id="c")
+        front, back = scene.render().elements or []
+        assert (front.id, front.fill, back.id, back.stroke_dasharray) == (
+            "c-front",
+            "none",
+            "c-back",
+            "2",
+        )
+        scene = Scene(self.CAM)
+        scene.line_art(1, self.CYLINDER, stroke="#000", id="c")
+        assert ids(scene) == ["c-front"]
+
+    def test_in_a_sorted_layer_a_solid_in_front_hides_lines_in_the_back_style(self) -> None:
+        scene = Scene(self.CAM)
+        scene.faces(1, self.CYLINDER, fill="white")
+        scene.line_art(1, self.CYLINDER, back={"stroke_dasharray": "2"}, stroke="#000", id="c")
+        u = vecview.unit(np.cross(self.CAM.view, (0.0, 0.0, 1.0)))
+        v = np.cross(self.CAM.view, u)
+        near = np.array([0.0, 0.0, 1.0]) + 3 * self.CAM.view + 0.8 * u  # covering one side
+        wall = [near + 1.5 * (su * u + sv * v) for su, sv in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        scene.polygon(1, wall, fill="white")
+        scene.sort_by_depth(1)
+        rendered = scene.to_svg_document()
+        assert 'id="c-front-hidden"' in rendered
+
+    def test_refuses_a_crease_angle_beyond_a_half_turn(self) -> None:
+        with pytest.raises(ValueError, match="crease_deg"):
+            Scene(self.CAM).line_art(1, self.CYLINDER, crease_deg=200)
+
+
 class TestSphereCurve:
     def test_an_equator_seen_from_above_splits_into_two_halves(self) -> None:
         scene = Scene(OrthographicCamera(35.0, 24.0, 10.0))

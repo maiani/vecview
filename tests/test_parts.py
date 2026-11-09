@@ -42,6 +42,8 @@ def draw(target: Scene | Part) -> None:
     target.polygon(5, vecview.outlines.to_plane(washer, origin=(0, 0, 1)), fill="#ccc", id="w")
     target.faces(5, vecview.prism_faces(washer, 0.0, 0.1), cull=True, fill="#ccc", id="ring")
     target.prism_walls(5, washer, 0.1, 0.2, fill="#456", id="ring-walls")
+    tube = vecview.revolve(vecview.outlines.rect((0.1, 0.0), (0.2, 0.3)), sweep_deg=(0, 270), n=12)
+    target.line_art(6, tube, back={"stroke_dasharray": "2"}, stroke="#000", id="lathe")
 
 
 def polygons(scene: Scene) -> list[np.ndarray]:
