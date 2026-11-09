@@ -5,6 +5,8 @@ All notable changes to this project are documented here, following
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-09
+
 ### Added
 
 - `revolve(profile, *, sweep_deg=(0, 360), axis=(0, 0, 1), origin=(0, 0, 0), n=96)`:
